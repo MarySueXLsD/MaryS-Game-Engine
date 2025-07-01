@@ -1,0 +1,13 @@
+{
+    "name": "Window Management",
+    "version": "1.0.0",
+    "author": "MaryS Game Engine Team",
+    "description": "Universal window management system for modules",
+    "shortcut": "Ctrl Shift W",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": false,
+    "is_movable": false,
+    "is_resizable": false,
+    "lastUpdated": "04/06/2025"
+} 

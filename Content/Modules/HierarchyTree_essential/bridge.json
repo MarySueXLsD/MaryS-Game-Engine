@@ -1,0 +1,13 @@
+{
+    "name": "Hierarchy Tree",
+    "version": "1.0.0",
+    "author": "MaryS Game Engine Team",
+    "description": "Essential hierarchy tree module for the game engine",
+    "shortcut": "Ctrl Shift H",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": true,
+    "is_movable": true,
+    "is_resizable": true,
+    "lastUpdated": "04/06/2025"
+} 

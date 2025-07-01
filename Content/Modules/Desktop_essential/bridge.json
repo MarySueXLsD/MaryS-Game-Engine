@@ -1,0 +1,13 @@
+{
+    "name": "Desktop",
+    "version": "1.0.0",
+    "author": "MaryS Game Engine Team",
+    "description": "Essential desktop module that manages background and selection",
+    "shortcut": "Ctrl Shift D",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": false,
+    "is_movable": false,
+    "is_resizable": false,
+    "lastUpdated": "04/06/2025"
+} 
