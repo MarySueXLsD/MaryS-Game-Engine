@@ -1,0 +1,13 @@
+{
+    "name": "Code Editor",
+    "version": "0.1.0",
+    "author": "MaryS Game Engine Team",
+    "description": "Text/code editor for C# scripts.",
+    "shortcut": "Ctrl Shift E",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": true,
+    "is_movable": true,
+    "is_resizable": true,
+    "lastUpdated": "2024-06-07"
+} 
