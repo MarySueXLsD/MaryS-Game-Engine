@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/59a258d0-a6f5-4e59-9c82-bf46fb7c0481" alt="MaryS Engine Architecture Diagram" width="350">
+</p>
+
 
 # Technical Plan for a "MaryS" MonoGame-Based 2D Turn-Based Game Engine
 
@@ -12,7 +16,6 @@ The goal of this project is to build a **user-friendly, turn-based focused 2D ga
     -   **Modules/** – Contains installable **editor modules** that extend engine functionality (e.g. Scene Editor, Top Bar, Side Bar, Asset Browser, Code Editor, etc.). The engine’s core loads these plugins at runtime[community.monogame.net](https://community.monogame.net/t/monogame-editor/8658#:~:text=source%2C%20community,MonoGame). Removing a module from this folder will disable its features in the editor.
         
     -   **Games/** – Contains game project folders. Each game project has its own folder with all its code, assets, and data. The engine can run these games within itself for testing, and games can be exported as standalone MonoGame projects.
-        
 
 This structure ensures a clear separation between the engine’s editor features (modules), the user’s desktop environment, and the actual game projects.
 
@@ -38,6 +41,9 @@ The core engine is using MonoGame for rendering and input. Key architectural con
     
 -   **Data-Driven Design:** Favors data files (JSON, XML, or ScriptableObjects) for game configuration that the editor can manipulate, rather than complex code generation for every aspect. For instance, character stats, enemy definitions, tile maps, dialog scripts can all be in data files editable via custom editors. The engine can then generate or update code only for things that truly require it (like registering a new Scene class, etc.).
     
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/3974eba4-8937-4718-8155-d73e015bdce0" alt="MaryS Engine Architecture Diagram" width="600">
+</p>
 
 ## Editor Modules and Tools
 
