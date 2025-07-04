@@ -1,75 +1,5 @@
 [
   {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder (1).folder",
-    "Cell": {
-      "Row": 0,
-      "Column": 0
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder (2).folder",
-    "Cell": {
-      "Row": 0,
-      "Column": 1
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder (3).folder",
-    "Cell": {
-      "Row": 1,
-      "Column": 0
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder (4).folder",
-    "Cell": {
-      "Row": 1,
-      "Column": 1
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder (5).folder",
-    "Cell": {
-      "Row": 0,
-      "Column": 2
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder (6).folder",
-    "Cell": {
-      "Row": 2,
-      "Column": 0
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder (7).folder",
-    "Cell": {
-      "Row": 1,
-      "Column": 2
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder (8).folder",
-    "Cell": {
-      "Row": 2,
-      "Column": 1
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder (9).folder",
-    "Cell": {
-      "Row": 3,
-      "Column": 6
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\.New Folder.folder",
-    "Cell": {
-      "Row": 2,
-      "Column": 2
-    }
-  },
-  {
     "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\234324324324.ttf",
     "Cell": {
       "Row": 0,
@@ -107,15 +37,15 @@
   {
     "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\test.txt",
     "Cell": {
-      "Row": 3,
-      "Column": 2
+      "Row": 1,
+      "Column": 6
     }
   },
   {
     "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\test210498.cs",
     "Cell": {
-      "Row": 0,
-      "Column": 4
+      "Row": 3,
+      "Column": 8
     }
   }
 ]

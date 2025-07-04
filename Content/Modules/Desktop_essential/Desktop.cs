@@ -1793,7 +1793,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
 
                 // Split name into main part and extension
                 extension = extension.TrimStart('.'); // Remove the dot
-                bool needsTruncation = nameWithoutExt.Length > 6;
+                bool needsTruncation = nameWithoutExt.Length > 9;
 
                 // Calculate widths for layout decisions
                 float nameWidth = _desktopFont.MeasureString(nameWithoutExt).X;
@@ -1802,8 +1802,8 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 float extWidth = _desktopFont.MeasureString(extension).X;
                 float totalWidth = nameWidth + dotsWidth + dotWidth + extWidth;
 
-                // Decide if we need two lines
-                bool useTwoLines = needsTruncation || totalWidth > file.IconBounds.Width * 0.8f;
+                // Decide if we need two lines - check if filename part alone fits on one line
+                bool useTwoLines = needsTruncation || nameWidth > file.IconBounds.Width * 0.9f;
 
                 if (useTwoLines)
                 {
@@ -1811,7 +1811,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
                     string displayName = nameWithoutExt;
                     if (needsTruncation)
                     {
-                        displayName = nameWithoutExt.Substring(0, 6);
+                        displayName = nameWithoutExt.Substring(0, 9);
                     }
 
                     // Calculate total width for first line (including dots if needed)
