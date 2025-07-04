@@ -71,6 +71,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         // Colors
         private Color _windowColor = new Color(40, 40, 40);
         private Color _titleBarColor = new Color(147, 112, 219); // Purple title bar
+        private Color _pinnedTitleBarColor = new Color(100, 75, 150); // Darker purple for pinned windows
         private Color _hoverColor = new Color(60, 60, 60);
         private Color _buttonHoverColor = new Color(180, 145, 250); // Lighter purple for button hover
         private Color _closeButtonHoverColor = new Color(232, 17, 35);
@@ -1054,7 +1055,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 scaledBounds.Width,
                 _titleBarHeight
             );
-            spriteBatch.Draw(_pixel, titleBarBounds, _titleBarColor);
+            Color titleBarColor = _isPinned ? _pinnedTitleBarColor : _titleBarColor;
+            spriteBatch.Draw(_pixel, titleBarBounds, titleBarColor);
 
             // Draw title text with the title font
             Vector2 titleTextPos = new Vector2(
@@ -1068,7 +1070,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             if (maximizeButtonBounds != Rectangle.Empty)
             {
                 bool isMaximizeHovered = maximizeButtonBounds.Contains(_currentMouseState.Position);
-                spriteBatch.Draw(_pixel, maximizeButtonBounds, isMaximizeHovered ? _buttonHoverColor : _titleBarColor);
+                Color buttonColor = isMaximizeHovered ? _buttonHoverColor : titleBarColor;
+                spriteBatch.Draw(_pixel, maximizeButtonBounds, buttonColor);
                 spriteBatch.Draw(_isMaximized ? _restoreIcon : _maximiseIcon, maximizeButtonBounds, Color.White);
             }
 
@@ -1077,7 +1080,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             if (minimizeButtonBounds != Rectangle.Empty)
             {
                 bool isMinimizeHovered = minimizeButtonBounds.Contains(_currentMouseState.Position);
-                spriteBatch.Draw(_pixel, minimizeButtonBounds, isMinimizeHovered ? _buttonHoverColor : _titleBarColor);
+                Color buttonColor = isMinimizeHovered ? _buttonHoverColor : titleBarColor;
+                spriteBatch.Draw(_pixel, minimizeButtonBounds, buttonColor);
                 spriteBatch.Draw(_minimiseIcon, minimizeButtonBounds, Color.White);
             }
 
@@ -1086,7 +1090,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             if (closeButtonBounds != Rectangle.Empty)
             {
                 bool isCloseHovered = closeButtonBounds.Contains(_currentMouseState.Position);
-                spriteBatch.Draw(_pixel, closeButtonBounds, isCloseHovered ? _closeButtonHoverColor : _titleBarColor);
+                Color buttonColor = isCloseHovered ? _closeButtonHoverColor : titleBarColor;
+                spriteBatch.Draw(_pixel, closeButtonBounds, buttonColor);
                 spriteBatch.Draw(_closeIcon, closeButtonBounds, Color.White);
             }
 
@@ -1095,7 +1100,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             if (settingsButtonBounds != Rectangle.Empty)
             {
                 bool isSettingsHovered = settingsButtonBounds.Contains(_currentMouseState.Position);
-                spriteBatch.Draw(_pixel, settingsButtonBounds, isSettingsHovered ? _buttonHoverColor : _titleBarColor);
+                Color buttonColor = isSettingsHovered ? _buttonHoverColor : titleBarColor;
+                spriteBatch.Draw(_pixel, settingsButtonBounds, buttonColor);
                 spriteBatch.Draw(_settingsIcon, settingsButtonBounds, Color.White);
             }
 
@@ -1104,7 +1110,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             if (pinButtonBounds != Rectangle.Empty)
             {
                 bool isPinHovered = pinButtonBounds.Contains(_currentMouseState.Position);
-                spriteBatch.Draw(_pixel, pinButtonBounds, isPinHovered ? _buttonHoverColor : _titleBarColor);
+                Color buttonColor = isPinHovered ? _buttonHoverColor : titleBarColor;
+                spriteBatch.Draw(_pixel, pinButtonBounds, buttonColor);
                 spriteBatch.Draw(_isPinned ? _unpinIcon : _pinIcon, pinButtonBounds, Color.White);
                 
                 // Debug: Log pin button drawing occasionally
