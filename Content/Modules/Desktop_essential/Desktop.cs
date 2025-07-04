@@ -1886,7 +1886,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 // Draw selection highlight if selected
                 if (file.IsSelected)
                 {
-                    Color highlightColor = new Color(147, 112, 219, 50); // Semi-transparent purple
+                    Color highlightColor = new Color(147, 112, 219, 40); // Transparent purple overlay
                     spriteBatch.Draw(_pixel, file.IconBounds, highlightColor);
                 }
             }
