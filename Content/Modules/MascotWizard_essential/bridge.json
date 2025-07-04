@@ -1,0 +1,13 @@
+{
+    "name": "Mascot Wizard",
+    "version": "0.1.0",
+    "author": "MaryS Game Engine Team",
+    "description": "Mascot-guided project setup and onboarding wizard.",
+    "shortcut": "Ctrl Shift W",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": true,
+    "is_movable": true,
+    "is_resizable": true,
+    "lastUpdated": "2024-06-07"
+} 
