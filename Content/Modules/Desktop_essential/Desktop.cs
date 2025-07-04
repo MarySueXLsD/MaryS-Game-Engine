@@ -67,6 +67,10 @@ namespace MarySGameEngine.Modules.Desktop_essential
 
         private bool _isFirstDropdownVisible;
         private int _firstDropdownX;
+        
+        // New fields for context menu types
+        private bool _isFileContextMenu; // true if right-clicked on file, false if on empty cell
+        private DesktopFile _contextMenuTargetFile; // The file that was right-clicked (if any)
 
         private TaskBarPosition _lastTaskBarPosition;
 
@@ -139,12 +143,9 @@ namespace MarySGameEngine.Modules.Desktop_essential
 
             // Initialize context menu
             _isContextMenuVisible = false;
-            _contextMenuItems = new List<ContextMenuItem>
-            {
-                new ContextMenuItem("New", new List<string> { "Project", "Folder", "Text File" }),
-                new ContextMenuItem("View", new List<string> { "Large Icons", "Medium Icons", "Small Icons"}),
-                new ContextMenuItem("Settings", null)
-            };
+            _contextMenuItems = new List<ContextMenuItem>();
+            _isFileContextMenu = false;
+            _contextMenuTargetFile = null;
 
             // Initialize file watcher
             InitializeFileWatcher();
@@ -192,6 +193,106 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 maxMenuWidth = Math.Max(maxMenuWidth, CalculateMenuWidth(item));
             }
             return (position.X + maxMenuWidth + dropdownWidth) > _windowWidth;
+        }
+
+        private void SetupEmptyCellContextMenu()
+        {
+            _contextMenuItems.Clear();
+            _contextMenuItems.Add(new ContextMenuItem("New", new List<string> { "Project", "Folder", "Text File" }));
+            _contextMenuItems.Add(new ContextMenuItem("View", new List<string> { "Large Icons", "Medium Icons", "Small Icons"}));
+            _contextMenuItems.Add(new ContextMenuItem("Settings", null));
+            _isFileContextMenu = false;
+            _contextMenuTargetFile = null;
+        }
+
+        private void SetupFileContextMenu(DesktopFile file)
+        {
+            _contextMenuItems.Clear();
+            _contextMenuItems.Add(new ContextMenuItem("Open", null));
+            _contextMenuItems.Add(new ContextMenuItem("Rename", null));
+            _contextMenuItems.Add(new ContextMenuItem("Delete", null));
+            _contextMenuItems.Add(new ContextMenuItem("Properties", null));
+            _isFileContextMenu = true;
+            _contextMenuTargetFile = file;
+        }
+
+        private void HandleContextMenuAction(int mainMenuIndex, int dropdownIndex = -1)
+        {
+            if (mainMenuIndex < 0 || mainMenuIndex >= _contextMenuItems.Count)
+                return;
+
+            var item = _contextMenuItems[mainMenuIndex];
+            string action = item.Text;
+            
+            if (dropdownIndex >= 0 && item.DropdownItems != null && dropdownIndex < item.DropdownItems.Count)
+            {
+                action = item.DropdownItems[dropdownIndex];
+            }
+
+            _engine.Log($"Desktop: Context menu action: {action} (File context: {_isFileContextMenu})");
+
+            if (_isFileContextMenu && _contextMenuTargetFile != null)
+            {
+                // Handle file context menu actions
+                switch (action)
+                {
+                    case "Open":
+                        _engine.Log($"Desktop: Opening file: {_contextMenuTargetFile.Name}");
+                        // TODO: Implement file opening logic
+                        break;
+                    case "Rename":
+                        _engine.Log($"Desktop: Renaming file: {_contextMenuTargetFile.Name}");
+                        // TODO: Implement file renaming logic
+                        break;
+                    case "Delete":
+                        _engine.Log($"Desktop: Deleting file: {_contextMenuTargetFile.Name}");
+                        // TODO: Implement file deletion logic
+                        break;
+                    case "Properties":
+                        _engine.Log($"Desktop: Showing properties for file: {_contextMenuTargetFile.Name}");
+                        // TODO: Implement file properties logic
+                        break;
+                }
+            }
+            else
+            {
+                // Handle empty cell context menu actions
+                switch (action)
+                {
+                    case "Project":
+                        _engine.Log("Desktop: Creating new project");
+                        // TODO: Implement new project creation
+                        break;
+                    case "Folder":
+                        _engine.Log("Desktop: Creating new folder");
+                        // TODO: Implement new folder creation
+                        break;
+                    case "Text File":
+                        _engine.Log("Desktop: Creating new text file");
+                        // TODO: Implement new text file creation
+                        break;
+                    case "Large Icons":
+                        _engine.Log("Desktop: Switching to large icons");
+                        // TODO: Implement icon size change
+                        break;
+                    case "Medium Icons":
+                        _engine.Log("Desktop: Switching to medium icons");
+                        // TODO: Implement icon size change
+                        break;
+                    case "Small Icons":
+                        _engine.Log("Desktop: Switching to small icons");
+                        // TODO: Implement icon size change
+                        break;
+                    case "Settings":
+                        _engine.Log("Desktop: Opening settings");
+                        // TODO: Implement settings opening
+                        break;
+                }
+            }
+
+            // Close the context menu after action
+            _isContextMenuVisible = false;
+            _isFirstDropdownVisible = false;
         }
 
         public void Update()
@@ -453,6 +554,50 @@ namespace MarySGameEngine.Modules.Desktop_essential
             {
                 if (IsMouseOverDesktop())
                 {
+                    // Check if right-click is on a file
+                    DesktopFile clickedFile = null;
+                    bool clickedOnFile = false;
+                    
+                    foreach (var file in _desktopFiles)
+                    {
+                        if (file.IconBounds.Contains(_currentMouseState.Position) || 
+                            file.TextBounds.Contains(_currentMouseState.Position))
+                        {
+                            clickedFile = file;
+                            clickedOnFile = true;
+                            _engine.Log($"Desktop: Right-clicked on file: {file.Name}");
+                            break;
+                        }
+                    }
+
+                    if (clickedOnFile && clickedFile != null)
+                    {
+                        // Right-clicked on a file - select it and show file context menu
+                        foreach (var file in _desktopFiles)
+                        {
+                            file.IsSelected = file == clickedFile;
+                        }
+                        _lastSelectedFile = clickedFile;
+                        _engine.Log($"Desktop: Selected file {clickedFile.Name} via right-click");
+                        
+                        SetupFileContextMenu(clickedFile);
+                    }
+                    else
+                    {
+                        // Right-clicked on empty space - clear selection and show empty cell context menu
+                        if (!_isCtrlPressed && !_isShiftPressed)
+                        {
+                            foreach (var file in _desktopFiles)
+                            {
+                                file.IsSelected = false;
+                            }
+                            _lastSelectedFile = null;
+                            _engine.Log("Desktop: Cleared file selection via right-click on empty space");
+                        }
+                        
+                        SetupEmptyCellContextMenu();
+                    }
+
                     _isContextMenuVisible = true;
                     
                     // Calculate the maximum width needed for the main menu
@@ -494,7 +639,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
 
                     _isFirstDropdownVisible = false;
                     UpdateContextMenuBounds();
-                    _engine.Log($"Desktop: Showing context menu at {_contextMenuPosition}");
+                    _engine.Log($"Desktop: Showing {(clickedOnFile ? "file" : "empty cell")} context menu at {_contextMenuPosition}");
                 }
             }
             // Close context menu on left click outside
@@ -507,9 +652,101 @@ namespace MarySGameEngine.Modules.Desktop_essential
                     _isFirstDropdownVisible = false;
                     _engine.Log("Desktop: Closing context menu");
                 }
+                else
+                {
+                    // Handle clicks on menu items
+                    
+                    // Calculate the maximum width needed for the main menu
+                    int maxMenuWidth = 0;
+                    foreach (var item in _contextMenuItems)
+                    {
+                        maxMenuWidth = Math.Max(maxMenuWidth, CalculateMenuWidth(item));
+                    }
+
+                    // Calculate the maximum dropdown width needed
+                    int maxDropdownWidth = 0;
+                    foreach (var item in _contextMenuItems)
+                    {
+                        if (item.DropdownItems != null)
+                        {
+                            maxDropdownWidth = Math.Max(maxDropdownWidth, CalculateDropdownWidth(item));
+                        }
+                    }
+
+                    // Check if dropdowns should be on the left
+                    bool showDropdownsOnLeft = ShouldShowDropdownsOnLeft(_contextMenuPosition, maxDropdownWidth);
+                    
+                    for (int i = 0; i < _contextMenuItems.Count; i++)
+                    {
+                        var item = _contextMenuItems[i];
+                        Rectangle itemBounds = new Rectangle(
+                            (int)_contextMenuPosition.X,
+                            (int)_contextMenuPosition.Y + (i * CONTEXT_MENU_ITEM_HEIGHT),
+                            maxMenuWidth,
+                            CONTEXT_MENU_ITEM_HEIGHT
+                        );
+                        
+                        if (itemBounds.Contains(_currentMouseState.Position))
+                        {
+                            // Clicked on main menu item
+                            if (item.DropdownItems == null)
+                            {
+                                // No dropdown - execute action directly
+                                HandleContextMenuAction(i);
+                            }
+                            // If it has dropdown, it will be handled by hover logic
+                            break;
+                        }
+
+                        // Check if clicked on dropdown items
+                        if (item.IsDropdownVisible && item.DropdownItems != null)
+                        {
+                            int dropdownWidth = CalculateDropdownWidth(item);
+                            int dropdownX;
+                            if (showDropdownsOnLeft)
+                            {
+                                dropdownX = (int)_contextMenuPosition.X - dropdownWidth;
+                            }
+                            else
+                            {
+                                dropdownX = (int)_contextMenuPosition.X + maxMenuWidth;
+                            }
+
+                            // Calculate dropdown Y position based on whether main menu is above or below cursor
+                            int dropdownY;
+                            if (_contextMenuBounds.Y < _contextMenuPosition.Y)
+                            {
+                                // If main menu is above cursor, align dropdown with its item
+                                dropdownY = _contextMenuBounds.Y + (i * CONTEXT_MENU_ITEM_HEIGHT);
+                            }
+                            else
+                            {
+                                // If main menu is below cursor, use original positioning
+                                dropdownY = (int)_contextMenuPosition.Y + (i * CONTEXT_MENU_ITEM_HEIGHT);
+                            }
+
+                            for (int j = 0; j < item.DropdownItems.Count; j++)
+                            {
+                                Rectangle dropdownBounds = new Rectangle(
+                                    dropdownX,
+                                    dropdownY + (j * CONTEXT_MENU_ITEM_HEIGHT),
+                                    dropdownWidth,
+                                    CONTEXT_MENU_ITEM_HEIGHT
+                                );
+                                
+                                if (dropdownBounds.Contains(_currentMouseState.Position))
+                                {
+                                    // Clicked on dropdown item - execute action
+                                    HandleContextMenuAction(i, j);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
-            // Handle context menu interactions
+            // Handle context menu interactions (hover effects and dropdown visibility)
             if (_isContextMenuVisible)
             {
                 bool isOverAnyDropdown = false;
@@ -651,18 +888,6 @@ namespace MarySGameEngine.Modules.Desktop_essential
                     else
                     {
                         item.DropdownBounds.Clear();
-                    }
-                }
-
-                // Close context menu if clicking outside both main menu and dropdowns
-                if (_currentMouseState.LeftButton == ButtonState.Pressed && 
-                    _previousMouseState.LeftButton == ButtonState.Released)
-                {
-                    if (!isOverMainMenu && !isOverAnyDropdown)
-                    {
-                        _isContextMenuVisible = false;
-                        _isFirstDropdownVisible = false;
-                        _engine.Log("Desktop: Closing context menu");
                     }
                 }
             }
