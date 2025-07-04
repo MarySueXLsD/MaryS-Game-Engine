@@ -12,33 +12,33 @@
 
 #---------------------------------- Content ---------------------------------#
 
-#begin Fonts/window_title_font.spritefont
+#begin Fonts/SpriteFonts/window_title_font.spritefont
 /importer:FontDescriptionImporter
 /processor:FontDescriptionProcessor
 /processorParam:PremultiplyAlpha=True
 /processorParam:TextureFormat=Compressed
-/build:Fonts/window_title_font.spritefont
+/build:Fonts/SpriteFonts/window_title_font.spritefont
 
-#begin Fonts/pixel_font.spritefont
+#begin Fonts/SpriteFonts/pixel_font.spritefont
 /importer:FontDescriptionImporter
 /processor:FontDescriptionProcessor
 /processorParam:PremultiplyAlpha=True
 /processorParam:TextureFormat=Compressed
-/build:Fonts/pixel_font.spritefont
+/build:Fonts/SpriteFonts/pixel_font.spritefont
 
-#begin Fonts/desktop_font.spritefont
+#begin Fonts/SpriteFonts/desktop_font.spritefont
 /importer:FontDescriptionImporter
 /processor:FontDescriptionProcessor
 /processorParam:PremultiplyAlpha=True
 /processorParam:TextureFormat=Compressed
-/build:Fonts/desktop_font.spritefont
+/build:Fonts/SpriteFonts/desktop_font.spritefont
 
-#begin Fonts/arial_font.spritefont
+#begin Fonts/SpriteFonts/roboto_font.spritefont
 /importer:FontDescriptionImporter
 /processor:FontDescriptionProcessor
 /processorParam:PremultiplyAlpha=True
 /processorParam:TextureFormat=Compressed
-/build:Fonts/arial_font.spritefont
+/build:Fonts/SpriteFonts/roboto_font.spritefont
 
 #begin Logos/text_file_icon.png
 /importer:TextureImporter
