@@ -1277,8 +1277,8 @@ namespace MarySGameEngine.Modules.Desktop_essential
             _gridCellSize = Math.Max(_gridCellSize, MIN_CELL_SIZE);
             
             // Calculate number of columns and rows based on the determined cell size
-            _gridColumns = Math.Max(1, availableWidth / _gridCellSize);
-            _gridRows = Math.Max(1, availableHeight / _gridCellSize);
+                _gridColumns = Math.Max(1, availableWidth / _gridCellSize);
+                _gridRows = Math.Max(1, availableHeight / _gridCellSize);
 
             // Recalculate grid end positions to ensure perfect fit
             _gridEndX = _gridStartX + (_gridColumns * _gridCellSize);
@@ -1306,19 +1306,25 @@ namespace MarySGameEngine.Modules.Desktop_essential
             var usedCells = new HashSet<(int, int)>();
             var repositionedFiles = new List<DesktopFile>();
 
+            _engine.Log($"Desktop: Loaded {savedCellPositions.Count} saved cell positions");
+
             // First pass: try to place files in their original saved cell positions if they fit
             foreach (var file in _desktopFiles)
             {
                 string normalizedFilePath = Path.GetFullPath(file.Path);
+                _engine.Log($"Desktop: Processing file {file.Name} with path {normalizedFilePath}");
                 
                 if (savedCellPositions.ContainsKey(normalizedFilePath))
                 {
                     // Get the original saved cell position
                     var (originalRow, originalColumn) = savedCellPositions[normalizedFilePath];
+                    _engine.Log($"Desktop: File {file.Name} has saved position Row {originalRow}, Column {originalColumn}");
                     
                     // Ensure cell coordinates are within bounds
                     int column = Math.Max(0, Math.Min(originalColumn, _gridColumns - 1));
                     int row = Math.Max(0, Math.Min(originalRow, _gridRows - 1));
+                    
+                    _engine.Log($"Desktop: File {file.Name} adjusted to Row {row}, Column {column} (within bounds)");
                     
                     // Check if this cell is available
                     if (!usedCells.Contains((column, row)))
@@ -1364,6 +1370,8 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 }
             }
 
+            _engine.Log($"Desktop: Files needing repositioning: {repositionedFiles.Count}");
+
             // Second pass: reposition files that couldn't stay in their original positions
             foreach (var file in repositionedFiles)
             {
@@ -1375,6 +1383,11 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 {
                     var (originalRow, originalColumn) = savedCellPositions[normalizedFilePath];
                     targetCell = (originalRow, originalColumn);
+                    _engine.Log($"Desktop: Looking for closest cell to Row {targetCell.targetRow}, Column {targetCell.targetColumn} for {file.Name}");
+                }
+                else
+                {
+                    _engine.Log($"Desktop: No saved position for {file.Name}, using default target (0,0)");
                 }
                 
                 var newPosition = FindClosestAvailableCell(usedCells, targetCell);
@@ -1529,7 +1542,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
             // Save the updated positions only if requested (not when repositioning due to window resize)
             if (savePositions)
             {
-                SaveDesktopFilePositions();
+            SaveDesktopFilePositions();
             }
             _engine.Log($"Desktop: Loaded {_desktopFiles.Count} files");
         }
@@ -1859,6 +1872,10 @@ namespace MarySGameEngine.Modules.Desktop_essential
 
         private Vector2 FindClosestAvailableCell(HashSet<(int, int)> usedCells, (int targetRow, int targetColumn) targetCell)
         {
+            _engine.Log($"Desktop: FindClosestAvailableCell called with target Row {targetCell.targetRow}, Column {targetCell.targetColumn}");
+            _engine.Log($"Desktop: Grid bounds: {_gridRows} rows x {_gridColumns} columns");
+            _engine.Log($"Desktop: Used cells count: {usedCells.Count}");
+            
             // Create a set of occupied positions for quick lookup
             var occupiedPositions = new HashSet<(int, int)>(usedCells);
             foreach (var file in _desktopFiles)
@@ -1872,10 +1889,13 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 row = Math.Max(0, Math.Min(row, _gridRows - 1));
                 
                 occupiedPositions.Add((column, row));
+                _engine.Log($"Desktop: File {file.Name} occupies cell Row {row}, Column {column}");
             }
 
-            // If target cell is available, use it
-            if (!occupiedPositions.Contains(targetCell))
+            // If target cell is within bounds and available, use it
+            if (targetCell.targetRow >= 0 && targetCell.targetRow < _gridRows && 
+                targetCell.targetColumn >= 0 && targetCell.targetColumn < _gridColumns &&
+                !occupiedPositions.Contains(targetCell))
             {
                 Vector2 position = new Vector2(
                     _gridStartX + (targetCell.targetColumn * _gridCellSize) + (_gridCellSize - _currentIconSize) / 2,
@@ -1885,36 +1905,45 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 return position;
             }
 
-            // Search in expanding circles around the target cell
-            int maxDistance = Math.Max(_gridRows, _gridColumns);
+            // If target cell is out of bounds, clamp it to the nearest valid cell
+            int clampedTargetRow = Math.Max(0, Math.Min(targetCell.targetRow, _gridRows - 1));
+            int clampedTargetColumn = Math.Max(0, Math.Min(targetCell.targetColumn, _gridColumns - 1));
+            _engine.Log($"Desktop: Target cell out of bounds, clamped to Row {clampedTargetRow}, Column {clampedTargetColumn}");
+
+            // Find the closest available cell using Euclidean distance
+            double closestDistance = double.MaxValue;
+            (int closestRow, int closestColumn) closestCell = (-1, -1);
             
-            for (int distance = 1; distance <= maxDistance; distance++)
+            for (int row = 0; row < _gridRows; row++)
             {
-                // Check all cells at this distance from target
-                for (int rowOffset = -distance; rowOffset <= distance; rowOffset++)
+                for (int column = 0; column < _gridColumns; column++)
                 {
-                    for (int colOffset = -distance; colOffset <= distance; colOffset++)
+                    if (!occupiedPositions.Contains((column, row)))
                     {
-                        // Only check cells at exactly this distance (on the perimeter of the square)
-                        if (Math.Abs(rowOffset) == distance || Math.Abs(colOffset) == distance)
+                        // Calculate Euclidean distance to target
+                        double distance = Math.Sqrt(
+                            Math.Pow(row - clampedTargetRow, 2) + 
+                            Math.Pow(column - clampedTargetColumn, 2)
+                        );
+                        
+                        if (distance < closestDistance)
                         {
-                            int row = targetCell.targetRow + rowOffset;
-                            int column = targetCell.targetColumn + colOffset;
-                            
-                            // Check if cell is within bounds and available
-                            if (row >= 0 && row < _gridRows && column >= 0 && column < _gridColumns && 
-                                !occupiedPositions.Contains((column, row)))
-                            {
-                                Vector2 position = new Vector2(
-                                    _gridStartX + (column * _gridCellSize) + (_gridCellSize - _currentIconSize) / 2,
-                                    _gridStartY + (row * _gridCellSize) + (_gridCellSize - _currentIconSize) / 2 + ICON_TOP_OFFSET
-                                );
-                                _engine.Log($"Desktop: Found closest available cell at Row {row}, Column {column} (distance {distance} from target) -> position {position}");
-                                return position;
-                            }
+                            closestDistance = distance;
+                            closestCell = (row, column);
+                            _engine.Log($"Desktop: Found closer cell at Row {row}, Column {column} with distance {distance}");
                         }
                     }
                 }
+            }
+            
+            if (closestCell.closestRow >= 0 && closestCell.closestColumn >= 0)
+            {
+                Vector2 position = new Vector2(
+                    _gridStartX + (closestCell.closestColumn * _gridCellSize) + (_gridCellSize - _currentIconSize) / 2,
+                    _gridStartY + (closestCell.closestRow * _gridCellSize) + (_gridCellSize - _currentIconSize) / 2 + ICON_TOP_OFFSET
+                );
+                _engine.Log($"Desktop: Found closest available cell at Row {closestCell.closestRow}, Column {closestCell.closestColumn} (distance {closestDistance}) -> position {position}");
+                return position;
             }
 
             // If no cell is available, return the last cell position
@@ -1922,7 +1951,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 _gridStartX + ((_gridColumns - 1) * _gridCellSize) + (_gridCellSize - _currentIconSize) / 2,
                 _gridStartY + ((_gridRows - 1) * _gridCellSize) + (_gridCellSize - _currentIconSize) / 2 + ICON_TOP_OFFSET
             );
-            _engine.Log($"Desktop: No available cells, using last position {lastPosition}");
+            _engine.Log($"Desktop: No available cells found, using last position {lastPosition}");
             return lastPosition;
         }
 
