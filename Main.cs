@@ -321,7 +321,7 @@ public class GameEngine : Game
             Log("Main: Created SpriteBatch");
             
             // Load the pixel font
-            _menuFont = Content.Load<SpriteFont>("Fonts/pixel_font");
+            _menuFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font");
             Log("Main: Loaded pixel font");
 
             // Load all modules

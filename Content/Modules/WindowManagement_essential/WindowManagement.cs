@@ -1192,7 +1192,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _unlockedIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/unlocked");
             _pinIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/pin");
             _unpinIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/unpin");
-            _titleFont = content.Load<SpriteFont>("Fonts/window_title_font");
+            _titleFont = content.Load<SpriteFont>("Fonts/SpriteFonts/window_title_font");
         }
 
         private string GetButtonTooltip(Rectangle bounds)
