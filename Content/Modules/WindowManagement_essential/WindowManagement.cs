@@ -45,6 +45,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private bool _isMinimized;
         private Vector2 _preMinimizePosition;
         private Vector2 _preMinimizeSize;
+        private bool _isClosing;
+        private Vector2 _closeAnimationCenter;
+        private float _closeAnimationScale;
         private int _titleBarHeight = 40;
         private int _defaultWidth = 250;
         private int _defaultHeight = 400;
@@ -105,6 +108,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private const float MINIMIZE_SCALE_START = 1.0f;
         private const float MINIMIZE_SCALE_END = 0.15f; // Changed from 0.3f to 0.2f for a middle ground
         private const float MINIMIZE_VISIBILITY_THRESHOLD = 0.4f; // New constant for visibility threshold
+        private const float CLOSE_ANIMATION_SPEED = 0.08f; // Speed of close animation
         private bool _isPinned;
         private bool _isLocked;
         private string _currentTooltip = string.Empty;
@@ -126,6 +130,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _properties = properties;
             _animationProgress = 0f;
             _isAnimating = false;
+            _isClosing = false;
+            _closeAnimationScale = 1.0f;
             _engine = (GameEngine)GameEngine.Instance;
             
             // Add to active windows list and assign z-order
@@ -241,13 +247,14 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
         }
 
-        private Rectangle GetMaximizeButtonBounds()
+        private Rectangle GetMaximizeButtonBounds(Rectangle? bounds = null)
         {
             try
             {
+                Rectangle targetBounds = bounds ?? _windowBounds;
                 return new Rectangle(
-                    _windowBounds.Right - (_buttonSize * 2) - (_buttonSpacing * 2),
-                    _windowBounds.Y + (_titleBarHeight - _buttonSize) / 2,
+                    targetBounds.Right - (_buttonSize * 2) - (_buttonSpacing * 2),
+                    targetBounds.Y + (_titleBarHeight - _buttonSize) / 2,
                     _buttonSize,
                     _buttonSize
                 );
@@ -258,13 +265,14 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
         }
 
-        private Rectangle GetMinimizeButtonBounds()
+        private Rectangle GetMinimizeButtonBounds(Rectangle? bounds = null)
         {
             try
             {
+                Rectangle targetBounds = bounds ?? _windowBounds;
                 return new Rectangle(
-                    _windowBounds.Right - (_buttonSize * 3) - (_buttonSpacing * 3),
-                    _windowBounds.Y + (_titleBarHeight - _buttonSize) / 2,
+                    targetBounds.Right - (_buttonSize * 3) - (_buttonSpacing * 3),
+                    targetBounds.Y + (_titleBarHeight - _buttonSize) / 2,
                     _buttonSize,
                     _buttonSize
                 );
@@ -275,13 +283,14 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
         }
 
-        private Rectangle GetCloseButtonBounds()
+        private Rectangle GetCloseButtonBounds(Rectangle? bounds = null)
         {
             try
             {
+                Rectangle targetBounds = bounds ?? _windowBounds;
                 return new Rectangle(
-                    _windowBounds.Right - _buttonSize - _buttonSpacing,
-                    _windowBounds.Y + (_titleBarHeight - _buttonSize) / 2,
+                    targetBounds.Right - _buttonSize - _buttonSpacing,
+                    targetBounds.Y + (_titleBarHeight - _buttonSize) / 2,
                     _buttonSize,
                     _buttonSize
                 );
@@ -292,13 +301,14 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
         }
 
-        private Rectangle GetLockButtonBounds()
+        private Rectangle GetLockButtonBounds(Rectangle? bounds = null)
         {
             try
             {
+                Rectangle targetBounds = bounds ?? _windowBounds;
                 return new Rectangle(
-                    _windowBounds.Right - (_buttonSize * 4) - (_buttonSpacing * 4),
-                    _windowBounds.Y + (_titleBarHeight - _buttonSize) / 2,
+                    targetBounds.Right - (_buttonSize * 4) - (_buttonSpacing * 4),
+                    targetBounds.Y + (_titleBarHeight - _buttonSize) / 2,
                     _buttonSize,
                     _buttonSize
                 );
@@ -309,13 +319,14 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
         }
 
-        private Rectangle GetPinButtonBounds()
+        private Rectangle GetPinButtonBounds(Rectangle? bounds = null)
         {
             try
             {
+                Rectangle targetBounds = bounds ?? _windowBounds;
                 return new Rectangle(
-                    _windowBounds.Right - (_buttonSize * 5) - (_buttonSpacing * 5),
-                    _windowBounds.Y + (_titleBarHeight - _buttonSize) / 2,
+                    targetBounds.Right - (_buttonSize * 5) - (_buttonSpacing * 5),
+                    targetBounds.Y + (_titleBarHeight - _buttonSize) / 2,
                     _buttonSize,
                     _buttonSize
                 );
@@ -326,14 +337,15 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
         }
 
-        private Rectangle GetResizeHandleBounds()
+        private Rectangle GetResizeHandleBounds(Rectangle? bounds = null)
         {
             try
             {
+                Rectangle targetBounds = bounds ?? _windowBounds;
                 const int handleSize = 24; // Increased to 24 for better pattern alignment
                 return new Rectangle(
-                    _windowBounds.Right - handleSize,
-                    _windowBounds.Bottom - handleSize,
+                    targetBounds.Right - handleSize,
+                    targetBounds.Bottom - handleSize,
                     handleSize,
                     handleSize
                 );
@@ -571,31 +583,68 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                         _defaultWidth = (int)(MathHelper.Lerp(_animationStartSize.X, _animationTargetSize.X, smoothProgress) * scale);
                         _defaultHeight = (int)(MathHelper.Lerp(_animationStartSize.Y, _animationTargetSize.Y, smoothProgress) * scale);
                     }
-                }
-                UpdateWindowBounds();
-                return;
-            }
+                            }
+            UpdateWindowBounds();
+            return;
+        }
 
-            // Only process input if not minimized and not animating
-            if (_isMinimized) return;
+        // Handle close animation
+        if (_isClosing)
+        {
+            _closeAnimationScale -= CLOSE_ANIMATION_SPEED;
+            if (_closeAnimationScale <= 0f)
+            {
+                _closeAnimationScale = 0f;
+                _isClosing = false;
+                _properties.IsVisible = false;
+                
+                // Remove from TaskBar
+                if (_taskBar != null)
+                {
+                    _taskBar.SetModuleActive(_windowTitle, false);
+                }
+                
+                // Remove from active windows list
+                _activeWindows.Remove(this);
+            }
+            return;
+        }
+
+        // Only process input if not minimized and not animating
+        if (_isMinimized) return;
 
             int gameWindowWidth = _graphicsDevice.Viewport.Width;
             int gameWindowHeight = _graphicsDevice.Viewport.Height;
 
+            // Calculate scaled bounds for close animation
+            Rectangle scaledBounds = _windowBounds;
+            if (_isClosing)
+            {
+                // Calculate scaled size
+                int scaledWidth = (int)(_windowBounds.Width * _closeAnimationScale);
+                int scaledHeight = (int)(_windowBounds.Height * _closeAnimationScale);
+                
+                // Calculate scaled position to keep center point
+                int scaledX = (int)(_closeAnimationCenter.X - scaledWidth / 2);
+                int scaledY = (int)(_closeAnimationCenter.Y - scaledHeight / 2);
+                
+                scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+            }
+
             Rectangle titleBarBounds = new Rectangle(
-                _windowBounds.X,
-                _windowBounds.Y,
-                _windowBounds.Width - (_buttonSize * 3) - (_buttonSpacing * 3),
+                scaledBounds.X,
+                scaledBounds.Y,
+                scaledBounds.Width - (_buttonSize * 3) - (_buttonSpacing * 3),
                 _titleBarHeight
             );
 
-            Rectangle maximizeButtonBounds = GetMaximizeButtonBounds();
-            Rectangle minimizeButtonBounds = GetMinimizeButtonBounds();
-            Rectangle closeButtonBounds = GetCloseButtonBounds();
-            Rectangle resizeHandleBounds = GetResizeHandleBounds();
+            Rectangle maximizeButtonBounds = GetMaximizeButtonBounds(scaledBounds);
+            Rectangle minimizeButtonBounds = GetMinimizeButtonBounds(scaledBounds);
+            Rectangle closeButtonBounds = GetCloseButtonBounds(scaledBounds);
+            Rectangle resizeHandleBounds = GetResizeHandleBounds(scaledBounds);
 
             // Check if mouse is over any part of the window
-            bool isMouseOverWindow = _windowBounds.Contains(_currentMouseState.Position);
+            bool isMouseOverWindow = scaledBounds.Contains(_currentMouseState.Position);
 
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
@@ -625,7 +674,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     }
                     else if (closeButtonBounds.Contains(_currentMouseState.Position))
                     {
-                        _properties.IsVisible = false;
+                        StartCloseAnimation();
                     }
                     else if (_properties.IsResizable && resizeHandleBounds.Contains(_currentMouseState.Position))
                     {
@@ -829,16 +878,40 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 
                 _isMinimized = true;
                 
-                // Update TaskBar indicator
+                // Update TaskBar indicator - minimize keeps icon visible but removes active indicator
                 if (_taskBar != null)
                 {
-                    _taskBar.SetModuleActive(_windowTitle, false);
-                    _engine.Log($"WindowManagement: Updated TaskBar indicator for {_windowTitle}");
+                    _taskBar.SetModuleMinimized(_windowTitle, true);
+                    _engine.Log($"WindowManagement: Updated TaskBar indicator for {_windowTitle} (minimized)");
                 }
             }
             catch (Exception ex)
             {
                 _engine.Log($"WindowManagement: Error in ToggleMinimize: {ex.Message}");
+            }
+        }
+
+        private void StartCloseAnimation()
+        {
+            try
+            {
+                _engine.Log($"WindowManagement: Starting close animation for window {_windowTitle}");
+                
+                // Calculate the center of the window for the shrink animation
+                _closeAnimationCenter = new Vector2(
+                    _position.X + (_windowBounds.Width / 2),
+                    _position.Y + (_windowBounds.Height / 2)
+                );
+                
+                // Start the close animation
+                _isClosing = true;
+                _closeAnimationScale = 1.0f;
+                
+                _engine.Log($"WindowManagement: Close animation started for {_windowTitle}");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"WindowManagement: Error in StartCloseAnimation: {ex.Message}");
             }
         }
 
@@ -850,29 +923,47 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             // Don't draw if minimized and scale is below threshold
             if (_isMinimized && _isAnimating && _animationProgress > 0.85f) return;
             
+            // Don't draw if closing and scale is 0
+            if (_isClosing && _closeAnimationScale <= 0f) return;
+            
             _windowTitle = title;
 
+            // Calculate scaled bounds for close animation
+            Rectangle scaledBounds = _windowBounds;
+            if (_isClosing)
+            {
+                // Calculate scaled size
+                int scaledWidth = (int)(_windowBounds.Width * _closeAnimationScale);
+                int scaledHeight = (int)(_windowBounds.Height * _closeAnimationScale);
+                
+                // Calculate scaled position to keep center point
+                int scaledX = (int)(_closeAnimationCenter.X - scaledWidth / 2);
+                int scaledY = (int)(_closeAnimationCenter.Y - scaledHeight / 2);
+                
+                scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+            }
+
             // Draw window background
-            spriteBatch.Draw(_pixel, _windowBounds, _windowColor);
+            spriteBatch.Draw(_pixel, scaledBounds, _windowColor);
 
             // Draw title bar
             Rectangle titleBarBounds = new Rectangle(
-                _windowBounds.X,
-                _windowBounds.Y,
-                _windowBounds.Width,
+                scaledBounds.X,
+                scaledBounds.Y,
+                scaledBounds.Width,
                 _titleBarHeight
             );
             spriteBatch.Draw(_pixel, titleBarBounds, _titleBarColor);
 
             // Draw title text with the title font
             Vector2 titleTextPos = new Vector2(
-                _windowBounds.X + TITLE_LEFT_PADDING,
-                _windowBounds.Y + (_titleBarHeight - _titleFont.LineSpacing) / 2
+                scaledBounds.X + TITLE_LEFT_PADDING,
+                scaledBounds.Y + (_titleBarHeight - _titleFont.LineSpacing) / 2
             );
             spriteBatch.DrawString(_titleFont, title, titleTextPos, Color.White);
 
             // Draw maximize/restore button
-            Rectangle maximizeButtonBounds = GetMaximizeButtonBounds();
+            Rectangle maximizeButtonBounds = GetMaximizeButtonBounds(scaledBounds);
             if (maximizeButtonBounds != Rectangle.Empty)
             {
                 bool isMaximizeHovered = maximizeButtonBounds.Contains(_currentMouseState.Position);
@@ -881,7 +972,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
 
             // Draw minimize button
-            Rectangle minimizeButtonBounds = GetMinimizeButtonBounds();
+            Rectangle minimizeButtonBounds = GetMinimizeButtonBounds(scaledBounds);
             if (minimizeButtonBounds != Rectangle.Empty)
             {
                 bool isMinimizeHovered = minimizeButtonBounds.Contains(_currentMouseState.Position);
@@ -890,7 +981,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
 
             // Draw close button
-            Rectangle closeButtonBounds = GetCloseButtonBounds();
+            Rectangle closeButtonBounds = GetCloseButtonBounds(scaledBounds);
             if (closeButtonBounds != Rectangle.Empty)
             {
                 bool isCloseHovered = closeButtonBounds.Contains(_currentMouseState.Position);
@@ -899,7 +990,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
 
             // Draw lock/unlock button
-            Rectangle lockButtonBounds = GetLockButtonBounds();
+            Rectangle lockButtonBounds = GetLockButtonBounds(scaledBounds);
             if (lockButtonBounds != Rectangle.Empty)
             {
                 bool isLockHovered = lockButtonBounds.Contains(_currentMouseState.Position);
@@ -908,7 +999,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
 
             // Draw pin/unpin button
-            Rectangle pinButtonBounds = GetPinButtonBounds();
+            Rectangle pinButtonBounds = GetPinButtonBounds(scaledBounds);
             if (pinButtonBounds != Rectangle.Empty)
             {
                 bool isPinHovered = pinButtonBounds.Contains(_currentMouseState.Position);
@@ -919,7 +1010,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             // Draw resize handle if not maximized and resizable
             if (!_isMaximized && _properties.IsResizable)
             {
-                Rectangle resizeHandleBounds = GetResizeHandleBounds();
+                Rectangle resizeHandleBounds = GetResizeHandleBounds(scaledBounds);
                 if (resizeHandleBounds != Rectangle.Empty)
                 {
                     // Removed hover effect, just draw the pattern
@@ -945,17 +1036,17 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
             // Draw window border (black border)
             // Top border
-            spriteBatch.Draw(_pixel, new Rectangle(_windowBounds.X - WINDOW_BORDER_THICKNESS, _windowBounds.Y - WINDOW_BORDER_THICKNESS, 
-                _windowBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), WINDOW_BORDER_COLOR);
+            spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
+                scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), WINDOW_BORDER_COLOR);
             // Bottom border
-            spriteBatch.Draw(_pixel, new Rectangle(_windowBounds.X - WINDOW_BORDER_THICKNESS, _windowBounds.Bottom, 
-                _windowBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), WINDOW_BORDER_COLOR);
+            spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Bottom, 
+                scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), WINDOW_BORDER_COLOR);
             // Left border
-            spriteBatch.Draw(_pixel, new Rectangle(_windowBounds.X - WINDOW_BORDER_THICKNESS, _windowBounds.Y - WINDOW_BORDER_THICKNESS, 
-                WINDOW_BORDER_THICKNESS, _windowBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), WINDOW_BORDER_COLOR);
+            spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
+                WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), WINDOW_BORDER_COLOR);
             // Right border
-            spriteBatch.Draw(_pixel, new Rectangle(_windowBounds.Right, _windowBounds.Y - WINDOW_BORDER_THICKNESS, 
-                WINDOW_BORDER_THICKNESS, _windowBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), WINDOW_BORDER_COLOR);
+            spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.Right, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
+                WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), WINDOW_BORDER_COLOR);
 
             // Draw highlight if active (after borders to ensure it's visible)
             if (_isHighlighted)
@@ -974,17 +1065,17 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
                 // Draw highlight borders with same width as window borders
                 // Top border
-                spriteBatch.Draw(_pixel, new Rectangle(_windowBounds.X - WINDOW_BORDER_THICKNESS, _windowBounds.Y - WINDOW_BORDER_THICKNESS, 
-                    _windowBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), highlightColor);
+                spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
+                    scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), highlightColor);
                 // Bottom border
-                spriteBatch.Draw(_pixel, new Rectangle(_windowBounds.X - WINDOW_BORDER_THICKNESS, _windowBounds.Bottom, 
-                    _windowBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), highlightColor);
+                spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Bottom, 
+                    scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), highlightColor);
                 // Left border
-                spriteBatch.Draw(_pixel, new Rectangle(_windowBounds.X - WINDOW_BORDER_THICKNESS, _windowBounds.Y - WINDOW_BORDER_THICKNESS, 
-                    WINDOW_BORDER_THICKNESS, _windowBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), highlightColor);
+                spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
+                    WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), highlightColor);
                 // Right border
-                spriteBatch.Draw(_pixel, new Rectangle(_windowBounds.Right, _windowBounds.Y - WINDOW_BORDER_THICKNESS, 
-                    WINDOW_BORDER_THICKNESS, _windowBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), highlightColor);
+                spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.Right, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
+                    WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), highlightColor);
 
                 // Log the current alpha value for debugging
                 if (_highlightTimer % 0.25f < 0.016f) // Log roughly every quarter second
@@ -1115,10 +1206,10 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     _isMinimized = false;
                     _properties.IsVisible = true;
                     
-                    // Update TaskBar indicator
+                    // Update TaskBar indicator - restore from minimized state
                     if (_taskBar != null)
                     {
-                        _taskBar.SetModuleActive(_windowTitle, true);
+                        _taskBar.SetModuleMinimized(_windowTitle, false);
                     }
                     
                     _engine.Log($"WindowManagement: Window {_windowTitle} restored successfully");
