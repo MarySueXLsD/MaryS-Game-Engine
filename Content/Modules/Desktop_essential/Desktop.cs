@@ -642,104 +642,97 @@ namespace MarySGameEngine.Modules.Desktop_essential
                     _engine.Log($"Desktop: Showing {(clickedOnFile ? "file" : "empty cell")} context menu at {_contextMenuPosition}");
                 }
             }
-            // Close context menu on left click outside
-            else if (_currentMouseState.LeftButton == ButtonState.Pressed && 
-                     _previousMouseState.LeftButton == ButtonState.Released)
+
+            // Handle clicks on menu items (context menu closing is now handled globally in Main.cs)
+            if (_currentMouseState.LeftButton == ButtonState.Pressed && 
+                _previousMouseState.LeftButton == ButtonState.Released &&
+                _isContextMenuVisible && _contextMenuBounds.Contains(_currentMouseState.Position))
             {
-                if (_isContextMenuVisible && !_contextMenuBounds.Contains(_currentMouseState.Position))
+                // Handle clicks on menu items
+                
+                // Calculate the maximum width needed for the main menu
+                int maxMenuWidth = 0;
+                foreach (var item in _contextMenuItems)
                 {
-                    _isContextMenuVisible = false;
-                    _isFirstDropdownVisible = false;
-                    _engine.Log("Desktop: Closing context menu");
+                    maxMenuWidth = Math.Max(maxMenuWidth, CalculateMenuWidth(item));
                 }
-                else
+
+                // Calculate the maximum dropdown width needed
+                int maxDropdownWidth = 0;
+                foreach (var item in _contextMenuItems)
                 {
-                    // Handle clicks on menu items
-                    
-                    // Calculate the maximum width needed for the main menu
-                    int maxMenuWidth = 0;
-                    foreach (var item in _contextMenuItems)
+                    if (item.DropdownItems != null)
                     {
-                        maxMenuWidth = Math.Max(maxMenuWidth, CalculateMenuWidth(item));
+                        maxDropdownWidth = Math.Max(maxDropdownWidth, CalculateDropdownWidth(item));
+                    }
+                }
+
+                // Check if dropdowns should be on the left
+                bool showDropdownsOnLeft = ShouldShowDropdownsOnLeft(_contextMenuPosition, maxDropdownWidth);
+                
+                for (int i = 0; i < _contextMenuItems.Count; i++)
+                {
+                    var item = _contextMenuItems[i];
+                    Rectangle itemBounds = new Rectangle(
+                        (int)_contextMenuPosition.X,
+                        (int)_contextMenuPosition.Y + (i * CONTEXT_MENU_ITEM_HEIGHT),
+                        maxMenuWidth,
+                        CONTEXT_MENU_ITEM_HEIGHT
+                    );
+                    
+                    if (itemBounds.Contains(_currentMouseState.Position))
+                    {
+                        // Clicked on main menu item
+                        if (item.DropdownItems == null)
+                        {
+                            // No dropdown - execute action directly
+                            HandleContextMenuAction(i);
+                        }
+                        // If it has dropdown, it will be handled by hover logic
+                        break;
                     }
 
-                    // Calculate the maximum dropdown width needed
-                    int maxDropdownWidth = 0;
-                    foreach (var item in _contextMenuItems)
+                    // Check if clicked on dropdown items
+                    if (item.IsDropdownVisible && item.DropdownItems != null)
                     {
-                        if (item.DropdownItems != null)
+                        int dropdownWidth = CalculateDropdownWidth(item);
+                        int dropdownX;
+                        if (showDropdownsOnLeft)
                         {
-                            maxDropdownWidth = Math.Max(maxDropdownWidth, CalculateDropdownWidth(item));
+                            dropdownX = (int)_contextMenuPosition.X - dropdownWidth;
                         }
-                    }
-
-                    // Check if dropdowns should be on the left
-                    bool showDropdownsOnLeft = ShouldShowDropdownsOnLeft(_contextMenuPosition, maxDropdownWidth);
-                    
-                    for (int i = 0; i < _contextMenuItems.Count; i++)
-                    {
-                        var item = _contextMenuItems[i];
-                        Rectangle itemBounds = new Rectangle(
-                            (int)_contextMenuPosition.X,
-                            (int)_contextMenuPosition.Y + (i * CONTEXT_MENU_ITEM_HEIGHT),
-                            maxMenuWidth,
-                            CONTEXT_MENU_ITEM_HEIGHT
-                        );
-                        
-                        if (itemBounds.Contains(_currentMouseState.Position))
+                        else
                         {
-                            // Clicked on main menu item
-                            if (item.DropdownItems == null)
-                            {
-                                // No dropdown - execute action directly
-                                HandleContextMenuAction(i);
-                            }
-                            // If it has dropdown, it will be handled by hover logic
-                            break;
+                            dropdownX = (int)_contextMenuPosition.X + maxMenuWidth;
                         }
 
-                        // Check if clicked on dropdown items
-                        if (item.IsDropdownVisible && item.DropdownItems != null)
+                        // Calculate dropdown Y position based on whether main menu is above or below cursor
+                        int dropdownY;
+                        if (_contextMenuBounds.Y < _contextMenuPosition.Y)
                         {
-                            int dropdownWidth = CalculateDropdownWidth(item);
-                            int dropdownX;
-                            if (showDropdownsOnLeft)
-                            {
-                                dropdownX = (int)_contextMenuPosition.X - dropdownWidth;
-                            }
-                            else
-                            {
-                                dropdownX = (int)_contextMenuPosition.X + maxMenuWidth;
-                            }
+                            // If main menu is above cursor, align dropdown with its item
+                            dropdownY = _contextMenuBounds.Y + (i * CONTEXT_MENU_ITEM_HEIGHT);
+                        }
+                        else
+                        {
+                            // If main menu is below cursor, use original positioning
+                            dropdownY = (int)_contextMenuPosition.Y + (i * CONTEXT_MENU_ITEM_HEIGHT);
+                        }
 
-                            // Calculate dropdown Y position based on whether main menu is above or below cursor
-                            int dropdownY;
-                            if (_contextMenuBounds.Y < _contextMenuPosition.Y)
+                        for (int j = 0; j < item.DropdownItems.Count; j++)
+                        {
+                            Rectangle dropdownBounds = new Rectangle(
+                                dropdownX,
+                                dropdownY + (j * CONTEXT_MENU_ITEM_HEIGHT),
+                                dropdownWidth,
+                                CONTEXT_MENU_ITEM_HEIGHT
+                            );
+                            
+                            if (dropdownBounds.Contains(_currentMouseState.Position))
                             {
-                                // If main menu is above cursor, align dropdown with its item
-                                dropdownY = _contextMenuBounds.Y + (i * CONTEXT_MENU_ITEM_HEIGHT);
-                            }
-                            else
-                            {
-                                // If main menu is below cursor, use original positioning
-                                dropdownY = (int)_contextMenuPosition.Y + (i * CONTEXT_MENU_ITEM_HEIGHT);
-                            }
-
-                            for (int j = 0; j < item.DropdownItems.Count; j++)
-                            {
-                                Rectangle dropdownBounds = new Rectangle(
-                                    dropdownX,
-                                    dropdownY + (j * CONTEXT_MENU_ITEM_HEIGHT),
-                                    dropdownWidth,
-                                    CONTEXT_MENU_ITEM_HEIGHT
-                                );
-                                
-                                if (dropdownBounds.Contains(_currentMouseState.Position))
-                                {
-                                    // Clicked on dropdown item - execute action
-                                    HandleContextMenuAction(i, j);
-                                    break;
-                                }
+                                // Clicked on dropdown item - execute action
+                                HandleContextMenuAction(i, j);
+                                break;
                             }
                         }
                     }
@@ -1407,6 +1400,16 @@ namespace MarySGameEngine.Modules.Desktop_essential
         public void SetBackgroundColor(Color color)
         {
             _backgroundColor = color;
+        }
+
+        public void CloseContextMenuIfOutside(Point mousePosition)
+        {
+            if (_isContextMenuVisible && !_contextMenuBounds.Contains(mousePosition))
+            {
+                _isContextMenuVisible = false;
+                _isFirstDropdownVisible = false;
+                _engine.Log("Desktop: Closing context menu from global click");
+            }
         }
 
         private void UpdateContextMenuBounds()
