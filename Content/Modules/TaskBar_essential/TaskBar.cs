@@ -327,9 +327,9 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 bool clickedOnIcon = false;
                 foreach (var icon in _moduleIcons)
                 {
-                    // Skip icons that are not active and not animating (closed windows)
+                    // Skip icons that are closed (not active, not visible) or shrunk to nothing
                     // But allow minimized icons (not active but still visible)
-                    if (!icon.IsActive && !icon.IsAnimating && icon.Scale <= 0f)
+                    if ((!icon.IsActive && !icon.IsVisible) || icon.Scale <= 0f)
                     {
                         continue;
                     }
@@ -426,9 +426,9 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             bool foundHoveredIcon = false;
             foreach (var icon in _moduleIcons)
             {
-                // Skip icons that are not active and not animating (closed windows)
+                // Skip icons that are closed (not active, not visible) or shrunk to nothing
                 // But allow minimized icons (not active but still visible)
-                if (!icon.IsActive && !icon.IsAnimating && icon.Scale <= 0f)
+                if ((!icon.IsActive && !icon.IsVisible) || icon.Scale <= 0f)
                 {
                     icon.IsHovered = false; // Ensure inactive icons are not hovered
                     continue;
@@ -515,9 +515,9 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 // Draw module icons
                 foreach (var icon in _moduleIcons)
                 {
-                    // Skip drawing if icon is not active and not animating (closed windows)
+                    // Skip drawing if icon is closed (not active, not visible) or shrunk to nothing
                     // But allow minimized icons (not active but still visible)
-                    if (!icon.IsActive && !icon.IsAnimating && icon.Scale <= 0f)
+                    if ((!icon.IsActive && !icon.IsVisible) || icon.Scale <= 0f)
                     {
                         continue;
                     }
@@ -979,7 +979,8 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 for (int i = closingIndex + 1; i < _moduleIcons.Count; i++)
                 {
                     var icon = _moduleIcons[i];
-                    if (icon.IsActive && !icon.IsShrinking) // Only animate active, non-shrinking icons
+                    // Animate icons that are either active or visible (minimized windows are visible but not active)
+                    if ((icon.IsActive || icon.IsVisible) && !icon.IsShrinking)
                     {
                         // Calculate new target position
                         Rectangle newTargetBounds;
@@ -1008,7 +1009,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                         icon.IsAnimating = true;
                         icon.AnimationProgress = 0f;
                         
-                        _engine.Log($"TaskBar: Set target position for {icon.Name} to {newTargetBounds}");
+                        _engine.Log($"TaskBar: Set target position for {icon.Name} to {newTargetBounds} (Active: {icon.IsActive}, Visible: {icon.IsVisible})");
                     }
                 }
             }
@@ -1065,12 +1066,15 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             else
                             {
                                 // Interpolate position
+                                Rectangle oldBounds = icon.Bounds;
                                 icon.Bounds = new Rectangle(
                                     (int)MathHelper.Lerp(icon.Bounds.X, icon.TargetBounds.X, icon.AnimationProgress),
                                     (int)MathHelper.Lerp(icon.Bounds.Y, icon.TargetBounds.Y, icon.AnimationProgress),
                                     icon.Bounds.Width,
                                     icon.Bounds.Height
                                 );
+                                
+
                             }
                         }
                     }
