@@ -90,8 +90,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private Texture2D _maximiseIcon;
         private Texture2D _restoreIcon;
         private Texture2D _minimiseIcon;
-        private Texture2D _lockedIcon;
-        private Texture2D _unlockedIcon;
+        private Texture2D _settingsIcon;
         private Texture2D _pinIcon;
         private Texture2D _unpinIcon;
         private MouseState _currentMouseState;
@@ -110,7 +109,6 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private const float MINIMIZE_VISIBILITY_THRESHOLD = 0.4f; // New constant for visibility threshold
         private const float CLOSE_ANIMATION_SPEED = 0.08f; // Speed of close animation
         private bool _isPinned;
-        private bool _isLocked;
         private string _currentTooltip = string.Empty;
         private Vector2 _tooltipPosition;
         private const int TOOLTIP_PADDING = 5;
@@ -332,13 +330,13 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
         }
 
-        private Rectangle GetLockButtonBounds(Rectangle? bounds = null)
+        private Rectangle GetSettingsButtonBounds(Rectangle? bounds = null)
         {
             try
             {
                 Rectangle targetBounds = bounds ?? _windowBounds;
                 return new Rectangle(
-                    targetBounds.Right - (_buttonSize * 4) - (_buttonSpacing * 4),
+                    targetBounds.Right - (_buttonSize * 5) - (_buttonSpacing * 5),
                     targetBounds.Y + (_titleBarHeight - _buttonSize) / 2,
                     _buttonSize,
                     _buttonSize
@@ -356,7 +354,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             {
                 Rectangle targetBounds = bounds ?? _windowBounds;
                 return new Rectangle(
-                    targetBounds.Right - (_buttonSize * 5) - (_buttonSpacing * 5),
+                    targetBounds.Right - (_buttonSize * 4) - (_buttonSpacing * 4),
                     targetBounds.Y + (_titleBarHeight - _buttonSize) / 2,
                     _buttonSize,
                     _buttonSize
@@ -1028,13 +1026,13 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 spriteBatch.Draw(_closeIcon, closeButtonBounds, Color.White);
             }
 
-            // Draw lock/unlock button
-            Rectangle lockButtonBounds = GetLockButtonBounds(scaledBounds);
-            if (lockButtonBounds != Rectangle.Empty)
+            // Draw settings button
+            Rectangle settingsButtonBounds = GetSettingsButtonBounds(scaledBounds);
+            if (settingsButtonBounds != Rectangle.Empty)
             {
-                bool isLockHovered = lockButtonBounds.Contains(_currentMouseState.Position);
-                spriteBatch.Draw(_pixel, lockButtonBounds, isLockHovered ? _buttonHoverColor : _titleBarColor);
-                spriteBatch.Draw(_isLocked ? _lockedIcon : _unlockedIcon, lockButtonBounds, Color.White);
+                bool isSettingsHovered = settingsButtonBounds.Contains(_currentMouseState.Position);
+                spriteBatch.Draw(_pixel, settingsButtonBounds, isSettingsHovered ? _buttonHoverColor : _titleBarColor);
+                spriteBatch.Draw(_settingsIcon, settingsButtonBounds, Color.White);
             }
 
             // Draw pin/unpin button
@@ -1323,8 +1321,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _maximiseIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/maximise");
             _restoreIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/restore");
             _minimiseIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/minimise");
-            _lockedIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/locked");
-            _unlockedIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/unlocked");
+            _settingsIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/settings");
             _pinIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/pin");
             _unpinIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/unpin");
             _titleFont = content.Load<SpriteFont>("Fonts/SpriteFonts/window_title_font");
@@ -1338,8 +1335,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 return _isMaximized ? "Restore" : "Maximize";
             else if (bounds == GetMinimizeButtonBounds())
                 return "Minimize";
-            else if (bounds == GetLockButtonBounds())
-                return _isLocked ? "Unlock" : "Lock";
+            else if (bounds == GetSettingsButtonBounds())
+                return "Settings";
             else if (bounds == GetPinButtonBounds())
                 return _isPinned ? "Unpin" : "Pin";
             return string.Empty;
@@ -1352,7 +1349,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 GetCloseButtonBounds(),
                 GetMaximizeButtonBounds(),
                 GetMinimizeButtonBounds(),
-                GetLockButtonBounds(),
+                GetSettingsButtonBounds(),
                 GetPinButtonBounds()
             };
 

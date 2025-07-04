@@ -400,7 +400,7 @@
 /processorParam:TextureFormat=Color
 /build:Modules/WindowManagement_essential/minimise.png
 
-#begin Modules/WindowManagement_essential/locked.png
+#begin Modules/WindowManagement_essential/settings.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyColor=255,0,255,255
@@ -410,19 +410,7 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:Modules/WindowManagement_essential/locked.png
-
-#begin Modules/WindowManagement_essential/unlocked.png
-/importer:TextureImporter
-/processor:TextureProcessor
-/processorParam:ColorKeyColor=255,0,255,255
-/processorParam:ColorKeyEnabled=True
-/processorParam:GenerateMipmaps=False
-/processorParam:PremultiplyAlpha=True
-/processorParam:ResizeToPowerOfTwo=False
-/processorParam:MakeSquare=False
-/processorParam:TextureFormat=Color
-/build:Modules/WindowManagement_essential/unlocked.png
+/build:Modules/WindowManagement_essential/settings.png
 
 #begin Modules/WindowManagement_essential/pin.png
 /importer:TextureImporter
