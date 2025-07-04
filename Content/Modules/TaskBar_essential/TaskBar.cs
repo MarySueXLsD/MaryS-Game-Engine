@@ -60,6 +60,8 @@ namespace MarySGameEngine.Modules.TaskBar_essential
         private bool _isMouseOverTaskBar;
         private const float HIGHLIGHT_DURATION = 1.0f; // Duration of highlight effect in seconds
         private const float HIGHLIGHT_BLINK_SPEED = 0.25f; // Speed of blink effect
+        private const float ICON_ANIMATION_SPEED = 0.08f; // Speed of icon position animation
+        private const float ICON_SHRINK_SPEED = 0.12f; // Speed of icon shrink animation
         private float _highlightTimer = 0f;
         private bool _isHighlighted = false;
 
@@ -67,10 +69,15 @@ namespace MarySGameEngine.Modules.TaskBar_essential
         {
             public string Name { get; set; }
             public Rectangle Bounds { get; set; }
+            public Rectangle TargetBounds { get; set; } // Target position for animation
             public bool IsHovered { get; set; }
             public bool IsVisible { get; set; }
             public Texture2D Logo { get; set; }
             public bool IsActive { get; set; }
+            public bool IsAnimating { get; set; } // Whether this icon is currently animating
+            public float AnimationProgress { get; set; } // Animation progress (0.0 to 1.0)
+            public float Scale { get; set; } = 1.0f; // Scale for shrink animation
+            public bool IsShrinking { get; set; } // Whether this icon is shrinking to disappear
             public Vector2? PreMinimizePosition { get; set; }
             public Vector2? PreMinimizeSize { get; set; }
         }
@@ -170,10 +177,15 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 {
                     Name = "Task Bar",
                     Bounds = taskBarBounds,
+                    TargetBounds = taskBarBounds,
                     IsHovered = false,
                     IsVisible = true,
                     Logo = taskBarLogo,
-                    IsActive = true
+                    IsActive = true,
+                    IsAnimating = false,
+                    AnimationProgress = 0f,
+                    Scale = 1.0f,
+                    IsShrinking = false
                 });
 
                 // Add separator dots
@@ -262,10 +274,15 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                         {
                             Name = moduleInfo.Name,
                             Bounds = bounds,
+                            TargetBounds = bounds,
                             IsHovered = false,
                             IsVisible = true,
                             Logo = moduleLogo,
-                            IsActive = true
+                            IsActive = true,
+                            IsAnimating = false,
+                            AnimationProgress = 0f,
+                            Scale = 1.0f,
+                            IsShrinking = false
                         };
 
                         _moduleIcons.Add(moduleIcon);
@@ -310,6 +327,13 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 bool clickedOnIcon = false;
                 foreach (var icon in _moduleIcons)
                 {
+                    // Skip icons that are not active and not animating (closed windows)
+                    // But allow minimized icons (not active but still visible)
+                    if (!icon.IsActive && !icon.IsAnimating && icon.Scale <= 0f)
+                    {
+                        continue;
+                    }
+                    
                     if (icon.Bounds.Contains(currentMousePosition))
                     {
                         clickedOnIcon = true;
@@ -402,6 +426,14 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             bool foundHoveredIcon = false;
             foreach (var icon in _moduleIcons)
             {
+                // Skip icons that are not active and not animating (closed windows)
+                // But allow minimized icons (not active but still visible)
+                if (!icon.IsActive && !icon.IsAnimating && icon.Scale <= 0f)
+                {
+                    icon.IsHovered = false; // Ensure inactive icons are not hovered
+                    continue;
+                }
+                
                 bool wasHovered = icon.IsHovered;
                 icon.IsHovered = icon.Bounds.Contains(currentMousePosition);
                 
@@ -427,6 +459,9 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             }
 
             _lastMousePosition = currentMousePosition;
+            
+            // Update icon animations
+            UpdateIconAnimations();
         }
 
         private WindowManagement GetWindowManagementForModule(string moduleName)
@@ -480,30 +515,58 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 // Draw module icons
                 foreach (var icon in _moduleIcons)
                 {
+                    // Skip drawing if icon is not active and not animating (closed windows)
+                    // But allow minimized icons (not active but still visible)
+                    if (!icon.IsActive && !icon.IsAnimating && icon.Scale <= 0f)
+                    {
+                        continue;
+                    }
+                    
+                    // Calculate scaled bounds for shrinking animation
+                    Rectangle drawBounds = icon.Bounds;
+                    if (icon.IsShrinking && icon.Scale < 1.0f)
+                    {
+                        // Calculate center point for scaling
+                        Vector2 center = new Vector2(
+                            icon.Bounds.X + icon.Bounds.Width / 2f,
+                            icon.Bounds.Y + icon.Bounds.Height / 2f
+                        );
+                        
+                        // Calculate scaled size
+                        int scaledWidth = (int)(icon.Bounds.Width * icon.Scale);
+                        int scaledHeight = (int)(icon.Bounds.Height * icon.Scale);
+                        
+                        // Calculate scaled position to keep center point
+                        int scaledX = (int)(center.X - scaledWidth / 2f);
+                        int scaledY = (int)(center.Y - scaledHeight / 2f);
+                        
+                        drawBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+                    }
+                    
                     // Draw icon background
                     Color iconColor = icon.IsHovered ? new Color(70, 70, 70) : new Color(50, 50, 50);
-                    spriteBatch.Draw(_pixel, icon.Bounds, iconColor);
+                    spriteBatch.Draw(_pixel, drawBounds, iconColor);
 
                     // Draw active indicator if this module is active
                     if (icon.IsActive)
                     {
                         Rectangle indicatorBounds;
-                        int centerOffset = (icon.Bounds.Height - ACTIVE_INDICATOR_LENGTH) / 2;
+                        int centerOffset = (drawBounds.Height - ACTIVE_INDICATOR_LENGTH) / 2;
                         switch (_currentPosition)
                         {
                             case TaskBarPosition.Left:
-                                indicatorBounds = new Rectangle(icon.Bounds.X, icon.Bounds.Y + centerOffset, ACTIVE_INDICATOR_WIDTH, ACTIVE_INDICATOR_LENGTH);
+                                indicatorBounds = new Rectangle(drawBounds.X, drawBounds.Y + centerOffset, ACTIVE_INDICATOR_WIDTH, ACTIVE_INDICATOR_LENGTH);
                                 break;
                             case TaskBarPosition.Right:
-                                indicatorBounds = new Rectangle(icon.Bounds.Right - ACTIVE_INDICATOR_WIDTH, icon.Bounds.Y + centerOffset, ACTIVE_INDICATOR_WIDTH, ACTIVE_INDICATOR_LENGTH);
+                                indicatorBounds = new Rectangle(drawBounds.Right - ACTIVE_INDICATOR_WIDTH, drawBounds.Y + centerOffset, ACTIVE_INDICATOR_WIDTH, ACTIVE_INDICATOR_LENGTH);
                                 break;
                             case TaskBarPosition.Top:
-                                centerOffset = (icon.Bounds.Width - ACTIVE_INDICATOR_LENGTH) / 2;
-                                indicatorBounds = new Rectangle(icon.Bounds.X + centerOffset, icon.Bounds.Y, ACTIVE_INDICATOR_LENGTH, ACTIVE_INDICATOR_WIDTH);
+                                centerOffset = (drawBounds.Width - ACTIVE_INDICATOR_LENGTH) / 2;
+                                indicatorBounds = new Rectangle(drawBounds.X + centerOffset, drawBounds.Y, ACTIVE_INDICATOR_LENGTH, ACTIVE_INDICATOR_WIDTH);
                                 break;
                             default: // Bottom
-                                centerOffset = (icon.Bounds.Width - ACTIVE_INDICATOR_LENGTH) / 2;
-                                indicatorBounds = new Rectangle(icon.Bounds.X + centerOffset, icon.Bounds.Bottom - ACTIVE_INDICATOR_WIDTH, ACTIVE_INDICATOR_LENGTH, ACTIVE_INDICATOR_WIDTH);
+                                centerOffset = (drawBounds.Width - ACTIVE_INDICATOR_LENGTH) / 2;
+                                indicatorBounds = new Rectangle(drawBounds.X + centerOffset, drawBounds.Bottom - ACTIVE_INDICATOR_WIDTH, ACTIVE_INDICATOR_LENGTH, ACTIVE_INDICATOR_WIDTH);
                                 break;
                         }
                         spriteBatch.Draw(_pixel, indicatorBounds, ACTIVE_INDICATOR_COLOR);
@@ -520,8 +583,8 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             case TaskBarPosition.Right:
                                 // Calculate total width of dots and spacing
                                 int totalDotsWidth = (3 * DOT_SIZE) + (2 * DOT_SPACING);
-                                dotX = icon.Bounds.X + (icon.Bounds.Width - totalDotsWidth) / 2;
-                                dotY = icon.Bounds.Bottom + DOT_SEPARATOR_SPACING;
+                                dotX = drawBounds.X + (drawBounds.Width - totalDotsWidth) / 2;
+                                dotY = drawBounds.Bottom + DOT_SEPARATOR_SPACING;
                                 for (int i = 0; i < 3; i++)
                                 {
                                     // Draw circular dot
@@ -542,10 +605,10 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                                 }
                                 break;
                             default: // Top or Bottom
-                                dotX = icon.Bounds.Right + DOT_SEPARATOR_SPACING;
+                                dotX = drawBounds.Right + DOT_SEPARATOR_SPACING;
                                 // Calculate total height of dots and spacing
                                 int totalDotsHeight = (3 * DOT_SIZE) + (2 * DOT_SPACING);
-                                dotY = icon.Bounds.Y + (icon.Bounds.Height - totalDotsHeight) / 2;
+                                dotY = drawBounds.Y + (drawBounds.Height - totalDotsHeight) / 2;
                                 for (int i = 0; i < 3; i++)
                                 {
                                     // Draw circular dot
@@ -573,17 +636,17 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     {
                         try
                         {
-                            spriteBatch.Draw(icon.Logo, icon.Bounds, Color.White);
+                            spriteBatch.Draw(icon.Logo, drawBounds, Color.White);
                         }
                         catch (Exception ex)
                         {
                             _engine.Log($"TaskBar: Error drawing logo for {icon.Name}: {ex.Message}");
-                            DrawModuleName(spriteBatch, icon);
+                            DrawModuleName(spriteBatch, icon, drawBounds);
                         }
                     }
                     else
                     {
-                        DrawModuleName(spriteBatch, icon);
+                        DrawModuleName(spriteBatch, icon, drawBounds);
                     }
                 }
 
@@ -642,12 +705,12 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             }
         }
 
-        private void DrawModuleName(SpriteBatch spriteBatch, ModuleIcon icon)
+        private void DrawModuleName(SpriteBatch spriteBatch, ModuleIcon icon, Rectangle drawBounds)
         {
             // Calculate text position to be centered in the icon bounds
             Vector2 textSize = _menuFont.MeasureString(icon.Name);
-            float textX = icon.Bounds.X + (icon.Bounds.Width - textSize.X) / 2;
-            float textY = icon.Bounds.Y + (icon.Bounds.Height - textSize.Y) / 2;
+            float textX = drawBounds.X + (drawBounds.Width - textSize.X) / 2;
+            float textY = drawBounds.Y + (drawBounds.Height - textSize.Y) / 2;
 
             // Draw text with a slight shadow for better visibility
             Vector2 shadowOffset = new Vector2(1, 1);
@@ -737,8 +800,26 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 var module = _moduleIcons.FirstOrDefault(m => m.Name == moduleName);
                 if (module != null)
                 {
-                    module.IsActive = isActive;
-                    _engine.Log($"TaskBar: Set {moduleName} active state to {isActive}");
+                    if (!isActive && module.IsActive)
+                    {
+                        // Starting shrink animation for closing
+                        StartIconShrinkAnimation(module);
+                    }
+                    else if (isActive && !module.IsActive)
+                    {
+                        // Restoring icon
+                        module.IsActive = true;
+                        module.IsShrinking = false;
+                        module.Scale = 1.0f;
+                        module.IsAnimating = false;
+                        module.AnimationProgress = 0f;
+                        _engine.Log($"TaskBar: Restored {moduleName} icon");
+                    }
+                    else
+                    {
+                        module.IsActive = isActive;
+                        _engine.Log($"TaskBar: Set {moduleName} active state to {isActive}");
+                    }
                 }
                 else
                 {
@@ -831,6 +912,179 @@ namespace MarySGameEngine.Modules.TaskBar_essential
         public bool IsMouseOver()
         {
             return _isMouseOverTaskBar;
+        }
+
+        private void StartIconShrinkAnimation(ModuleIcon icon)
+        {
+            try
+            {
+                _engine.Log($"TaskBar: Starting shrink animation for {icon.Name}");
+                
+                // Store current bounds as target for other icons
+                icon.TargetBounds = icon.Bounds;
+                
+                // Start shrink animation
+                icon.IsShrinking = true;
+                icon.IsAnimating = true;
+                icon.AnimationProgress = 0f;
+                icon.Scale = 1.0f;
+                
+                // Calculate target positions for all icons that come after this one
+                CalculateIconRepositioning(icon);
+                
+                _engine.Log($"TaskBar: Shrink animation started for {icon.Name}");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"TaskBar: Error starting shrink animation: {ex.Message}");
+            }
+        }
+
+        // Add method to set module minimized state (different from active state)
+        public void SetModuleMinimized(string moduleName, bool isMinimized)
+        {
+            try
+            {
+                var module = _moduleIcons.FirstOrDefault(m => m.Name == moduleName);
+                if (module != null)
+                {
+                    // For minimize, we keep the icon visible but remove the active indicator
+                    // The icon stays in place, only the active state changes
+                    module.IsActive = !isMinimized; // Active = not minimized
+                    _engine.Log($"TaskBar: Set {moduleName} minimized state to {isMinimized} (active: {!isMinimized})");
+                }
+                else
+                {
+                    _engine.Log($"TaskBar: Could not find module {moduleName} to set minimized state");
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"TaskBar: Error setting module minimized state: {ex.Message}");
+            }
+        }
+
+        private void CalculateIconRepositioning(ModuleIcon closingIcon)
+        {
+            try
+            {
+                // Find the index of the closing icon
+                int closingIndex = _moduleIcons.IndexOf(closingIcon);
+                if (closingIndex == -1) return;
+
+                // Calculate the space that will be freed up
+                int freedSpace = TASK_BAR_SIZE + _spacing; // Icon size + spacing
+
+                // Update target positions for all icons that come after the closing icon
+                for (int i = closingIndex + 1; i < _moduleIcons.Count; i++)
+                {
+                    var icon = _moduleIcons[i];
+                    if (icon.IsActive && !icon.IsShrinking) // Only animate active, non-shrinking icons
+                    {
+                        // Calculate new target position
+                        Rectangle newTargetBounds;
+                        switch (_currentPosition)
+                        {
+                            case TaskBarPosition.Left:
+                            case TaskBarPosition.Right:
+                                newTargetBounds = new Rectangle(
+                                    icon.Bounds.X,
+                                    icon.Bounds.Y - freedSpace,
+                                    icon.Bounds.Width,
+                                    icon.Bounds.Height
+                                );
+                                break;
+                            default: // Top or Bottom
+                                newTargetBounds = new Rectangle(
+                                    icon.Bounds.X - freedSpace,
+                                    icon.Bounds.Y,
+                                    icon.Bounds.Width,
+                                    icon.Bounds.Height
+                                );
+                                break;
+                        }
+                        
+                        icon.TargetBounds = newTargetBounds;
+                        icon.IsAnimating = true;
+                        icon.AnimationProgress = 0f;
+                        
+                        _engine.Log($"TaskBar: Set target position for {icon.Name} to {newTargetBounds}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"TaskBar: Error calculating icon repositioning: {ex.Message}");
+            }
+        }
+
+        private void UpdateIconAnimations()
+        {
+            try
+            {
+                bool anyAnimating = false;
+                
+                foreach (var icon in _moduleIcons)
+                {
+                    if (icon.IsAnimating)
+                    {
+                        anyAnimating = true;
+                        
+                        if (icon.IsShrinking)
+                        {
+                            // Update shrink animation
+                            icon.AnimationProgress += ICON_SHRINK_SPEED;
+                            if (icon.AnimationProgress >= 1.0f)
+                            {
+                                // Shrink animation complete
+                                icon.AnimationProgress = 1.0f;
+                                icon.IsAnimating = false;
+                                icon.IsShrinking = false;
+                                icon.IsActive = false; // Now actually deactivate
+                                icon.Scale = 0f;
+                                _engine.Log($"TaskBar: Shrink animation completed for {icon.Name}");
+                            }
+                            else
+                            {
+                                // Update scale
+                                icon.Scale = 1.0f - icon.AnimationProgress;
+                            }
+                        }
+                        else
+                        {
+                            // Update position animation
+                            icon.AnimationProgress += ICON_ANIMATION_SPEED;
+                            if (icon.AnimationProgress >= 1.0f)
+                            {
+                                // Position animation complete
+                                icon.AnimationProgress = 1.0f;
+                                icon.IsAnimating = false;
+                                icon.Bounds = icon.TargetBounds;
+                                _engine.Log($"TaskBar: Position animation completed for {icon.Name}");
+                            }
+                            else
+                            {
+                                // Interpolate position
+                                icon.Bounds = new Rectangle(
+                                    (int)MathHelper.Lerp(icon.Bounds.X, icon.TargetBounds.X, icon.AnimationProgress),
+                                    (int)MathHelper.Lerp(icon.Bounds.Y, icon.TargetBounds.Y, icon.AnimationProgress),
+                                    icon.Bounds.Width,
+                                    icon.Bounds.Height
+                                );
+                            }
+                        }
+                    }
+                }
+                
+                if (!anyAnimating)
+                {
+                    _engine.Log("TaskBar: All icon animations completed");
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"TaskBar: Error updating icon animations: {ex.Message}");
+            }
         }
     }
 } 
