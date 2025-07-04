@@ -126,7 +126,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _windowWidth = windowWidth;
             _graphicsDevice = graphicsDevice;
             _windowHeight = graphicsDevice.Viewport.Height;
-            _position = new Vector2(100, TOP_BAR_HEIGHT);
+            // Stagger window positions to avoid overlap
+            int windowIndex = _activeWindows.Count;
+            _position = new Vector2(100 + (windowIndex * 50), TOP_BAR_HEIGHT + (windowIndex * 30));
             _properties = properties;
             _animationProgress = 0f;
             _isAnimating = false;
@@ -153,8 +155,22 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
         private int CalculateMinimumWidth(string title)
         {
+            // Handle null or empty title
+            if (string.IsNullOrEmpty(title))
+            {
+                title = "Window"; // Default title
+            }
+            
+            // Use menu font if title font is not loaded yet
+            SpriteFont fontToUse = _titleFont ?? _menuFont;
+            if (fontToUse == null)
+            {
+                // Fallback to minimum width if no font is available
+                return MIN_WINDOW_WIDTH;
+            }
+            
             // Measure title text width using the title font
-            Vector2 titleSize = _titleFont.MeasureString(title);
+            Vector2 titleSize = fontToUse.MeasureString(title);
             
             // Calculate total width needed for buttons
             int totalButtonWidth = (_buttonSize * 5) + (_buttonSpacing * 4);  // 5 buttons with 4 spaces between them
@@ -188,10 +204,25 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 }
                 else
                 {
+                    // Ensure position is valid
+                    if (float.IsNaN(_position.X) || float.IsNaN(_position.Y))
+                    {
+                        _engine.Log($"WindowManagement: Invalid position detected for {_windowTitle}: {_position}");
+                        _position = new Vector2(100, TOP_BAR_HEIGHT);
+                    }
+                    
                     int x = Math.Max(0, Math.Min((int)_position.X, gameWindowWidth - minWidth));
                     int y = _taskBar != null && _taskBar.GetCurrentPosition() == TaskBarPosition.Top ? 
                         _taskBar.GetTaskBarBounds().Height : TOP_BAR_HEIGHT;
                     y = Math.Max(y, Math.Min((int)_position.Y, gameWindowHeight - MIN_WINDOW_HEIGHT));
+                    
+                    // Ensure dimensions are valid
+                    if (_defaultWidth <= 0 || _defaultHeight <= 0)
+                    {
+                        _engine.Log($"WindowManagement: Invalid dimensions detected for {_windowTitle}: {_defaultWidth}x{_defaultHeight}");
+                        _defaultWidth = Math.Max(_defaultWidth, MIN_WINDOW_WIDTH);
+                        _defaultHeight = Math.Max(_defaultHeight, MIN_WINDOW_HEIGHT);
+                    }
                     
                     _windowBounds = new Rectangle(
                         x,
@@ -546,6 +577,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     {
                         _properties.IsVisible = false;
                     }
+                    
+                    _engine.Log($"WindowManagement: Animation completed for {_windowTitle} - Progress: {_animationProgress:F2}");
                 }
                 else
                 {
@@ -583,35 +616,41 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                         _defaultWidth = (int)(MathHelper.Lerp(_animationStartSize.X, _animationTargetSize.X, smoothProgress) * scale);
                         _defaultHeight = (int)(MathHelper.Lerp(_animationStartSize.Y, _animationTargetSize.Y, smoothProgress) * scale);
                     }
-                            }
-            UpdateWindowBounds();
-            return;
-        }
-
-        // Handle close animation
-        if (_isClosing)
-        {
-            _closeAnimationScale -= CLOSE_ANIMATION_SPEED;
-            if (_closeAnimationScale <= 0f)
-            {
-                _closeAnimationScale = 0f;
-                _isClosing = false;
-                _properties.IsVisible = false;
-                
-                // Remove from TaskBar
-                if (_taskBar != null)
-                {
-                    _taskBar.SetModuleActive(_windowTitle, false);
+                    
+                    // Log animation progress periodically
+                    if (_animationProgress % 0.1f < ANIMATION_SPEED)
+                    {
+                        _engine.Log($"WindowManagement: Animation progress for {_windowTitle}: {_animationProgress:F2}");
+                    }
                 }
-                
-                // Remove from active windows list
-                _activeWindows.Remove(this);
+                UpdateWindowBounds();
+                return; // Return early when animating to prevent input processing
             }
-            return;
-        }
 
-        // Only process input if not minimized and not animating
-        if (_isMinimized) return;
+            // Handle close animation
+            if (_isClosing)
+            {
+                _closeAnimationScale -= CLOSE_ANIMATION_SPEED;
+                if (_closeAnimationScale <= 0f)
+                {
+                    _closeAnimationScale = 0f;
+                    _isClosing = false;
+                    _properties.IsVisible = false;
+                    
+                    // Remove from TaskBar
+                    if (_taskBar != null)
+                    {
+                        _taskBar.SetModuleActive(_windowTitle, false);
+                    }
+                    
+                    // Remove from active windows list
+                    _activeWindows.Remove(this);
+                }
+                return; // Return early when closing to prevent input processing
+            }
+
+            // Only process input if not minimized
+            if (_isMinimized) return;
 
             int gameWindowWidth = _graphicsDevice.Viewport.Width;
             int gameWindowHeight = _graphicsDevice.Viewport.Height;
@@ -848,31 +887,31 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     var iconPosition = _taskBar.GetModuleIconPosition(_windowTitle);
                     if (iconPosition != Vector2.Zero)
                     {
-                        _isAnimating = true;
-                        _animationStartPosition = _position;
-                        _animationStartSize = new Vector2(_windowBounds.Width, _windowBounds.Height);
-                        
-                        // Calculate center of the icon for better animation
-                        Vector2 iconCenter = new Vector2(
-                            iconPosition.X + 20, // Half of icon width (40/2)
-                            iconPosition.Y + 20  // Half of icon height (40/2)
-                        );
-                        
-                        // Calculate center of the window
-                        Vector2 windowCenter = new Vector2(
-                            _position.X + (_windowBounds.Width / 2),
-                            _position.Y + (_windowBounds.Height / 2)
-                        );
-                        
-                        // Set target position to be the icon center minus half the final size
-                        _animationTargetPosition = new Vector2(
-                            iconCenter.X - 20, // Half of final width
-                            iconCenter.Y - 20  // Half of final height
-                        );
-                        
-                        _animationTargetSize = new Vector2(40, 40); // Icon size
-                        _animationProgress = 0f;
-                        _engine.Log($"WindowManagement: Starting minimize animation for {_windowTitle}");
+                                        _isAnimating = true;
+                _animationStartPosition = _position;
+                _animationStartSize = new Vector2(_windowBounds.Width, _windowBounds.Height);
+                
+                // Calculate center of the icon for better animation
+                Vector2 iconCenter = new Vector2(
+                    iconPosition.X + 20, // Half of icon width (40/2)
+                    iconPosition.Y + 20  // Half of icon height (40/2)
+                );
+                
+                // Calculate center of the window
+                Vector2 windowCenter = new Vector2(
+                    _position.X + (_windowBounds.Width / 2),
+                    _position.Y + (_windowBounds.Height / 2)
+                );
+                
+                // Set target position to be the icon center minus half the final size
+                _animationTargetPosition = new Vector2(
+                    iconCenter.X - 20, // Half of final width
+                    iconCenter.Y - 20  // Half of final height
+                );
+                
+                _animationTargetSize = new Vector2(40, 40); // Icon size
+                _animationProgress = 0f;
+                _engine.Log($"WindowManagement: Starting minimize animation for {_windowTitle} - Start: {_animationStartPosition}, Target: {_animationTargetPosition}, StartSize: {_animationStartSize}, TargetSize: {_animationTargetSize}");
                     }
                 }
                 
@@ -1271,6 +1310,11 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         public bool IsResizing()
         {
             return _isResizing;
+        }
+
+        public bool IsAnimating()
+        {
+            return _isAnimating;
         }
 
         public void LoadContent(ContentManager content)
