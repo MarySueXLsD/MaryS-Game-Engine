@@ -62,6 +62,7 @@ public class GameEngine : Game
     private string _mainDirectory;
     private TaskBar _taskBar;
     private Desktop _desktop;
+    private MouseState _previousMouseState;
     public static GameEngine Instance { get; private set; }
 
     // Window dimensions
@@ -84,6 +85,9 @@ public class GameEngine : Game
 
         // Get main directory (root project folder)
         _mainDirectory = Directory.GetCurrentDirectory();
+
+        // Initialize mouse state
+        _previousMouseState = Mouse.GetState();
 
         // Initialize log file
         InitializeLogging();
@@ -380,6 +384,20 @@ public class GameEngine : Game
             // Get mouse state
             var mouseState = Mouse.GetState();
             var mousePosition = mouseState.Position;
+
+            // Handle global context menu closing
+            if (mouseState.LeftButton == ButtonState.Pressed && 
+                _previousMouseState.LeftButton == ButtonState.Released)
+            {
+                // Close desktop context menu if it's visible and click is outside of it
+                if (_desktop != null)
+                {
+                    _desktop.CloseContextMenuIfOutside(mousePosition);
+                }
+            }
+
+            // Update previous mouse state
+            _previousMouseState = mouseState;
 
             // First find TaskBar and TopBar
             TaskBar taskBar = null;
