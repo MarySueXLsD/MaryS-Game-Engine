@@ -635,6 +635,15 @@ public class GameEngine : Game
                 _desktop.DrawContextMenu(_spriteBatch);
             }
 
+            // Draw window highlights last to ensure they're always on top
+            foreach (var windowModule in windowModules)
+            {
+                if (windowModule.WindowManagement != null)
+                {
+                    windowModule.WindowManagement.DrawHighlight(_spriteBatch);
+                }
+            }
+
             _spriteBatch.End();
 
             base.Draw(gameTime);

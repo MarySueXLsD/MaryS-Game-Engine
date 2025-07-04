@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using MarySGameEngine.Modules.TaskBar_essential;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xna.Framework.Content;
 
 namespace MarySGameEngine.Modules.WindowManagement_essential
@@ -27,6 +28,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         // Add static z-order tracking
         private static int _nextZOrder = 0;
         private static List<WindowManagement> _activeWindows = new List<WindowManagement>();
+        private static List<WindowManagement> _pinnedWindows = new List<WindowManagement>(); // Track pinned windows
+        private static List<WindowManagement> _pinnedWindowsOrder = new List<WindowManagement>(); // Track pinned windows order
         private int _zOrder;
         
         // Window properties
@@ -671,25 +674,36 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             Rectangle titleBarBounds = new Rectangle(
                 scaledBounds.X,
                 scaledBounds.Y,
-                scaledBounds.Width - (_buttonSize * 3) - (_buttonSpacing * 3),
+                scaledBounds.Width - (_buttonSize * 5) - (_buttonSpacing * 5), // Account for all 5 buttons
                 _titleBarHeight
             );
 
             Rectangle maximizeButtonBounds = GetMaximizeButtonBounds(scaledBounds);
             Rectangle minimizeButtonBounds = GetMinimizeButtonBounds(scaledBounds);
             Rectangle closeButtonBounds = GetCloseButtonBounds(scaledBounds);
+            Rectangle pinButtonBounds = GetPinButtonBounds(scaledBounds);
             Rectangle resizeHandleBounds = GetResizeHandleBounds(scaledBounds);
 
             // Check if mouse is over any part of the window
             bool isMouseOverWindow = scaledBounds.Contains(_currentMouseState.Position);
+            
+            // Debug: Log pin button bounds and mouse position occasionally
+            if (_currentMouseState.Position.X % 100 == 0 && _currentMouseState.Position.Y % 100 == 0)
+            {
+                _engine.Log($"WindowManagement: Mouse at {_currentMouseState.Position}, Pin button bounds: {pinButtonBounds}, Title bar bounds: {titleBarBounds}, Window bounds: {scaledBounds}");
+            }
 
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
             {
                 if (isMouseOverWindow)
                 {
-                    // Bring window to front when clicked
-                    BringToFront();
+                    // Only bring to front if this window is pinned or if there are no pinned windows
+                    bool hasPinnedWindows = _pinnedWindows.Count > 0;
+                    if (_isPinned || !hasPinnedWindows)
+                    {
+                        BringToFront();
+                    }
 
                     if (_properties.IsMovable && titleBarBounds.Contains(_currentMouseState.Position))
                     {
@@ -712,6 +726,11 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     else if (closeButtonBounds.Contains(_currentMouseState.Position))
                     {
                         StartCloseAnimation();
+                    }
+                    else if (pinButtonBounds.Contains(_currentMouseState.Position))
+                    {
+                        _engine.Log($"WindowManagement: Pin button clicked for window {_windowTitle}");
+                        TogglePin();
                     }
                     else if (_properties.IsResizable && resizeHandleBounds.Contains(_currentMouseState.Position))
                     {
@@ -885,31 +904,31 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     var iconPosition = _taskBar.GetModuleIconPosition(_windowTitle);
                     if (iconPosition != Vector2.Zero)
                     {
-                                        _isAnimating = true;
-                _animationStartPosition = _position;
-                _animationStartSize = new Vector2(_windowBounds.Width, _windowBounds.Height);
-                
-                // Calculate center of the icon for better animation
-                Vector2 iconCenter = new Vector2(
-                    iconPosition.X + 20, // Half of icon width (40/2)
-                    iconPosition.Y + 20  // Half of icon height (40/2)
-                );
-                
-                // Calculate center of the window
-                Vector2 windowCenter = new Vector2(
-                    _position.X + (_windowBounds.Width / 2),
-                    _position.Y + (_windowBounds.Height / 2)
-                );
-                
-                // Set target position to be the icon center minus half the final size
-                _animationTargetPosition = new Vector2(
-                    iconCenter.X - 20, // Half of final width
-                    iconCenter.Y - 20  // Half of final height
-                );
-                
-                _animationTargetSize = new Vector2(40, 40); // Icon size
-                _animationProgress = 0f;
-                _engine.Log($"WindowManagement: Starting minimize animation for {_windowTitle} - Start: {_animationStartPosition}, Target: {_animationTargetPosition}, StartSize: {_animationStartSize}, TargetSize: {_animationTargetSize}");
+                        _isAnimating = true;
+                        _animationStartPosition = _position;
+                        _animationStartSize = new Vector2(_windowBounds.Width, _windowBounds.Height);
+                        
+                        // Calculate center of the icon for better animation
+                        Vector2 iconCenter = new Vector2(
+                            iconPosition.X + 20, // Half of icon width (40/2)
+                            iconPosition.Y + 20  // Half of icon height (40/2)
+                        );
+                        
+                        // Calculate center of the window
+                        Vector2 windowCenter = new Vector2(
+                            _position.X + (_windowBounds.Width / 2),
+                            _position.Y + (_windowBounds.Height / 2)
+                        );
+                        
+                        // Set target position to be the icon center minus half the final size
+                        _animationTargetPosition = new Vector2(
+                            iconCenter.X - 20, // Half of final width
+                            iconCenter.Y - 20  // Half of final height
+                        );
+                        
+                        _animationTargetSize = new Vector2(40, 40); // Icon size
+                        _animationProgress = 0f;
+                        _engine.Log($"WindowManagement: Starting minimize animation for {_windowTitle} - Start: {_animationStartPosition}, Target: {_animationTargetPosition}, StartSize: {_animationStartSize}, TargetSize: {_animationTargetSize}");
                     }
                 }
                 
@@ -949,6 +968,51 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             catch (Exception ex)
             {
                 _engine.Log($"WindowManagement: Error in StartCloseAnimation: {ex.Message}");
+            }
+        }
+
+        private void TogglePin()
+        {
+            try
+            {
+                _engine.Log($"WindowManagement: TogglePin called for window {_windowTitle} - Current pinned state: {_isPinned}");
+                
+                _isPinned = !_isPinned;
+                
+                if (_isPinned)
+                {
+                    // Add to pinned windows list if not already there
+                    if (!_pinnedWindows.Contains(this))
+                    {
+                        _pinnedWindows.Add(this);
+                    }
+                    
+                    // Add to the end of the pinned order list (most recent pinned = last in list)
+                    if (!_pinnedWindowsOrder.Contains(this))
+                    {
+                        _pinnedWindowsOrder.Add(this);
+                    }
+                    
+                    // Bring to front of pinned windows (without highlighting)
+                    BringToFrontWithoutHighlight();
+                    _engine.Log($"WindowManagement: Window {_windowTitle} pinned");
+                }
+                else
+                {
+                    // Remove from pinned windows list
+                    _pinnedWindows.Remove(this);
+                    
+                    // Remove from pinned order list
+                    _pinnedWindowsOrder.Remove(this);
+                    
+                    // Bring to front of normal windows (without highlighting)
+                    BringToFrontWithoutHighlight();
+                    _engine.Log($"WindowManagement: Window {_windowTitle} unpinned");
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"WindowManagement: Error in TogglePin: {ex.Message}");
             }
         }
 
@@ -1042,6 +1106,12 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 bool isPinHovered = pinButtonBounds.Contains(_currentMouseState.Position);
                 spriteBatch.Draw(_pixel, pinButtonBounds, isPinHovered ? _buttonHoverColor : _titleBarColor);
                 spriteBatch.Draw(_isPinned ? _unpinIcon : _pinIcon, pinButtonBounds, Color.White);
+                
+                // Debug: Log pin button drawing occasionally
+                if (_currentMouseState.Position.X % 200 == 0 && _currentMouseState.Position.Y % 200 == 0)
+                {
+                    _engine.Log($"WindowManagement: Drawing pin button for {_windowTitle} at {pinButtonBounds}, Pinned: {_isPinned}, Hovered: {isPinHovered}");
+                }
             }
 
             // Draw resize handle if not maximized and resizable
@@ -1085,42 +1155,6 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.Right, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
                 WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), WINDOW_BORDER_COLOR);
 
-            // Draw highlight if active (after borders to ensure it's visible)
-            if (_isHighlighted)
-            {
-                // Calculate pulse effect using a sine wave with faster oscillation
-                float pulseValue = (float)(Math.Sin(_highlightTimer * Math.PI * 2 * HIGHLIGHT_BLINK_SPEED) + 1) / 2;
-                float alpha = MathHelper.Lerp(HIGHLIGHT_MIN_ALPHA, HIGHLIGHT_MAX_ALPHA, pulseValue);
-                
-                // Create a pulsing purple color
-                Color highlightColor = new Color(
-                    (byte)(ACTIVE_INDICATOR_COLOR.R * alpha),
-                    (byte)(ACTIVE_INDICATOR_COLOR.G * alpha),
-                    (byte)(ACTIVE_INDICATOR_COLOR.B * alpha),
-                    (byte)(255 * alpha)
-                );
-
-                // Draw highlight borders with same width as window borders
-                // Top border
-                spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
-                    scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), highlightColor);
-                // Bottom border
-                spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Bottom, 
-                    scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), highlightColor);
-                // Left border
-                spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
-                    WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), highlightColor);
-                // Right border
-                spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.Right, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
-                    WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), highlightColor);
-
-                // Log the current alpha value for debugging
-                if (_highlightTimer % 0.25f < 0.016f) // Log roughly every quarter second
-                {
-                    _engine.Log($"WindowManagement: Highlight alpha for {_windowTitle}: {alpha:F2}");
-                }
-            }
-
             // Draw tooltip
             DrawTooltip(spriteBatch);
         }
@@ -1160,6 +1194,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         public void Dispose()
         {
             _activeWindows.Remove(this);
+            _pinnedWindows.Remove(this);
+            _pinnedWindowsOrder.Remove(this);
             _pixel?.Dispose();
         }
 
@@ -1179,10 +1215,23 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             if (!visible)
             {
                 _activeWindows.Remove(this);
+                if (_isPinned)
+                {
+                    _pinnedWindows.Remove(this);
+                    _pinnedWindowsOrder.Remove(this);
+                }
             }
             else if (!_activeWindows.Contains(this))
             {
                 _activeWindows.Add(this);
+                if (_isPinned && !_pinnedWindows.Contains(this))
+                {
+                    _pinnedWindows.Add(this);
+                    if (!_pinnedWindowsOrder.Contains(this))
+                    {
+                        _pinnedWindowsOrder.Add(this);
+                    }
+                }
                 BringToFront();
             }
         }
@@ -1256,12 +1305,24 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     _engine.Log($"WindowManagement: Window {_windowTitle} is not minimized, no action needed");
                 }
 
-                // Always bring to front and highlight when clicked
-                BringToFront();
+                // Always highlight when clicked
                 _isHighlighted = true;
                 _highlightTimer = 0f;
                 _currentlyHighlightedWindow = this;
-                _engine.Log($"WindowManagement: Highlighting window {_windowTitle}");
+                
+                // Only bring to front if this window is pinned or if there are no pinned windows
+                bool hasPinnedWindows = _pinnedWindows.Count > 0;
+                if (_isPinned || !hasPinnedWindows)
+                {
+                    BringToFront();
+                    _engine.Log($"WindowManagement: Brought window {_windowTitle} to front (Pinned: {_isPinned}, HasPinnedWindows: {hasPinnedWindows})");
+                }
+                else
+                {
+                    // For normal windows below pinned windows, just highlight without bringing to front
+                    // This will show the purple border animation to indicate the window is below pinned windows
+                    _engine.Log($"WindowManagement: Highlighted window {_windowTitle} below pinned windows - showing border animation");
+                }
             }
             catch (Exception ex)
             {
@@ -1279,8 +1340,38 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             // Remove from current position
             _activeWindows.Remove(this);
             
-            // Add to end of list (top)
-            _activeWindows.Add(this);
+            if (_isPinned)
+            {
+                // For pinned windows, add to the end of the list (after all normal windows)
+                _activeWindows.Add(this);
+                
+                // Reorder the active windows list to match the pinned order
+                // First, remove all pinned windows
+                foreach (var pinnedWindow in _pinnedWindowsOrder)
+                {
+                    _activeWindows.Remove(pinnedWindow);
+                }
+                
+                // Then add them back in the correct order (most recent first)
+                foreach (var pinnedWindow in _pinnedWindowsOrder)
+                {
+                    _activeWindows.Add(pinnedWindow);
+                }
+            }
+            else
+            {
+                // For normal windows, add before any pinned windows
+                int insertIndex = _activeWindows.Count;
+                for (int i = 0; i < _activeWindows.Count; i++)
+                {
+                    if (_activeWindows[i]._isPinned)
+                    {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+                _activeWindows.Insert(insertIndex, this);
+            }
             
             // Update z-order
             _zOrder = _nextZOrder++;
@@ -1292,7 +1383,59 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
 
             // Force a redraw to ensure proper z-order
-            _engine.Log($"WindowManagement: Brought window {_windowTitle} to front with z-order {_zOrder}");
+            _engine.Log($"WindowManagement: Brought window {_windowTitle} to front with z-order {_zOrder} (Pinned: {_isPinned})");
+        }
+
+        private void BringToFrontWithoutHighlight()
+        {
+            // Same as BringToFront but without any highlighting
+            // Remove from current position
+            _activeWindows.Remove(this);
+            
+            if (_isPinned)
+            {
+                // For pinned windows, add to the end of the list (after all normal windows)
+                _activeWindows.Add(this);
+                
+                // Reorder the active windows list to match the pinned order
+                // First, remove all pinned windows
+                foreach (var pinnedWindow in _pinnedWindowsOrder)
+                {
+                    _activeWindows.Remove(pinnedWindow);
+                }
+                
+                // Then add them back in the correct order (most recent first)
+                foreach (var pinnedWindow in _pinnedWindowsOrder)
+                {
+                    _activeWindows.Add(pinnedWindow);
+                }
+            }
+            else
+            {
+                // For normal windows, add before any pinned windows
+                int insertIndex = _activeWindows.Count;
+                for (int i = 0; i < _activeWindows.Count; i++)
+                {
+                    if (_activeWindows[i]._isPinned)
+                    {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+                _activeWindows.Insert(insertIndex, this);
+            }
+            
+            // Update z-order
+            _zOrder = _nextZOrder++;
+            
+            // Ensure all windows have proper z-order
+            for (int i = 0; i < _activeWindows.Count; i++)
+            {
+                _activeWindows[i]._zOrder = i;
+            }
+
+            // Force a redraw to ensure proper z-order (without highlighting)
+            _engine.Log($"WindowManagement: Brought window {_windowTitle} to front with z-order {_zOrder} (Pinned: {_isPinned}) - No highlight");
         }
 
         public bool IsTopMost()
@@ -1313,6 +1456,11 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         public bool IsAnimating()
         {
             return _isAnimating;
+        }
+
+        public bool IsPinned()
+        {
+            return _isPinned;
         }
 
         public void LoadContent(ContentManager content)
@@ -1416,6 +1564,62 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 new Vector2(tooltipBounds.X + TOOLTIP_PADDING, tooltipBounds.Y + TOOLTIP_PADDING),
                 Color.White
             );
+        }
+
+        public void DrawHighlight(SpriteBatch spriteBatch)
+        {
+            // Only draw highlight if this window is highlighted
+            if (!_isHighlighted) return;
+            
+            // Don't draw if not visible or if minimized and not animating
+            if (!_properties.IsVisible || (_isMinimized && !_isAnimating)) return;
+            
+            // Don't draw if minimized and scale is below threshold
+            if (_isMinimized && _isAnimating && _animationProgress > 0.85f) return;
+            
+            // Don't draw if closing and scale is 0
+            if (_isClosing && _closeAnimationScale <= 0f) return;
+
+            // Calculate scaled bounds for close animation
+            Rectangle scaledBounds = _windowBounds;
+            if (_isClosing)
+            {
+                // Calculate scaled size
+                int scaledWidth = (int)(_windowBounds.Width * _closeAnimationScale);
+                int scaledHeight = (int)(_windowBounds.Height * _closeAnimationScale);
+                
+                // Calculate scaled position to keep center point
+                int scaledX = (int)(_closeAnimationCenter.X - scaledWidth / 2);
+                int scaledY = (int)(_closeAnimationCenter.Y - scaledHeight / 2);
+                
+                scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+            }
+
+            // Calculate pulse effect using a sine wave with faster oscillation
+            float pulseValue = (float)(Math.Sin(_highlightTimer * Math.PI * 2 * HIGHLIGHT_BLINK_SPEED) + 1) / 2;
+            float alpha = MathHelper.Lerp(HIGHLIGHT_MIN_ALPHA, HIGHLIGHT_MAX_ALPHA, pulseValue);
+            
+            // Create a pulsing purple color
+            Color highlightColor = new Color(
+                (byte)(ACTIVE_INDICATOR_COLOR.R * alpha),
+                (byte)(ACTIVE_INDICATOR_COLOR.G * alpha),
+                (byte)(ACTIVE_INDICATOR_COLOR.B * alpha),
+                (byte)(255 * alpha)
+            );
+
+            // Draw highlight borders with same width as window borders
+            // Top border
+            spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
+                scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), highlightColor);
+            // Bottom border
+            spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Bottom, 
+                scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), highlightColor);
+            // Left border
+            spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
+                WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), highlightColor);
+            // Right border
+            spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.Right, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
+                WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), highlightColor);
         }
     }
 } 
