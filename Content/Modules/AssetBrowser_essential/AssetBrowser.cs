@@ -59,6 +59,7 @@ namespace MarySGameEngine.Modules.AssetBrowser_essential
         {
             _windowWidth = newWidth;
             _windowManagement.UpdateWindowWidth(newWidth);
+            UpdateBounds(); // Ensure proper positioning after width update
         }
 
         public void LoadContent(ContentManager content)

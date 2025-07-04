@@ -426,7 +426,7 @@ public class GameEngine : Game
             int highestZOrder = -1;
             bool isAnyWindowDragging = false;
 
-            // First pass: check for dragging windows
+            // First pass: check for dragging windows or animating windows
             foreach (var module in _activeModules)
             {
                 if (module is IModule moduleWithWindow)
@@ -439,7 +439,8 @@ public class GameEngine : Game
                         var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
                         if (windowManagement != null && windowManagement.IsVisible())
                         {
-                            if (windowManagement.IsDragging() || windowManagement.IsResizing())
+                            // Check if window is dragging, resizing, or animating
+                            if (windowManagement.IsDragging() || windowManagement.IsResizing() || windowManagement.IsAnimating())
                             {
                                 isAnyWindowDragging = true;
                                 topMostWindow = windowManagement;
@@ -494,6 +495,12 @@ public class GameEngine : Game
                         var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
                         if (windowManagement != null)
                         {
+                            // Log if window is animating
+                            if (windowManagement.IsAnimating())
+                            {
+                                Log($"Main: Window {windowManagement.GetWindowTitle()} is animating");
+                            }
+                            
                             // If we have a top-most window, only update that window's module
                             if (topMostWindow != null)
                             {
