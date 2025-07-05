@@ -57,6 +57,7 @@ public class GameEngine : Game
     private SpriteBatch _spriteBatch;
     private Color _backgroundColor;
     private SpriteFont _menuFont;
+    private SpriteFont _dropdownFont;
     private List<IModule> _activeModules;
     private StreamWriter _logFile;
     private string _mainDirectory;
@@ -219,8 +220,19 @@ public class GameEngine : Game
 
                     // Create instance of the module
                     Log($"Creating instance of {moduleInfo.Name}");
-                    IModule module = (IModule)Activator.CreateInstance(moduleType, 
-                        GraphicsDevice, _menuFont, GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width);
+                    IModule module;
+                    
+                    // Special handling for TopBar to pass dropdown font
+                    if (moduleName == "TopBar_essential")
+                    {
+                        module = (IModule)Activator.CreateInstance(moduleType, 
+                            GraphicsDevice, _menuFont, _dropdownFont, GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width);
+                    }
+                    else
+                    {
+                        module = (IModule)Activator.CreateInstance(moduleType, 
+                            GraphicsDevice, _menuFont, GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width);
+                    }
                     
                     _activeModules.Add(module);
                     Log($"Successfully loaded module: {moduleInfo.Name} v{moduleInfo.Version}");
@@ -327,6 +339,10 @@ public class GameEngine : Game
             // Load the pixel font
             _menuFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font");
             Log("Main: Loaded pixel font");
+
+            // Load the larger dropdown font
+            _dropdownFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/dropdown_font");
+            Log("Main: Loaded dropdown font");
 
             // Load all modules
             LoadModules();
