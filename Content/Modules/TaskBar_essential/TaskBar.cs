@@ -58,8 +58,8 @@ namespace MarySGameEngine.Modules.TaskBar_essential
         private bool _isMouseDown;
         private Point _lastMousePosition;
         private bool _isMouseOverTaskBar;
-        private const float HIGHLIGHT_DURATION = 1.0f; // Duration of highlight effect in seconds
-        private const float HIGHLIGHT_BLINK_SPEED = 0.25f; // Speed of blink effect
+        private const float HIGHLIGHT_DURATION = 1.5f; // Match WindowManagement
+        private const float HIGHLIGHT_BLINK_SPEED = 2.0f; // Match WindowManagement
         private const float ICON_ANIMATION_SPEED = 0.08f; // Speed of icon position animation
         private const float ICON_SHRINK_SPEED = 0.12f; // Speed of icon shrink animation
         private float _highlightTimer = 0f;
@@ -649,59 +649,31 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                         DrawModuleName(spriteBatch, icon, drawBounds);
                     }
                 }
-
-                // Draw highlight if active (after module icons to ensure it's on top)
-                if (_isHighlighted)
-                {
-                    // Calculate blink effect
-                    float blinkAlpha = (float)(Math.Sin(_highlightTimer * Math.PI * 2 / HIGHLIGHT_BLINK_SPEED) + 1) / 2;
-                    Color highlightColor = new Color(ACTIVE_INDICATOR_COLOR, (byte)(blinkAlpha * 255));
-
-                    // Draw highlight borders (1 pixel width) on the inside of the taskbar
-                    // Top border
-                    spriteBatch.Draw(_pixel, new Rectangle(_taskBarBounds.X, _taskBarBounds.Y, _taskBarBounds.Width, 1), highlightColor);
-                    // Bottom border
-                    spriteBatch.Draw(_pixel, new Rectangle(_taskBarBounds.X, _taskBarBounds.Bottom - 1, _taskBarBounds.Width, 1), highlightColor);
-                    // Left border
-                    spriteBatch.Draw(_pixel, new Rectangle(_taskBarBounds.X, _taskBarBounds.Y, 1, _taskBarBounds.Height), highlightColor);
-                    // Right border
-                    spriteBatch.Draw(_pixel, new Rectangle(_taskBarBounds.Right - 1, _taskBarBounds.Y, 1, _taskBarBounds.Height), highlightColor);
-                }
-
-                // Draw tooltip if hovering long enough
-                if (_currentHoveredModule != null && _hoverTime >= TOOLTIP_DELAY)
-                {
-                    Vector2 textSize = _menuFont.MeasureString(_currentHoveredModule);
-                    Rectangle tooltipBounds = new Rectangle(
-                        (int)_currentMouseState.Position.X + TOOLTIP_OFFSET,
-                        (int)_currentMouseState.Position.Y + TOOLTIP_OFFSET,
-                        (int)textSize.X + (TOOLTIP_PADDING * 2),
-                        (int)textSize.Y + (TOOLTIP_PADDING * 2)
-                    );
-
-                    // Draw tooltip background
-                    spriteBatch.Draw(_pixel, tooltipBounds, new Color(60, 60, 60));
-                    
-                    // Draw tooltip border
-                    Rectangle borderRect = new Rectangle(
-                        tooltipBounds.X - 1,
-                        tooltipBounds.Y - 1,
-                        tooltipBounds.Width + 2,
-                        tooltipBounds.Height + 2
-                    );
-                    spriteBatch.Draw(_pixel, borderRect, new Color(100, 100, 100));
-
-                    // Draw tooltip text
-                    Vector2 textPosition = new Vector2(
-                        tooltipBounds.X + TOOLTIP_PADDING,
-                        tooltipBounds.Y + TOOLTIP_PADDING
-                    );
-                    spriteBatch.DrawString(_menuFont, _currentHoveredModule, textPosition, Color.White);
-                }
             }
             catch (Exception ex)
             {
                 _engine.Log($"TaskBar: ERROR in Draw: {ex.Message}");
+            }
+        }
+
+        public void DrawHighlight(SpriteBatch spriteBatch)
+        {
+            // Draw highlight if active (after module icons to ensure it's on top)
+            if (_isHighlighted)
+            {
+                // Calculate blink effect
+                float blinkAlpha = (float)(Math.Sin(_highlightTimer * Math.PI * 2 / HIGHLIGHT_BLINK_SPEED) + 1) / 2;
+                Color highlightColor = new Color(ACTIVE_INDICATOR_COLOR, (byte)(blinkAlpha * 255));
+
+                // Draw highlight borders (1 pixel width) on the inside of the taskbar
+                // Top border
+                spriteBatch.Draw(_pixel, new Rectangle(_taskBarBounds.X, _taskBarBounds.Y, _taskBarBounds.Width, 1), highlightColor);
+                // Bottom border
+                spriteBatch.Draw(_pixel, new Rectangle(_taskBarBounds.X, _taskBarBounds.Bottom - 1, _taskBarBounds.Width, 1), highlightColor);
+                // Left border
+                spriteBatch.Draw(_pixel, new Rectangle(_taskBarBounds.X, _taskBarBounds.Y, 1, _taskBarBounds.Height), highlightColor);
+                // Right border
+                spriteBatch.Draw(_pixel, new Rectangle(_taskBarBounds.Right - 1, _taskBarBounds.Y, 1, _taskBarBounds.Height), highlightColor);
             }
         }
 
@@ -1088,6 +1060,46 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             catch (Exception ex)
             {
                 _engine.Log($"TaskBar: Error updating icon animations: {ex.Message}");
+            }
+        }
+
+        public void Highlight()
+        {
+            _isHighlighted = true;
+            _highlightTimer = 0f;
+        }
+
+        public void DrawTooltips(SpriteBatch spriteBatch)
+        {
+            // Draw tooltip if hovering long enough
+            if (_currentHoveredModule != null && _hoverTime >= TOOLTIP_DELAY)
+            {
+                Vector2 textSize = _menuFont.MeasureString(_currentHoveredModule);
+                Rectangle tooltipBounds = new Rectangle(
+                    (int)_currentMouseState.Position.X + TOOLTIP_OFFSET,
+                    (int)_currentMouseState.Position.Y + TOOLTIP_OFFSET,
+                    (int)textSize.X + (TOOLTIP_PADDING * 2),
+                    (int)textSize.Y + (TOOLTIP_PADDING * 2)
+                );
+
+                // Draw tooltip background
+                spriteBatch.Draw(_pixel, tooltipBounds, new Color(60, 60, 60));
+                
+                // Draw tooltip border
+                Rectangle borderRect = new Rectangle(
+                    tooltipBounds.X - 1,
+                    tooltipBounds.Y - 1,
+                    tooltipBounds.Width + 2,
+                    tooltipBounds.Height + 2
+                );
+                spriteBatch.Draw(_pixel, borderRect, new Color(100, 100, 100));
+
+                // Draw tooltip text
+                Vector2 textPosition = new Vector2(
+                    tooltipBounds.X + TOOLTIP_PADDING,
+                    tooltipBounds.Y + TOOLTIP_PADDING
+                );
+                spriteBatch.DrawString(_menuFont, _currentHoveredModule, textPosition, Color.White);
             }
         }
     }

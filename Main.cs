@@ -620,6 +620,18 @@ public class GameEngine : Game
                 }
             }
 
+            // Draw TaskBar after Desktop to ensure it's on top
+            if (_taskBar != null)
+            {
+                _taskBar.Draw(_spriteBatch);
+            }
+
+            // Draw Desktop grid after TaskBar to ensure it doesn't cover TaskBar highlight
+            if (_desktop != null)
+            {
+                _desktop.DrawGrid(_spriteBatch);
+            }
+
             // Then draw windows in z-order
             var windowModules = _activeModules
                 .Where(m => m.GetType().GetField("_windowManagement", 
@@ -658,6 +670,29 @@ public class GameEngine : Game
                 {
                     windowModule.WindowManagement.DrawHighlight(_spriteBatch);
                 }
+            }
+
+            // Draw Desktop and TopBar highlights last to ensure they're always on top
+            if (_desktop != null)
+            {
+                _desktop.DrawHighlight(_spriteBatch);
+            }
+            
+            if (topBar != null)
+            {
+                topBar.DrawHighlight(_spriteBatch);
+            }
+            
+            // Draw TaskBar highlight absolutely last to ensure it's always on top
+            if (_taskBar != null)
+            {
+                _taskBar.DrawHighlight(_spriteBatch);
+            }
+
+            // Draw TaskBar tooltips absolutely last to ensure they're always on top
+            if (_taskBar != null)
+            {
+                _taskBar.DrawTooltips(_spriteBatch);
             }
 
             _spriteBatch.End();
