@@ -575,6 +575,17 @@ namespace MarySGameEngine.Modules.TopBar_essential
                 // Highlight the window
                 windowManagement.HandleTaskBarClick();
                 
+                // Ensure TaskBar has an icon for this module
+                var modules = GameEngine.Instance.GetActiveModules();
+                foreach (var module in modules)
+                {
+                    if (module is MarySGameEngine.Modules.TaskBar_essential.TaskBar taskBar)
+                    {
+                        taskBar.EnsureModuleIconExists(moduleName);
+                        break;
+                    }
+                }
+                
                 System.Diagnostics.Debug.WriteLine($"TopBar: Successfully opened module {moduleName}");
             }
             catch (Exception ex)

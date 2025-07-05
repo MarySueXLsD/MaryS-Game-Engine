@@ -78,6 +78,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             public float AnimationProgress { get; set; } // Animation progress (0.0 to 1.0)
             public float Scale { get; set; } = 1.0f; // Scale for shrink animation
             public bool IsShrinking { get; set; } // Whether this icon is shrinking to disappear
+            public bool IsGrowing { get; set; } // Whether this icon is growing to appear
             public Vector2? PreMinimizePosition { get; set; }
             public Vector2? PreMinimizeSize { get; set; }
         }
@@ -329,7 +330,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 {
                     // Skip icons that are closed (not active, not visible) or shrunk to nothing
                     // But allow minimized icons (not active but still visible)
-                    if ((!icon.IsActive && !icon.IsVisible) || icon.Scale <= 0f)
+                    if ((!icon.IsActive && !icon.IsVisible && !icon.IsGrowing) || (icon.Scale <= 0f && !icon.IsGrowing))
                     {
                         continue;
                     }
@@ -427,8 +428,8 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             foreach (var icon in _moduleIcons)
             {
                 // Skip icons that are closed (not active, not visible) or shrunk to nothing
-                // But allow minimized icons (not active but still visible)
-                if ((!icon.IsActive && !icon.IsVisible) || icon.Scale <= 0f)
+                // But allow minimized icons (not active but still visible) and growing icons
+                if ((!icon.IsActive && !icon.IsVisible && !icon.IsGrowing) || (icon.Scale <= 0f && !icon.IsGrowing))
                 {
                     icon.IsHovered = false; // Ensure inactive icons are not hovered
                     continue;
@@ -516,15 +517,15 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 foreach (var icon in _moduleIcons)
                 {
                     // Skip drawing if icon is closed (not active, not visible) or shrunk to nothing
-                    // But allow minimized icons (not active but still visible)
-                    if ((!icon.IsActive && !icon.IsVisible) || icon.Scale <= 0f)
+                    // But allow minimized icons (not active but still visible) and growing icons
+                    if ((!icon.IsActive && !icon.IsVisible && !icon.IsGrowing) || (icon.Scale <= 0f && !icon.IsGrowing))
                     {
                         continue;
                     }
                     
                     // Calculate scaled bounds for shrinking animation
                     Rectangle drawBounds = icon.Bounds;
-                    if (icon.IsShrinking && icon.Scale < 1.0f)
+                    if ((icon.IsShrinking || icon.IsGrowing) && icon.Scale != 1.0f)
                     {
                         // Calculate center point for scaling
                         Vector2 center = new Vector2(
@@ -996,6 +997,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             try
             {
                 bool anyAnimating = false;
+                List<ModuleIcon> iconsToRemove = new List<ModuleIcon>();
                 
                 foreach (var icon in _moduleIcons)
                 {
@@ -1015,12 +1017,32 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                                 icon.IsShrinking = false;
                                 icon.IsActive = false; // Now actually deactivate
                                 icon.Scale = 0f;
+                                iconsToRemove.Add(icon); // Mark for removal
                                 _engine.Log($"TaskBar: Shrink animation completed for {icon.Name}");
                             }
                             else
                             {
                                 // Update scale
                                 icon.Scale = 1.0f - icon.AnimationProgress;
+                            }
+                        }
+                        else if (icon.IsGrowing)
+                        {
+                            // Update grow animation
+                            icon.AnimationProgress += ICON_SHRINK_SPEED; // Use same speed as shrink
+                            if (icon.AnimationProgress >= 1.0f)
+                            {
+                                // Grow animation complete
+                                icon.AnimationProgress = 1.0f;
+                                icon.IsAnimating = false;
+                                icon.IsGrowing = false;
+                                icon.Scale = 1.0f;
+                                _engine.Log($"TaskBar: Grow animation completed for {icon.Name}");
+                            }
+                            else
+                            {
+                                // Update scale
+                                icon.Scale = icon.AnimationProgress;
                             }
                         }
                         else
@@ -1050,6 +1072,13 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             }
                         }
                     }
+                }
+                
+                // Remove icons that completed shrink animation
+                foreach (var icon in iconsToRemove)
+                {
+                    _moduleIcons.Remove(icon);
+                    _engine.Log($"TaskBar: Removed icon {icon.Name} from list");
                 }
                 
                 if (!anyAnimating)
@@ -1100,6 +1129,145 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     tooltipBounds.Y + TOOLTIP_PADDING
                 );
                 spriteBatch.DrawString(_menuFont, _currentHoveredModule, textPosition, Color.White);
+            }
+        }
+
+        public void AddModuleIcon(string moduleName, Texture2D logo = null)
+        {
+            try
+            {
+                // Check if icon already exists
+                if (_moduleIcons.Any(icon => icon.Name == moduleName))
+                {
+                    _engine.Log($"TaskBar: Icon for {moduleName} already exists");
+                    return;
+                }
+
+                _engine.Log($"TaskBar: Adding icon for {moduleName}");
+
+                // Calculate position for new icon
+                int squareSize = TASK_BAR_SIZE;
+                Rectangle bounds;
+
+                // Find the last icon position
+                int currentX = _taskBarBounds.X;
+                int currentY = _taskBarBounds.Y;
+
+                // Start after TaskBar icon and separator dots
+                switch (_currentPosition)
+                {
+                    case TaskBarPosition.Left:
+                    case TaskBarPosition.Right:
+                        currentY += squareSize + _spacing; // Skip TaskBar icon
+                        currentY += DOT_SEPARATOR_SPACING + (3 * DOT_SIZE) + (2 * DOT_SPACING); // Skip separator dots
+                        break;
+                    default: // Top or Bottom
+                        currentX += squareSize + _spacing; // Skip TaskBar icon
+                        currentX += DOT_SEPARATOR_SPACING + (3 * DOT_SIZE) + (2 * DOT_SPACING); // Skip separator dots
+                        break;
+                }
+
+                // Add existing icons to calculate next position
+                foreach (var existingIcon in _moduleIcons)
+                {
+                    if (existingIcon.Name != "Task Bar")
+                    {
+                        switch (_currentPosition)
+                        {
+                            case TaskBarPosition.Left:
+                            case TaskBarPosition.Right:
+                                currentY += squareSize + _spacing;
+                                break;
+                            default: // Top or Bottom
+                                currentX += squareSize + _spacing;
+                                break;
+                        }
+                    }
+                }
+
+                // Create bounds for new icon
+                switch (_currentPosition)
+                {
+                    case TaskBarPosition.Left:
+                    case TaskBarPosition.Right:
+                        bounds = new Rectangle(currentX, currentY, squareSize, squareSize);
+                        break;
+                    default: // Top or Bottom
+                        bounds = new Rectangle(currentX, currentY, squareSize, squareSize);
+                        break;
+                }
+
+                // Create new icon
+                var moduleIcon = new ModuleIcon
+                {
+                    Name = moduleName,
+                    Bounds = bounds,
+                    TargetBounds = bounds,
+                    IsHovered = false,
+                    IsVisible = true,
+                    Logo = logo,
+                    IsActive = true,
+                    IsAnimating = true,
+                    AnimationProgress = 0f,
+                    Scale = 0.0f,
+                    IsShrinking = false,
+                    IsGrowing = true
+                };
+
+                _moduleIcons.Add(moduleIcon);
+                _engine.Log($"TaskBar: Successfully added icon for {moduleName} at position {bounds}");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"TaskBar: Error adding icon for {moduleName}: {ex.Message}");
+            }
+        }
+
+        public void RemoveModuleIcon(string moduleName)
+        {
+            try
+            {
+                var iconToRemove = _moduleIcons.FirstOrDefault(icon => icon.Name == moduleName);
+                if (iconToRemove == null)
+                {
+                    _engine.Log($"TaskBar: Icon for {moduleName} not found");
+                    return;
+                }
+
+                _engine.Log($"TaskBar: Removing icon for {moduleName}");
+
+                // Start shrink animation for the icon
+                StartIconShrinkAnimation(iconToRemove);
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"TaskBar: Error removing icon for {moduleName}: {ex.Message}");
+            }
+        }
+
+        public void EnsureModuleIconExists(string moduleName)
+        {
+            try
+            {
+                // Check if icon already exists
+                if (_moduleIcons.Any(icon => icon.Name == moduleName))
+                {
+                    return; // Icon already exists
+                }
+
+                // Try to load logo for the module
+                Texture2D logo = null;
+                if (_moduleLogos.ContainsKey(moduleName))
+                {
+                    logo = _moduleLogos[moduleName];
+                }
+
+                // Add the icon
+                AddModuleIcon(moduleName, logo);
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"TaskBar: Error ensuring icon exists for {moduleName}: {ex.Message}");
             }
         }
     }

@@ -51,6 +51,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private bool _isClosing;
         private Vector2 _closeAnimationCenter;
         private float _closeAnimationScale;
+        private bool _isOpening;
+        private Vector2 _openAnimationCenter;
+        private float _openAnimationScale;
         private int _titleBarHeight = 40;
         private int _defaultWidth = 250;
         private int _defaultHeight = 400;
@@ -111,6 +114,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private const float MINIMIZE_SCALE_END = 0.15f; // Changed from 0.3f to 0.2f for a middle ground
         private const float MINIMIZE_VISIBILITY_THRESHOLD = 0.4f; // New constant for visibility threshold
         private const float CLOSE_ANIMATION_SPEED = 0.08f; // Speed of close animation
+        private const float OPEN_ANIMATION_SPEED = 0.08f; // Speed of open animation
         private bool _isPinned;
         private string _currentTooltip = string.Empty;
         private Vector2 _tooltipPosition;
@@ -135,6 +139,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _isAnimating = false;
             _isClosing = false;
             _closeAnimationScale = 1.0f;
+            _isOpening = false;
+            _openAnimationScale = 1.0f;
+            _isPinned = false;
             _engine = (GameEngine)GameEngine.Instance;
             
             // Add to active windows list and assign z-order
@@ -634,16 +641,29 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     _isClosing = false;
                     _properties.IsVisible = false;
                     
-                    // Remove from TaskBar
+                    // Remove icon from TaskBar
                     if (_taskBar != null)
                     {
-                        _taskBar.SetModuleActive(_windowTitle, false);
+                        _taskBar.RemoveModuleIcon(_windowTitle);
                     }
                     
                     // Remove from active windows list
                     _activeWindows.Remove(this);
                 }
                 return; // Return early when closing to prevent input processing
+            }
+
+            // Handle open animation
+            if (_isOpening)
+            {
+                _openAnimationScale += OPEN_ANIMATION_SPEED;
+                if (_openAnimationScale >= 1.0f)
+                {
+                    _openAnimationScale = 1.0f;
+                    _isOpening = false;
+                    _engine.Log($"WindowManagement: Open animation completed for {_windowTitle}");
+                }
+                return; // Return early when opening to prevent input processing
             }
 
             // Only process input if not minimized
@@ -663,6 +683,18 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 // Calculate scaled position to keep center point
                 int scaledX = (int)(_closeAnimationCenter.X - scaledWidth / 2);
                 int scaledY = (int)(_closeAnimationCenter.Y - scaledHeight / 2);
+                
+                scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+            }
+            else if (_isOpening)
+            {
+                // Calculate scaled size for opening animation
+                int scaledWidth = (int)(_windowBounds.Width * _openAnimationScale);
+                int scaledHeight = (int)(_windowBounds.Height * _openAnimationScale);
+                
+                // Calculate scaled position to keep center point
+                int scaledX = (int)(_openAnimationCenter.X - scaledWidth / 2);
+                int scaledY = (int)(_openAnimationCenter.Y - scaledHeight / 2);
                 
                 scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
             }
@@ -967,6 +999,30 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
         }
 
+        private void StartOpenAnimation()
+        {
+            try
+            {
+                _engine.Log($"WindowManagement: Starting open animation for window {_windowTitle}");
+                
+                // Calculate the center of the window for the grow animation
+                _openAnimationCenter = new Vector2(
+                    _position.X + (_windowBounds.Width / 2),
+                    _position.Y + (_windowBounds.Height / 2)
+                );
+                
+                // Start the open animation
+                _isOpening = true;
+                _openAnimationScale = 0.0f;
+                
+                _engine.Log($"WindowManagement: Open animation started for {_windowTitle}");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"WindowManagement: Error in StartOpenAnimation: {ex.Message}");
+            }
+        }
+
         private void TogglePin()
         {
             try
@@ -1025,7 +1081,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             
             _windowTitle = title;
 
-            // Calculate scaled bounds for close animation
+            // Calculate scaled bounds for close/open animation
             Rectangle scaledBounds = _windowBounds;
             if (_isClosing)
             {
@@ -1036,6 +1092,18 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 // Calculate scaled position to keep center point
                 int scaledX = (int)(_closeAnimationCenter.X - scaledWidth / 2);
                 int scaledY = (int)(_closeAnimationCenter.Y - scaledHeight / 2);
+                
+                scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+            }
+            else if (_isOpening)
+            {
+                // Calculate scaled size for opening animation
+                int scaledWidth = (int)(_windowBounds.Width * _openAnimationScale);
+                int scaledHeight = (int)(_windowBounds.Height * _openAnimationScale);
+                
+                // Calculate scaled position to keep center point
+                int scaledX = (int)(_openAnimationCenter.X - scaledWidth / 2);
+                int scaledY = (int)(_openAnimationCenter.Y - scaledHeight / 2);
                 
                 scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
             }
@@ -1234,6 +1302,16 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                         _pinnedWindowsOrder.Add(this);
                     }
                 }
+                
+                // Ensure TaskBar has an icon for this window
+                if (_taskBar != null)
+                {
+                    _taskBar.EnsureModuleIconExists(_windowTitle);
+                }
+                
+                // Start opening animation
+                StartOpenAnimation();
+                
                 BringToFront();
             }
         }
