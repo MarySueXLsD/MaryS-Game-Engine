@@ -50,11 +50,13 @@ namespace MarySGameEngine.Modules.TopBar_essential
     {
         public string Text { get; set; }
         public string Shortcut { get; set; }
+        public bool HasSettingsIcon { get; set; }
 
-        public DropdownItem(string text, string shortcut = "")
+        public DropdownItem(string text, string shortcut = "", bool hasSettingsIcon = false)
         {
             Text = text;
             Shortcut = shortcut;
+            HasSettingsIcon = hasSettingsIcon;
         }
     }
 
@@ -62,39 +64,55 @@ namespace MarySGameEngine.Modules.TopBar_essential
     {
         // Window and UI dimensions
         private int _windowWidth;
-        private int _dropdownItemHeight = 25;
+        private int _dropdownItemHeight = 35; // Increased from 30 to 35 to accommodate larger settings icon
         private int _buttonLeftPadding = 10; // Left padding for text
         private int _buttonRightPadding = 10; // Right padding for text
         private int _dropdownLeftPadding = 25; // Padding from left edge for dropdowns
         private Vector2 _menuStartPosition = new Vector2(10, 5);
         private int _buttonHeight = 35;     // Height of the button area
-        private int _shortcutRightPadding = 10; // Padding from right edge for shortcuts
+        private int _shortcutRightPadding = 15; // Increased from 10 to 15 for more padding
         private int _dropdownTextSpacing = 40; // Spacing between menu text and shortcut
+        private const int SETTINGS_ICON_SIZE = 30; // Size of settings icon (same as dropdown item height minus small spacing)
+        private const int SETTINGS_ICON_SPACING = 2; // Small spacing around settings icon
         
 
         // Colors
         private Color _topBarColor;
         private Color _dropdownColor;
         private Color _hoverColor;
-        private Color _buttonHoverColor = new Color(60, 60, 60); // Color for button hover state
+        private Color _buttonHoverColor;
         private Color _shortcutColor = new Color(150, 150, 150); // Gray color for shortcuts
+        
+        // 80s Miami retro violet style colors
+        private readonly Color MIAMI_PURPLE = new Color(147, 112, 219); // Main purple color
+        private readonly Color MIAMI_PURPLE_DARK = new Color(100, 75, 150); // Darker purple
+        private readonly Color MIAMI_PURPLE_LIGHT = new Color(180, 145, 250); // Lighter purple
+        private readonly Color MIAMI_BACKGROUND = new Color(40, 40, 40); // Dark background
+        private readonly Color MIAMI_BORDER = new Color(147, 112, 219); // Purple border
+        private readonly Color MIAMI_SHADOW = new Color(0, 0, 0, 100); // Shadow color
+        private readonly Color MIAMI_TEXT = new Color(220, 220, 220); // Light text
+        private readonly Color MIAMI_HOVER = new Color(147, 112, 219, 180); // Semi-transparent purple hover
         
         // Resources
         private SpriteFont _menuFont;
+        private SpriteFont _dropdownFont;
         private List<MenuItem> _menuItems;
         private Texture2D _pixel;
+        private Texture2D _settingsIcon;
         private MouseState _currentMouseState;
         private MouseState _previousMouseState;
 
-        public TopBar(GraphicsDevice graphicsDevice, SpriteFont menuFont, int windowWidth)
+        public TopBar(GraphicsDevice graphicsDevice, SpriteFont menuFont, SpriteFont dropdownFont, int windowWidth)
         {
             _menuFont = menuFont;
+            _dropdownFont = dropdownFont;
             _windowWidth = windowWidth;
             
-            // Set colors
-            _topBarColor = new Color(40, 40, 40); // Dark grey
-            _dropdownColor = new Color(50, 50, 50); // Slightly lighter grey
-            _hoverColor = new Color(70, 70, 70); // Even lighter grey for hover
+            // Set colors to match 80s Miami retro violet style
+            _topBarColor = MIAMI_BACKGROUND; // Dark background
+            _dropdownColor = MIAMI_BACKGROUND; // Dark background for dropdowns
+            _hoverColor = MIAMI_HOVER; // Semi-transparent purple for hover
+            _buttonHoverColor = MIAMI_HOVER; // Purple hover for buttons
             
             // Initialize menu items
             _menuItems = new List<MenuItem>();
@@ -273,7 +291,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
                 if (moduleInfo != null)
                 {
                     System.Diagnostics.Debug.WriteLine($"Successfully loaded module: {moduleInfo.Name}");
-                    modulesDropdownItems.Add(new DropdownItem(moduleInfo.Name, moduleInfo.Shortcut));
+                    modulesDropdownItems.Add(new DropdownItem(moduleInfo.Name, moduleInfo.Shortcut, true)); // Add settings icon for modules
                 }
             }
 
@@ -305,21 +323,30 @@ namespace MarySGameEngine.Modules.TopBar_essential
         {
             float maxTextWidth = 0;
             float maxShortcutWidth = 0;
+            bool hasSettingsIcons = false;
 
             foreach (var item in menuItem.DropdownItems)
             {
-                float textWidth = _menuFont.MeasureString(item.Text).X;
+                float textWidth = _dropdownFont.MeasureString(item.Text).X;
                 maxTextWidth = Math.Max(maxTextWidth, textWidth);
 
                 if (!string.IsNullOrEmpty(item.Shortcut))
                 {
-                    float shortcutWidth = _menuFont.MeasureString(item.Shortcut).X;
+                    float shortcutWidth = _dropdownFont.MeasureString(item.Shortcut).X;
                     maxShortcutWidth = Math.Max(maxShortcutWidth, shortcutWidth);
+                }
+
+                if (item.HasSettingsIcon)
+                {
+                    hasSettingsIcons = true;
                 }
             }
 
-            // Total width = text width + spacing + shortcut width + left/right padding
-            return (int)(maxTextWidth + _dropdownTextSpacing + maxShortcutWidth + 10);
+            // Total width = left padding + text width + spacing + shortcut width + settings icon space + right padding
+            int leftPadding = 15; // Increased from implicit 10
+            int rightPadding = 15; // Increased from implicit 10
+            int settingsIconSpace = hasSettingsIcons ? SETTINGS_ICON_SIZE + SETTINGS_ICON_SPACING * 2 : 0; // Space for settings icon + spacing
+            return (int)(leftPadding + maxTextWidth + _dropdownTextSpacing + maxShortcutWidth + settingsIconSpace + rightPadding);
         }
 
         public void Update()
@@ -360,16 +387,40 @@ namespace MarySGameEngine.Modules.TopBar_essential
                     }
                 }
 
-                // Close dropdown if clicking outside
+                // Handle clicks on dropdown items and settings icons
                 if (menuItem.IsDropdownVisible && _currentMouseState.LeftButton == ButtonState.Pressed && 
                     _previousMouseState.LeftButton == ButtonState.Released)
                 {
                     bool clickedInside = false;
-                    foreach (var bound in menuItem.DropdownBounds)
+                    for (int i = 0; i < menuItem.DropdownBounds.Count; i++)
                     {
+                        var bound = menuItem.DropdownBounds[i];
                         if (bound.Contains(_currentMouseState.Position))
                         {
                             clickedInside = true;
+                            
+                            // Check if click was on settings icon
+                            if (menuItem.DropdownItems[i].HasSettingsIcon && _settingsIcon != null)
+                            {
+                                // Calculate settings icon bounds with new positioning
+                                Rectangle settingsIconBounds = new Rectangle(
+                                    (int)(bound.X + bound.Width - SETTINGS_ICON_SIZE - SETTINGS_ICON_SPACING),
+                                    bound.Y + SETTINGS_ICON_SPACING,
+                                    SETTINGS_ICON_SIZE,
+                                    SETTINGS_ICON_SIZE
+                                );
+                                
+                                if (settingsIconBounds.Contains(_currentMouseState.Position))
+                                {
+                                    // Settings icon was clicked
+                                    System.Diagnostics.Debug.WriteLine($"Settings icon clicked for module: {menuItem.DropdownItems[i].Text}");
+                                    // TODO: Add settings functionality here
+                                    break; // Don't close dropdown when settings icon is clicked
+                                }
+                            }
+                            
+                            // Regular dropdown item was clicked
+                            System.Diagnostics.Debug.WriteLine($"Dropdown item clicked: {menuItem.DropdownItems[i].Text}");
                             break;
                         }
                     }
@@ -383,8 +434,13 @@ namespace MarySGameEngine.Modules.TopBar_essential
 
         public void Draw(SpriteBatch spriteBatch)
         {
-            // Draw top bar background
+            // Draw top bar background with Miami style
             spriteBatch.Draw(_pixel, new Rectangle(0, 0, _windowWidth, _buttonHeight), _topBarColor);
+
+            // Draw top bar border (2px thick like windows)
+            const int BORDER_THICKNESS = 2;
+            // Bottom border only for top bar
+            spriteBatch.Draw(_pixel, new Rectangle(0, _buttonHeight - BORDER_THICKNESS, _windowWidth, BORDER_THICKNESS), MIAMI_BORDER);
 
             // Draw menu items
             foreach (var menuItem in _menuItems)
@@ -395,14 +451,14 @@ namespace MarySGameEngine.Modules.TopBar_essential
                     spriteBatch.Draw(_pixel, menuItem.ButtonBounds, _buttonHoverColor);
                 }
 
-                // Draw menu text
+                // Draw menu text with Miami style
                 Vector2 textSize = _menuFont.MeasureString(menuItem.Text);
                 Vector2 textPosition = new Vector2(
                     menuItem.ButtonBounds.X + _buttonLeftPadding,
                     menuItem.ButtonBounds.Y + (_buttonHeight - textSize.Y) / 2
                 );
                 System.Diagnostics.Debug.WriteLine($"Drawing text '{menuItem.Text}' at {textPosition} with size {textSize} in bounds {menuItem.ButtonBounds}");
-                spriteBatch.DrawString(_menuFont, menuItem.Text, textPosition, Color.White);
+                spriteBatch.DrawString(_menuFont, menuItem.Text, textPosition, MIAMI_TEXT);
             }
         }
 
@@ -413,26 +469,104 @@ namespace MarySGameEngine.Modules.TopBar_essential
             {
                 if (menuItem.IsDropdownVisible)
                 {
+                    // Calculate dropdown bounds for shadow and border
+                    int dropdownWidth = CalculateDropdownWidth(menuItem);
+                    int dropdownHeight = menuItem.DropdownItems.Count * _dropdownItemHeight;
+                    Rectangle dropdownBounds = new Rectangle(
+                        menuItem.ButtonBounds.X,
+                        menuItem.ButtonBounds.Y + menuItem.ButtonBounds.Height,
+                        dropdownWidth,
+                        dropdownHeight
+                    );
+
+                    // Draw dropdown shadow
+                    Rectangle shadowBounds = new Rectangle(
+                        dropdownBounds.X + 2,
+                        dropdownBounds.Y + 2,
+                        dropdownBounds.Width,
+                        dropdownBounds.Height
+                    );
+                    spriteBatch.Draw(_pixel, shadowBounds, MIAMI_SHADOW);
+
+                    // Draw dropdown background
+                    spriteBatch.Draw(_pixel, dropdownBounds, MIAMI_BACKGROUND);
+
+                    // Draw dropdown border (2px thick like windows)
+                    const int BORDER_THICKNESS = 2;
+                    // Top border
+                    spriteBatch.Draw(_pixel, new Rectangle(dropdownBounds.X - BORDER_THICKNESS, dropdownBounds.Y - BORDER_THICKNESS, 
+                        dropdownBounds.Width + (BORDER_THICKNESS * 2), BORDER_THICKNESS), MIAMI_BORDER);
+                    // Bottom border
+                    spriteBatch.Draw(_pixel, new Rectangle(dropdownBounds.X - BORDER_THICKNESS, dropdownBounds.Bottom, 
+                        dropdownBounds.Width + (BORDER_THICKNESS * 2), BORDER_THICKNESS), MIAMI_BORDER);
+                    // Left border
+                    spriteBatch.Draw(_pixel, new Rectangle(dropdownBounds.X - BORDER_THICKNESS, dropdownBounds.Y - BORDER_THICKNESS, 
+                        BORDER_THICKNESS, dropdownBounds.Height + (BORDER_THICKNESS * 2)), MIAMI_BORDER);
+                    // Right border
+                    spriteBatch.Draw(_pixel, new Rectangle(dropdownBounds.Right, dropdownBounds.Y - BORDER_THICKNESS, 
+                        BORDER_THICKNESS, dropdownBounds.Height + (BORDER_THICKNESS * 2)), MIAMI_BORDER);
+
                     for (int i = 0; i < menuItem.DropdownItems.Count; i++)
                     {
                         var bound = menuItem.DropdownBounds[i];
                         bool isHovered = bound.Contains(_currentMouseState.Position);
                         
-                        // Draw dropdown background
-                        spriteBatch.Draw(_pixel, bound, isHovered ? _hoverColor : _dropdownColor);
+                        // Draw dropdown item background if hovered
+                        if (isHovered)
+                        {
+                            spriteBatch.Draw(_pixel, bound, MIAMI_HOVER);
+                        }
                         
-                        // Draw dropdown text
-                        Vector2 textPos = new Vector2(bound.X + 5, bound.Y + 5);
-                        spriteBatch.DrawString(_menuFont, menuItem.DropdownItems[i].Text, textPos, Color.White);
+                        // Draw dropdown text with proper padding and vertical centering
+                        Vector2 textSize = _dropdownFont.MeasureString(menuItem.DropdownItems[i].Text);
+                        Vector2 textPos = new Vector2(
+                            bound.X + 15, // Increased left padding from 10 to 15
+                            bound.Y + (bound.Height - textSize.Y) / 2 // Center vertically
+                        );
+                        spriteBatch.DrawString(_dropdownFont, menuItem.DropdownItems[i].Text, textPos, MIAMI_TEXT);
 
-                        // Draw shortcut if exists
+                        // Calculate settings icon position (after shortcuts)
+                        Rectangle settingsIconBounds = Rectangle.Empty;
+                        if (menuItem.DropdownItems[i].HasSettingsIcon && _settingsIcon != null)
+                        {
+                            // Position the settings icon to fill the right side of the dropdown element
+                            // with minimal spacing from the borders
+                            int iconX = bound.X + bound.Width - SETTINGS_ICON_SIZE - SETTINGS_ICON_SPACING;
+                            int iconY = bound.Y + SETTINGS_ICON_SPACING;
+                            
+                            settingsIconBounds = new Rectangle(
+                                iconX,
+                                iconY,
+                                SETTINGS_ICON_SIZE,
+                                SETTINGS_ICON_SIZE
+                            );
+                        }
+
+                        // Draw shortcut if exists with proper padding and vertical centering
                         if (!string.IsNullOrEmpty(menuItem.DropdownItems[i].Shortcut))
                         {
+                            Vector2 shortcutSize = _dropdownFont.MeasureString(menuItem.DropdownItems[i].Shortcut);
                             Vector2 shortcutPos = new Vector2(
-                                bound.X + bound.Width - _shortcutRightPadding - _menuFont.MeasureString(menuItem.DropdownItems[i].Shortcut).X,
-                                bound.Y + 5
+                                bound.X + bound.Width - _shortcutRightPadding - shortcutSize.X - (menuItem.DropdownItems[i].HasSettingsIcon ? SETTINGS_ICON_SIZE + SETTINGS_ICON_SPACING * 2 : 0),
+                                bound.Y + (bound.Height - shortcutSize.Y) / 2 // Center vertically
                             );
-                            spriteBatch.DrawString(_menuFont, menuItem.DropdownItems[i].Shortcut, shortcutPos, _shortcutColor);
+                            spriteBatch.DrawString(_dropdownFont, menuItem.DropdownItems[i].Shortcut, shortcutPos, _shortcutColor);
+                        }
+
+                        // Draw settings icon if item has one
+                        if (menuItem.DropdownItems[i].HasSettingsIcon && _settingsIcon != null && settingsIconBounds != Rectangle.Empty)
+                        {
+                            // Check if mouse is hovering over the settings icon specifically
+                            bool isSettingsIconHovered = settingsIconBounds.Contains(_currentMouseState.Position);
+                            
+                            // Draw settings icon background if hovered
+                            if (isSettingsIconHovered)
+                            {
+                                spriteBatch.Draw(_pixel, settingsIconBounds, MIAMI_HOVER);
+                            }
+                            
+                            // Draw settings icon
+                            spriteBatch.Draw(_settingsIcon, settingsIconBounds, Color.White);
                         }
                     }
                 }
@@ -447,12 +581,19 @@ namespace MarySGameEngine.Modules.TopBar_essential
 
         public void LoadContent(ContentManager content)
         {
-            // No content to load for now
+            // Load settings icon from WindowManagement module
+            _settingsIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/settings");
         }
 
         public void Dispose()
         {
             _pixel.Dispose();
+            _settingsIcon?.Dispose();
+        }
+
+        public List<MenuItem> GetMenuItems()
+        {
+            return _menuItems;
         }
     }
 } 

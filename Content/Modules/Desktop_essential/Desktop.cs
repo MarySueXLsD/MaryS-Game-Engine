@@ -7,6 +7,7 @@ using System;
 using System.Linq;
 using MarySGameEngine.Modules.WindowManagement_essential;
 using MarySGameEngine.Modules.TaskBar_essential;
+using MarySGameEngine.Modules.TopBar_essential;
 using System.IO;
 
 namespace MarySGameEngine.Modules.Desktop_essential
@@ -896,8 +897,30 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 return false;
             }
 
-            // Check if mouse is over any window
+            // Check if mouse is over TopBar dropdowns
             var modules = GameEngine.Instance.GetActiveModules();
+            foreach (var module in modules)
+            {
+                if (module is TopBar topBar)
+                {
+                    // Check if mouse is over any TopBar dropdown
+                    foreach (var menuItem in topBar.GetMenuItems())
+                    {
+                        if (menuItem.IsDropdownVisible)
+                        {
+                            foreach (var dropdownBound in menuItem.DropdownBounds)
+                            {
+                                if (dropdownBound.Contains(mousePos))
+                                {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check if mouse is over any window
             foreach (var module in modules)
             {
                 var windowManagementField = module.GetType().GetField("_windowManagement", 

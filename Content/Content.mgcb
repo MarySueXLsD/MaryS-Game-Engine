@@ -40,6 +40,13 @@
 /processorParam:TextureFormat=Compressed
 /build:Fonts/SpriteFonts/roboto_font.spritefont
 
+#begin Fonts/SpriteFonts/dropdown_font.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/dropdown_font.spritefont
+
 #begin Logos/text_file_icon.png
 /importer:TextureImporter
 /processor:TextureProcessor
