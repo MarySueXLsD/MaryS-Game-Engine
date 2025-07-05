@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Linq;
 using System;
 using MarySGameEngine;
+using MarySGameEngine.Modules.WindowManagement_essential;
 
 namespace MarySGameEngine.Modules.TopBar_essential
 {
@@ -101,6 +102,13 @@ namespace MarySGameEngine.Modules.TopBar_essential
         private Texture2D _settingsIcon;
         private MouseState _currentMouseState;
         private MouseState _previousMouseState;
+        // Highlight effect
+        private bool _isHighlighted = false;
+        private float _highlightTimer = 0f;
+        private const float HIGHLIGHT_DURATION = 1.5f; // Match WindowManagement
+        private const float HIGHLIGHT_BLINK_SPEED = 2.0f; // Match WindowManagement
+        private const float HIGHLIGHT_MIN_ALPHA = 0.3f; // Match WindowManagement
+        private const float HIGHLIGHT_MAX_ALPHA = 0.7f; // Match WindowManagement
 
         public TopBar(GraphicsDevice graphicsDevice, SpriteFont menuFont, SpriteFont dropdownFont, int windowWidth)
         {
@@ -354,6 +362,17 @@ namespace MarySGameEngine.Modules.TopBar_essential
             _previousMouseState = _currentMouseState;
             _currentMouseState = Mouse.GetState();
 
+            // Update highlight timer
+            if (_isHighlighted)
+            {
+                _highlightTimer += (float)GameEngine.Instance.TargetElapsedTime.TotalSeconds;
+                if (_highlightTimer >= HIGHLIGHT_DURATION)
+                {
+                    _isHighlighted = false;
+                    _highlightTimer = 0f;
+                }
+            }
+
             // Update menu items
             for (int menuIndex = 0; menuIndex < _menuItems.Count; menuIndex++)
             {
@@ -421,6 +440,12 @@ namespace MarySGameEngine.Modules.TopBar_essential
                             
                             // Regular dropdown item was clicked
                             System.Diagnostics.Debug.WriteLine($"Dropdown item clicked: {menuItem.DropdownItems[i].Text}");
+                            
+                            // Handle module action
+                            HandleModuleAction(menuItem.DropdownItems[i].Text);
+                            
+                            // Close the dropdown after handling the action
+                            menuItem.IsDropdownVisible = false;
                             break;
                         }
                     }
@@ -430,6 +455,228 @@ namespace MarySGameEngine.Modules.TopBar_essential
                     }
                 }
             }
+        }
+
+        private void HandleModuleAction(string moduleName)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Handling action for module: {moduleName}");
+                
+                // Get the game engine instance
+                var engine = GameEngine.Instance;
+                
+                // Handle special cases first
+                switch (moduleName)
+                {
+                    case "Desktop":
+                        // Highlight the desktop
+                        HighlightDesktop();
+                        return;
+                        
+                    case "Window Management":
+                        // Highlight all currently active and open windows
+                        HighlightAllWindows();
+                        return;
+                        
+                    case "Task Bar":
+                        // Highlight the taskbar
+                        HighlightTaskBar();
+                        return;
+                        
+                    case "Top Bar":
+                        // Highlight the topbar area
+                        HighlightTopBar();
+                        return;
+                }
+                
+                // For regular modules, find their WindowManagement and handle accordingly
+                var windowManagement = GetWindowManagementForModule(moduleName);
+                if (windowManagement != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TopBar: Found window management for {moduleName}");
+                    
+                    // Check if the window is currently visible and active
+                    if (windowManagement.IsVisible())
+                    {
+                        // Window is open - highlight it (same as TaskBar click)
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Window {moduleName} is open, highlighting it");
+                        windowManagement.HandleTaskBarClick();
+                    }
+                    else
+                    {
+                        // Window is closed - open it
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Window {moduleName} is closed, opening it");
+                        OpenModule(moduleName, windowManagement);
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"TopBar: No window management found for {moduleName}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error handling module action for {moduleName}: {ex.Message}");
+            }
+        }
+
+        private WindowManagement GetWindowManagementForModule(string moduleName)
+        {
+            try
+            {
+                // Get all modules from the game engine
+                var modules = GameEngine.Instance.GetActiveModules();
+                System.Diagnostics.Debug.WriteLine($"TopBar: Searching for window management for {moduleName} among {modules.Count} modules");
+
+                foreach (var module in modules)
+                {
+                    // Use reflection to get the WindowManagement instance
+                    var windowManagementField = module.GetType().GetField("_windowManagement", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    
+                    if (windowManagementField != null)
+                    {
+                        var windowManagement = windowManagementField.GetValue(module) as WindowManagement;
+                        if (windowManagement != null)
+                        {
+                            var windowTitle = windowManagement.GetWindowTitle();
+                            System.Diagnostics.Debug.WriteLine($"TopBar: Found window management with title: {windowTitle}");
+                            
+                            if (windowTitle == moduleName)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"TopBar: Found matching window management for {moduleName}");
+                                return windowManagement;
+                            }
+                        }
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"TopBar: No window management found for {moduleName}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error finding window management: {ex.Message}");
+                return null;
+            }
+        }
+
+        private void OpenModule(string moduleName, WindowManagement windowManagement)
+        {
+            try
+            {
+                // Set the window to visible
+                windowManagement.SetVisible(true);
+                
+                // Bring to front
+                windowManagement.BringToFront();
+                
+                // Highlight the window
+                windowManagement.HandleTaskBarClick();
+                
+                System.Diagnostics.Debug.WriteLine($"TopBar: Successfully opened module {moduleName}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error opening module {moduleName}: {ex.Message}");
+            }
+        }
+
+        private void HighlightDesktop()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("TopBar: Highlighting desktop");
+                // Find the Desktop module and trigger a highlight effect
+                var modules = GameEngine.Instance.GetActiveModules();
+                foreach (var module in modules)
+                {
+                    if (module is MarySGameEngine.Modules.Desktop_essential.Desktop desktop)
+                    {
+                        desktop.Highlight();
+                        System.Diagnostics.Debug.WriteLine("TopBar: Found Desktop module for highlighting");
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error highlighting desktop: {ex.Message}");
+            }
+        }
+
+        private void HighlightAllWindows()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("TopBar: Highlighting all windows");
+                
+                // Find all WindowManagement instances and highlight them
+                var modules = GameEngine.Instance.GetActiveModules();
+                foreach (var module in modules)
+                {
+                    var windowManagementField = module.GetType().GetField("_windowManagement", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    
+                    if (windowManagementField != null)
+                    {
+                        var windowManagement = windowManagementField.GetValue(module) as WindowManagement;
+                        if (windowManagement != null && windowManagement.IsVisible())
+                        {
+                            // Highlight each visible window
+                            windowManagement.HandleTaskBarClick();
+                            System.Diagnostics.Debug.WriteLine($"TopBar: Highlighted window: {windowManagement.GetWindowTitle()}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error highlighting all windows: {ex.Message}");
+            }
+        }
+
+        private void HighlightTaskBar()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("TopBar: Highlighting taskbar");
+                // Find the TaskBar module and trigger a highlight effect
+                var modules = GameEngine.Instance.GetActiveModules();
+                foreach (var module in modules)
+                {
+                    if (module is MarySGameEngine.Modules.TaskBar_essential.TaskBar taskBar)
+                    {
+                        taskBar.Highlight();
+                        System.Diagnostics.Debug.WriteLine("TopBar: Found TaskBar module for highlighting");
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error highlighting taskbar: {ex.Message}");
+            }
+        }
+
+        private void HighlightTopBar()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("TopBar: Highlighting topbar");
+                this.Highlight();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error highlighting topbar: {ex.Message}");
+            }
+        }
+
+        public void Highlight()
+        {
+            _isHighlighted = true;
+            _highlightTimer = 0f;
         }
 
         public void Draw(SpriteBatch spriteBatch)
@@ -459,6 +706,26 @@ namespace MarySGameEngine.Modules.TopBar_essential
                 );
                 System.Diagnostics.Debug.WriteLine($"Drawing text '{menuItem.Text}' at {textPosition} with size {textSize} in bounds {menuItem.ButtonBounds}");
                 spriteBatch.DrawString(_menuFont, menuItem.Text, textPosition, MIAMI_TEXT);
+            }
+        }
+
+        public void DrawHighlight(SpriteBatch spriteBatch)
+        {
+            // Draw highlight border if needed
+            if (_isHighlighted)
+            {
+                float pulseValue = (float)(Math.Sin(_highlightTimer * Math.PI * 2 * HIGHLIGHT_BLINK_SPEED) + 1) / 2;
+                float alpha = MathHelper.Lerp(HIGHLIGHT_MIN_ALPHA, HIGHLIGHT_MAX_ALPHA, pulseValue);
+                Color highlightColor = new Color((byte)147, (byte)112, (byte)219, (byte)(255 * alpha));
+                int borderThickness = 4;
+                // Top
+                spriteBatch.Draw(_pixel, new Rectangle(0, 0, _windowWidth, borderThickness), highlightColor);
+                // Bottom
+                spriteBatch.Draw(_pixel, new Rectangle(0, _buttonHeight - borderThickness, _windowWidth, borderThickness), highlightColor);
+                // Left
+                spriteBatch.Draw(_pixel, new Rectangle(0, 0, borderThickness, _buttonHeight), highlightColor);
+                // Right
+                spriteBatch.Draw(_pixel, new Rectangle(_windowWidth - borderThickness, 0, borderThickness, _buttonHeight), highlightColor);
             }
         }
 

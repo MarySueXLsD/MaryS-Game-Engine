@@ -84,7 +84,6 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private const float HIGHLIGHT_MAX_ALPHA = 0.7f; // Reduced maximum alpha for less intensity
         private float _highlightTimer = 0f;
         private bool _isHighlighted = false;
-        private static WindowManagement _currentlyHighlightedWindow = null; // Track currently highlighted window
 
         // Resources
         private SpriteFont _menuFont;
@@ -554,10 +553,6 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 {
                     _isHighlighted = false;
                     _highlightTimer = 0f;
-                    if (_currentlyHighlightedWindow == this)
-                    {
-                        _currentlyHighlightedWindow = null;
-                    }
                     _engine.Log($"WindowManagement: Highlight ended for window {_windowTitle}");
                 }
             }
@@ -1258,13 +1253,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         {
             try
             {
-                // Remove highlight from previously highlighted window
-                if (_currentlyHighlightedWindow != null && _currentlyHighlightedWindow != this)
-                {
-                    _currentlyHighlightedWindow._isHighlighted = false;
-                    _currentlyHighlightedWindow._highlightTimer = 0f;
-                }
-
+                // Always highlight when clicked
+                Highlight();
+                
                 if (_isMinimized)
                 {
                     _engine.Log($"WindowManagement: Restoring window {_windowTitle} from minimized state");
@@ -1312,11 +1303,6 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     _engine.Log($"WindowManagement: Window {_windowTitle} is not minimized, no action needed");
                 }
 
-                // Always highlight when clicked
-                _isHighlighted = true;
-                _highlightTimer = 0f;
-                _currentlyHighlightedWindow = this;
-                
                 // Only bring to front if this window is pinned or if there are no pinned windows
                 bool hasPinnedWindows = _pinnedWindows.Count > 0;
                 if (_isPinned || !hasPinnedWindows)
@@ -1627,6 +1613,12 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             // Right border
             spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.Right, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
                 WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), highlightColor);
+        }
+
+        public void Highlight()
+        {
+            _isHighlighted = true;
+            _highlightTimer = 0f;
         }
     }
 } 

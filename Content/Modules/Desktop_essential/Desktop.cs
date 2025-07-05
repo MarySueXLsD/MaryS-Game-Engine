@@ -111,6 +111,13 @@ namespace MarySGameEngine.Modules.Desktop_essential
         private const float CURSOR_ICON_ALPHA = 0.8f; // More visible alpha for cursor icon
         private const int CURSOR_ICON_SIZE = 48; // Larger size for the cursor-following icon
         private int _updateCounter = 0; // Debug counter
+        // Highlight effect
+        private bool _isHighlighted = false;
+        private float _highlightTimer = 0f;
+        private const float HIGHLIGHT_DURATION = 1.5f; // Match WindowManagement
+        private const float HIGHLIGHT_BLINK_SPEED = 2.0f; // Match WindowManagement
+        private const float HIGHLIGHT_MIN_ALPHA = 0.3f; // Match WindowManagement
+        private const float HIGHLIGHT_MAX_ALPHA = 0.7f; // Match WindowManagement
 
         public class DesktopFile
         {
@@ -885,6 +892,17 @@ namespace MarySGameEngine.Modules.Desktop_essential
                     }
                 }
             }
+
+            // Update highlight timer
+            if (_isHighlighted)
+            {
+                _highlightTimer += (float)GameEngine.Instance.TargetElapsedTime.TotalSeconds;
+                if (_highlightTimer >= HIGHLIGHT_DURATION)
+                {
+                    _isHighlighted = false;
+                    _highlightTimer = 0f;
+                }
+            }
         }
 
         private bool IsMouseOverDesktop()
@@ -977,12 +995,6 @@ namespace MarySGameEngine.Modules.Desktop_essential
             // Draw background
             spriteBatch.Draw(_pixel, new Rectangle(0, 0, _windowWidth, _windowHeight), _backgroundColor);
 
-            // Draw grid only if enabled
-            if (_showGrid)
-            {
-                DrawGrid(spriteBatch);
-            }
-
             // Draw files
             DrawFiles(spriteBatch);
 
@@ -1017,9 +1029,10 @@ namespace MarySGameEngine.Modules.Desktop_essential
             }
         }
 
-        private void DrawGrid(SpriteBatch spriteBatch)
+        public void DrawGrid(SpriteBatch spriteBatch)
         {
             if (_taskBar == null) return;
+            if (!_showGrid) return;
 
             // Draw vertical lines
             for (int x = _gridStartX; x <= _gridEndX; x += _gridCellSize)
@@ -1342,6 +1355,28 @@ namespace MarySGameEngine.Modules.Desktop_essential
 
             // Draw context menu last to ensure it's on top
             DrawContextMenu(spriteBatch);
+        }
+
+        public void DrawHighlight(SpriteBatch spriteBatch)
+        {
+            // Draw highlight border if needed
+            if (_isHighlighted)
+            {
+                float pulseValue = (float)(Math.Sin(_highlightTimer * Math.PI * 2 * HIGHLIGHT_BLINK_SPEED) + 1) / 2;
+                float alpha = MathHelper.Lerp(HIGHLIGHT_MIN_ALPHA, HIGHLIGHT_MAX_ALPHA, pulseValue);
+                Color highlightColor = new Color((byte)147, (byte)112, (byte)219, (byte)(255 * alpha));
+                int borderThickness = 4;
+                
+                // Only highlight the desktop grid area (excluding TopBar and TaskBar)
+                // Top border (at grid start Y)
+                spriteBatch.Draw(_pixel, new Rectangle(_gridStartX, _gridStartY, _gridEndX - _gridStartX, borderThickness), highlightColor);
+                // Bottom border (at grid end Y)
+                spriteBatch.Draw(_pixel, new Rectangle(_gridStartX, _gridEndY - borderThickness, _gridEndX - _gridStartX, borderThickness), highlightColor);
+                // Left border (at grid start X)
+                spriteBatch.Draw(_pixel, new Rectangle(_gridStartX, _gridStartY, borderThickness, _gridEndY - _gridStartY), highlightColor);
+                // Right border (at grid end X)
+                spriteBatch.Draw(_pixel, new Rectangle(_gridEndX - borderThickness, _gridStartY, borderThickness, _gridEndY - _gridStartY), highlightColor);
+            }
         }
 
         public void UpdateWindowWidth(int newWidth)
@@ -2302,6 +2337,12 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 _engine.Log($"Desktop: Error loading cell positions: {ex.Message}");
                 return new Dictionary<string, (int Row, int Column)>();
             }
+        }
+
+        public void Highlight()
+        {
+            _isHighlighted = true;
+            _highlightTimer = 0f;
         }
     }
 
