@@ -334,6 +334,13 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     return;
                 }
 
+                // Don't handle clicks if any window has already handled them (prevents window-to-taskbar click-through)
+                if (GameEngine.Instance.HasAnyWindowHandledClick())
+                {
+                    _engine.Log("TaskBar: Window handled click, skipping TaskBar click processing");
+                    return;
+                }
+
                 _isMouseDown = true;
                 _lastMousePosition = currentMousePosition;
 

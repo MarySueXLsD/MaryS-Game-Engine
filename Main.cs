@@ -69,6 +69,7 @@ public class GameEngine : Game
 
     // Click handling prevention
     private bool _topBarHandledClick = false;
+    private bool _anyWindowHandledClick = false;
 
     // Window dimensions
     private const int InitialWindowWidth = 800;
@@ -403,6 +404,7 @@ public class GameEngine : Game
 
             // Reset TopBar click handling flag at the beginning of each update cycle
             _topBarHandledClick = false;
+            _anyWindowHandledClick = false;
 
             // Get mouse state
             var mouseState = Mouse.GetState();
@@ -746,5 +748,15 @@ public class GameEngine : Game
     public void SetTopBarHandledClick(bool handled)
     {
         _topBarHandledClick = handled;
+    }
+
+    public bool HasAnyWindowHandledClick()
+    {
+        return _anyWindowHandledClick;
+    }
+
+    public void SetAnyWindowHandledClick(bool handled)
+    {
+        _anyWindowHandledClick = handled;
     }
 }
