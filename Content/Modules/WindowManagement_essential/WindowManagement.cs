@@ -760,6 +760,11 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                         _engine.Log($"WindowManagement: Pin button clicked for window {_windowTitle}");
                         TogglePin();
                     }
+                    else if (GetSettingsButtonBounds(scaledBounds).Contains(_currentMouseState.Position))
+                    {
+                        _engine.Log($"WindowManagement: Settings button clicked for window {_windowTitle}");
+                        OpenModuleSettings();
+                    }
                     else if (_properties.IsResizable && resizeHandleBounds.Contains(_currentMouseState.Position))
                     {
                         _isResizing = true;
@@ -1065,6 +1070,33 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             catch (Exception ex)
             {
                 _engine.Log($"WindowManagement: Error in TogglePin: {ex.Message}");
+            }
+        }
+
+        private void OpenModuleSettings()
+        {
+            try
+            {
+                _engine.Log($"WindowManagement: Opening Module Settings from window {_windowTitle}");
+                
+                // Find the ModuleSettings module
+                var modules = GameEngine.Instance.GetActiveModules();
+                foreach (var module in modules)
+                {
+                    if (module is MarySGameEngine.Modules.ModuleSettings_essential.ModuleSettings moduleSettings)
+                    {
+                        // Use the new Open() method
+                        moduleSettings.Open();
+                        _engine.Log($"WindowManagement: Successfully opened Module Settings from {_windowTitle}");
+                        return;
+                    }
+                }
+                
+                _engine.Log($"WindowManagement: ModuleSettings module not found");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"WindowManagement: Error opening Module Settings from {_windowTitle}: {ex.Message}");
             }
         }
 
