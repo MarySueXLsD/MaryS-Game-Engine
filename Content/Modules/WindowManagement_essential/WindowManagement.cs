@@ -649,6 +649,15 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     
                     // Remove from active windows list
                     _activeWindows.Remove(this);
+                    
+                    // Remove from pinned windows lists to ensure clean state when reopened
+                    _pinnedWindows.Remove(this);
+                    _pinnedWindowsOrder.Remove(this);
+                    
+                    // Reset pinned state to ensure reopened windows start unpinned
+                    _isPinned = false;
+                    
+                    _engine.Log($"WindowManagement: Window {_windowTitle} closed and removed from all lists");
                 }
                 return; // Return early when closing to prevent input processing
             }
