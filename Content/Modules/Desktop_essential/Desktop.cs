@@ -365,6 +365,13 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 return;
             }
 
+            // Don't handle clicks if any window has already handled them (prevents window-to-desktop click-through)
+            if (GameEngine.Instance.HasAnyWindowHandledClick())
+            {
+                _engine.Log("Desktop: Window handled click, skipping desktop click processing");
+                return;
+            }
+
             // Handle file selection and drag start
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
@@ -667,6 +674,13 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 if (GameEngine.Instance.HasTopBarHandledClick())
                 {
                     _engine.Log("Desktop: TopBar handled click, skipping context menu click processing");
+                    return;
+                }
+
+                // Don't handle clicks if any window has already handled them (prevents window-to-desktop click-through)
+                if (GameEngine.Instance.HasAnyWindowHandledClick())
+                {
+                    _engine.Log("Desktop: Window handled click, skipping context menu click processing");
                     return;
                 }
 

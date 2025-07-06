@@ -731,8 +731,20 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     return;
                 }
 
-                if (isMouseOverWindow)
+                // Don't handle clicks if any window has already handled them (prevents window-to-window click-through)
+                if (GameEngine.Instance.HasAnyWindowHandledClick())
                 {
+                    _engine.Log($"WindowManagement: Another window handled click, skipping window click processing for {_windowTitle}");
+                    return;
+                }
+
+                // Only handle clicks if this window is the topmost window under the mouse
+                if (isMouseOverWindow && IsTopmostWindowUnderMouse(this, _currentMouseState.Position))
+                {
+                    // Set the flag to prevent other windows from processing this click
+                    GameEngine.Instance.SetAnyWindowHandledClick(true);
+                    _engine.Log($"WindowManagement: Window {_windowTitle} handling click, setting window click flag");
+
                     // Only bring to front if this window is pinned or if there are no pinned windows
                     bool hasPinnedWindows = _pinnedWindows.Count > 0;
                     if (_isPinned || !hasPinnedWindows)
@@ -1171,7 +1183,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             Rectangle maximizeButtonBounds = GetMaximizeButtonBounds(scaledBounds);
             if (maximizeButtonBounds != Rectangle.Empty)
             {
-                bool isMaximizeHovered = maximizeButtonBounds.Contains(_currentMouseState.Position);
+                bool isMaximizeHovered = IsTopmostWindowUnderMouse(this, _currentMouseState.Position) && scaledBounds.Contains(_currentMouseState.Position) && maximizeButtonBounds.Contains(_currentMouseState.Position);
                 Color buttonColor = isMaximizeHovered ? _buttonHoverColor : titleBarColor;
                 spriteBatch.Draw(_pixel, maximizeButtonBounds, buttonColor);
                 spriteBatch.Draw(_isMaximized ? _restoreIcon : _maximiseIcon, maximizeButtonBounds, Color.White);
@@ -1181,7 +1193,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             Rectangle minimizeButtonBounds = GetMinimizeButtonBounds(scaledBounds);
             if (minimizeButtonBounds != Rectangle.Empty)
             {
-                bool isMinimizeHovered = minimizeButtonBounds.Contains(_currentMouseState.Position);
+                bool isMinimizeHovered = IsTopmostWindowUnderMouse(this, _currentMouseState.Position) && scaledBounds.Contains(_currentMouseState.Position) && minimizeButtonBounds.Contains(_currentMouseState.Position);
                 Color buttonColor = isMinimizeHovered ? _buttonHoverColor : titleBarColor;
                 spriteBatch.Draw(_pixel, minimizeButtonBounds, buttonColor);
                 spriteBatch.Draw(_minimiseIcon, minimizeButtonBounds, Color.White);
@@ -1191,7 +1203,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             Rectangle closeButtonBounds = GetCloseButtonBounds(scaledBounds);
             if (closeButtonBounds != Rectangle.Empty)
             {
-                bool isCloseHovered = closeButtonBounds.Contains(_currentMouseState.Position);
+                bool isCloseHovered = IsTopmostWindowUnderMouse(this, _currentMouseState.Position) && scaledBounds.Contains(_currentMouseState.Position) && closeButtonBounds.Contains(_currentMouseState.Position);
                 Color buttonColor = isCloseHovered ? _closeButtonHoverColor : titleBarColor;
                 spriteBatch.Draw(_pixel, closeButtonBounds, buttonColor);
                 spriteBatch.Draw(_closeIcon, closeButtonBounds, Color.White);
@@ -1201,7 +1213,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             Rectangle settingsButtonBounds = GetSettingsButtonBounds(scaledBounds);
             if (settingsButtonBounds != Rectangle.Empty)
             {
-                bool isSettingsHovered = settingsButtonBounds.Contains(_currentMouseState.Position);
+                bool isSettingsHovered = IsTopmostWindowUnderMouse(this, _currentMouseState.Position) && scaledBounds.Contains(_currentMouseState.Position) && settingsButtonBounds.Contains(_currentMouseState.Position);
                 Color buttonColor = isSettingsHovered ? _buttonHoverColor : titleBarColor;
                 spriteBatch.Draw(_pixel, settingsButtonBounds, buttonColor);
                 spriteBatch.Draw(_settingsIcon, settingsButtonBounds, Color.White);
@@ -1211,7 +1223,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             Rectangle pinButtonBounds = GetPinButtonBounds(scaledBounds);
             if (pinButtonBounds != Rectangle.Empty)
             {
-                bool isPinHovered = pinButtonBounds.Contains(_currentMouseState.Position);
+                bool isPinHovered = IsTopmostWindowUnderMouse(this, _currentMouseState.Position) && scaledBounds.Contains(_currentMouseState.Position) && pinButtonBounds.Contains(_currentMouseState.Position);
                 Color buttonColor = isPinHovered ? _buttonHoverColor : titleBarColor;
                 spriteBatch.Draw(_pixel, pinButtonBounds, buttonColor);
                 spriteBatch.Draw(_isPinned ? _unpinIcon : _pinIcon, pinButtonBounds, Color.White);
@@ -1602,13 +1614,60 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
         private void UpdateTooltip(MouseState mouseState)
         {
+            // Only process tooltips if this window is the topmost window under the mouse
+            if (!IsTopmostWindowUnderMouse(this, mouseState.Position))
+            {
+                // Clear tooltip if this window is not the topmost under the mouse
+                _currentTooltip = string.Empty;
+                _tooltipTimer = 0f;
+                _showTooltip = false;
+                return;
+            }
+
+            // Calculate scaled bounds for close/open animation
+            Rectangle scaledBounds = _windowBounds;
+            if (_isClosing)
+            {
+                // Calculate scaled size
+                int scaledWidth = (int)(_windowBounds.Width * _closeAnimationScale);
+                int scaledHeight = (int)(_windowBounds.Height * _closeAnimationScale);
+                
+                // Calculate scaled position to keep center point
+                int scaledX = (int)(_closeAnimationCenter.X - scaledWidth / 2);
+                int scaledY = (int)(_closeAnimationCenter.Y - scaledHeight / 2);
+                
+                scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+            }
+            else if (_isOpening)
+            {
+                // Calculate scaled size for opening animation
+                int scaledWidth = (int)(_windowBounds.Width * _openAnimationScale);
+                int scaledHeight = (int)(_windowBounds.Height * _openAnimationScale);
+                
+                // Calculate scaled position to keep center point
+                int scaledX = (int)(_openAnimationCenter.X - scaledWidth / 2);
+                int scaledY = (int)(_openAnimationCenter.Y - scaledHeight / 2);
+                
+                scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+            }
+
+            // Only process tooltips if mouse is over this window (using scaled bounds)
+            if (!scaledBounds.Contains(mouseState.Position))
+            {
+                // Clear tooltip if mouse is not over this window
+                _currentTooltip = string.Empty;
+                _tooltipTimer = 0f;
+                _showTooltip = false;
+                return;
+            }
+
             Rectangle[] buttonBounds = new[]
             {
-                GetCloseButtonBounds(),
-                GetMaximizeButtonBounds(),
-                GetMinimizeButtonBounds(),
-                GetSettingsButtonBounds(),
-                GetPinButtonBounds()
+                GetCloseButtonBounds(scaledBounds),
+                GetMaximizeButtonBounds(scaledBounds),
+                GetMinimizeButtonBounds(scaledBounds),
+                GetSettingsButtonBounds(scaledBounds),
+                GetPinButtonBounds(scaledBounds)
             };
 
             bool isOverButton = false;
@@ -1736,6 +1795,39 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         {
             _isHighlighted = true;
             _highlightTimer = 0f;
+        }
+
+        // Static method to check if a window is the topmost window under the mouse
+        private static bool IsTopmostWindowUnderMouse(WindowManagement window, Point mousePosition)
+        {
+            if (!window.IsVisible())
+                return false;
+
+            // Get the window bounds (accounting for any scaling)
+            Rectangle windowBounds = window.GetWindowBounds();
+            
+            // Check if mouse is over this window
+            if (!windowBounds.Contains(mousePosition))
+                return false;
+
+            // Check if this window has the highest z-order among all windows under the mouse
+            int highestZOrder = -1;
+            WindowManagement topmostWindow = null;
+
+            foreach (var activeWindow in _activeWindows)
+            {
+                if (activeWindow.IsVisible() && activeWindow.GetWindowBounds().Contains(mousePosition))
+                {
+                    int zOrder = activeWindow.GetZOrder();
+                    if (zOrder > highestZOrder)
+                    {
+                        highestZOrder = zOrder;
+                        topmostWindow = activeWindow;
+                    }
+                }
+            }
+
+            return topmostWindow == window;
         }
     }
 } 
