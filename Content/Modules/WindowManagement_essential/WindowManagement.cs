@@ -1326,13 +1326,13 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             else if (!_activeWindows.Contains(this))
             {
                 _activeWindows.Add(this);
-                if (_isPinned && !_pinnedWindows.Contains(this))
+                
+                // Reset pinned state when reopening a window
+                // This ensures that closed and reopened windows start unpinned
+                if (_isPinned)
                 {
-                    _pinnedWindows.Add(this);
-                    if (!_pinnedWindowsOrder.Contains(this))
-                    {
-                        _pinnedWindowsOrder.Add(this);
-                    }
+                    _engine.Log($"WindowManagement: Resetting pinned state for reopened window {_windowTitle}");
+                    _isPinned = false;
                 }
                 
                 // Ensure TaskBar has an icon for this window
