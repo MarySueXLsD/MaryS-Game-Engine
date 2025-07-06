@@ -256,6 +256,12 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             continue;
                         }
 
+                        // Skip ModuleSettings module - it will be added when opened
+                        if (moduleInfo.Name == "Module Settings")
+                        {
+                            continue;
+                        }
+
                         Rectangle bounds;
                         switch (_currentPosition)
                         {
@@ -1245,7 +1251,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             }
         }
 
-        public void EnsureModuleIconExists(string moduleName)
+        public void EnsureModuleIconExists(string moduleName, ContentManager content = null)
         {
             try
             {
@@ -1260,6 +1266,22 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 if (_moduleLogos.ContainsKey(moduleName))
                 {
                     logo = _moduleLogos[moduleName];
+                }
+                else if (content != null)
+                {
+                    // Try to load the logo if it's not already loaded
+                    try
+                    {
+                        string moduleNameForPath = moduleName.Replace(" ", "") + "_essential";
+                        string logoPath = $"Modules/{moduleNameForPath}/logo";
+                        logo = content.Load<Texture2D>(logoPath);
+                        _moduleLogos[moduleName] = logo;
+                        _engine.Log($"TaskBar: Loaded logo for {moduleName} at path: {logoPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _engine.Log($"TaskBar: Could not load logo for {moduleName}: {ex.Message}");
+                    }
                 }
 
                 // Add the icon

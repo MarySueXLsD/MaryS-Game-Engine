@@ -385,6 +385,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
                     _previousMouseState.LeftButton == ButtonState.Pressed)
                 {
                     menuItem.IsDropdownVisible = !menuItem.IsDropdownVisible;
+                    System.Diagnostics.Debug.WriteLine($"TopBar: Toggled dropdown for {menuItem.Text} to {menuItem.IsDropdownVisible}");
                 }
 
                 // Calculate dropdown bounds
@@ -410,13 +411,19 @@ namespace MarySGameEngine.Modules.TopBar_essential
                 if (menuItem.IsDropdownVisible && _currentMouseState.LeftButton == ButtonState.Pressed && 
                     _previousMouseState.LeftButton == ButtonState.Released)
                 {
+                    System.Diagnostics.Debug.WriteLine($"TopBar: Dropdown click detected for menu: {menuItem.Text}");
+                    System.Diagnostics.Debug.WriteLine($"TopBar: Mouse position: {_currentMouseState.Position}");
+                    
                     bool clickedInside = false;
                     for (int i = 0; i < menuItem.DropdownBounds.Count; i++)
                     {
                         var bound = menuItem.DropdownBounds[i];
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Checking dropdown bound {i}: {bound}");
+                        
                         if (bound.Contains(_currentMouseState.Position))
                         {
                             clickedInside = true;
+                            System.Diagnostics.Debug.WriteLine($"TopBar: Click inside dropdown bound {i} for item: {menuItem.DropdownItems[i].Text}");
                             
                             // Check if click was on settings icon
                             if (menuItem.DropdownItems[i].HasSettingsIcon && _settingsIcon != null)
@@ -429,17 +436,29 @@ namespace MarySGameEngine.Modules.TopBar_essential
                                     SETTINGS_ICON_SIZE
                                 );
                                 
+                                System.Diagnostics.Debug.WriteLine($"TopBar: Settings icon bounds: {settingsIconBounds}");
+                                System.Diagnostics.Debug.WriteLine($"TopBar: HasSettingsIcon: {menuItem.DropdownItems[i].HasSettingsIcon}, SettingsIcon: {_settingsIcon != null}");
+                                
                                 if (settingsIconBounds.Contains(_currentMouseState.Position))
                                 {
                                     // Settings icon was clicked
-                                    System.Diagnostics.Debug.WriteLine($"Settings icon clicked for module: {menuItem.DropdownItems[i].Text}");
-                                    // TODO: Add settings functionality here
+                                    System.Diagnostics.Debug.WriteLine($"TopBar: Settings icon clicked for module: {menuItem.DropdownItems[i].Text}");
+                                    System.Diagnostics.Debug.WriteLine($"TopBar: Settings icon bounds: {settingsIconBounds}, Mouse position: {_currentMouseState.Position}");
+                                    OpenModuleSettings(menuItem.DropdownItems[i].Text);
                                     break; // Don't close dropdown when settings icon is clicked
                                 }
+                                else
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"TopBar: Click not on settings icon for {menuItem.DropdownItems[i].Text}");
+                                }
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"TopBar: No settings icon for {menuItem.DropdownItems[i].Text}");
                             }
                             
                             // Regular dropdown item was clicked
-                            System.Diagnostics.Debug.WriteLine($"Dropdown item clicked: {menuItem.DropdownItems[i].Text}");
+                            System.Diagnostics.Debug.WriteLine($"TopBar: Regular dropdown item clicked: {menuItem.DropdownItems[i].Text}");
                             
                             // Handle module action
                             HandleModuleAction(menuItem.DropdownItems[i].Text);
@@ -451,6 +470,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
                     }
                     if (!clickedInside && !menuItem.ButtonBounds.Contains(_currentMouseState.Position))
                     {
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Click outside dropdown, closing");
                         menuItem.IsDropdownVisible = false;
                     }
                 }
@@ -487,6 +507,12 @@ namespace MarySGameEngine.Modules.TopBar_essential
                     case "Top Bar":
                         // Highlight the topbar area
                         HighlightTopBar();
+                        return;
+                        
+                    case "Module Settings":
+                        // Open the Module Settings window
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Opening Module Settings from HandleModuleAction");
+                        OpenModuleSettings(moduleName);
                         return;
                 }
                 
@@ -684,6 +710,38 @@ namespace MarySGameEngine.Modules.TopBar_essential
             }
         }
 
+        private void OpenModuleSettings(string moduleName)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Opening settings for module: {moduleName}");
+                
+                // Find the ModuleSettings module
+                var modules = GameEngine.Instance.GetActiveModules();
+                System.Diagnostics.Debug.WriteLine($"TopBar: Found {modules.Count} active modules");
+                
+                foreach (var module in modules)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TopBar: Checking module type: {module.GetType().FullName}");
+                    if (module is MarySGameEngine.Modules.ModuleSettings_essential.ModuleSettings moduleSettings)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Found ModuleSettings module, calling Open()");
+                        // Use the new Open() method
+                        moduleSettings.Open();
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Successfully opened Module Settings for {moduleName}");
+                        return;
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"TopBar: ModuleSettings module not found among {modules.Count} modules");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error opening Module Settings for {moduleName}: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"TopBar: Stack trace: {ex.StackTrace}");
+            }
+        }
+
         public void Highlight()
         {
             _isHighlighted = true;
@@ -845,6 +903,20 @@ namespace MarySGameEngine.Modules.TopBar_essential
                             
                             // Draw settings icon
                             spriteBatch.Draw(_settingsIcon, settingsIconBounds, Color.White);
+                            
+                            // Debug: Log settings icon drawing occasionally
+                            if (_currentMouseState.Position.X % 100 == 0 && _currentMouseState.Position.Y % 100 == 0)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"TopBar: Drawing settings icon for {menuItem.DropdownItems[i].Text} at {settingsIconBounds}");
+                            }
+                        }
+                        else
+                        {
+                            // Debug: Log when settings icon is not drawn
+                            if (_currentMouseState.Position.X % 200 == 0 && _currentMouseState.Position.Y % 200 == 0)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"TopBar: Not drawing settings icon for {menuItem.DropdownItems[i].Text} - HasSettingsIcon: {menuItem.DropdownItems[i].HasSettingsIcon}, SettingsIcon: {_settingsIcon != null}, Bounds: {settingsIconBounds}");
+                            }
                         }
                     }
                 }
