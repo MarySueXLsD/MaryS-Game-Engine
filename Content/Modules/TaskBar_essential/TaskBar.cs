@@ -327,6 +327,13 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
             {
+                // Don't handle clicks if TopBar has already handled them (prevents click-through)
+                if (GameEngine.Instance.HasTopBarHandledClick())
+                {
+                    _engine.Log("TaskBar: TopBar handled click, skipping TaskBar click processing");
+                    return;
+                }
+
                 _isMouseDown = true;
                 _lastMousePosition = currentMousePosition;
 

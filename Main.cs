@@ -67,6 +67,9 @@ public class GameEngine : Game
     private MouseState _previousMouseState;
     public static GameEngine Instance { get; private set; }
 
+    // Click handling prevention
+    private bool _topBarHandledClick = false;
+
     // Window dimensions
     private const int InitialWindowWidth = 800;
     private const int InitialWindowHeight = 600;
@@ -397,6 +400,9 @@ public class GameEngine : Game
         {
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
+
+            // Reset TopBar click handling flag at the beginning of each update cycle
+            _topBarHandledClick = false;
 
             // Get mouse state
             var mouseState = Mouse.GetState();
@@ -730,5 +736,15 @@ public class GameEngine : Game
     public List<IModule> GetActiveModules()
     {
         return _activeModules;
+    }
+
+    public bool HasTopBarHandledClick()
+    {
+        return _topBarHandledClick;
+    }
+
+    public void SetTopBarHandledClick(bool handled)
+    {
+        _topBarHandledClick = handled;
     }
 }

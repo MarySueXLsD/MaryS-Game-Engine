@@ -724,6 +724,13 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
             {
+                // Don't handle clicks if TopBar has already handled them (prevents click-through)
+                if (GameEngine.Instance.HasTopBarHandledClick())
+                {
+                    _engine.Log($"WindowManagement: TopBar handled click, skipping window click processing for {_windowTitle}");
+                    return;
+                }
+
                 if (isMouseOverWindow)
                 {
                     // Only bring to front if this window is pinned or if there are no pinned windows

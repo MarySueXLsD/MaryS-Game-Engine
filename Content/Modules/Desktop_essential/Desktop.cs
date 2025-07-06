@@ -358,6 +358,13 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 return;
             }
 
+            // Don't handle clicks if TopBar has already handled them (prevents click-through)
+            if (GameEngine.Instance.HasTopBarHandledClick())
+            {
+                _engine.Log("Desktop: TopBar handled click, skipping desktop click processing");
+                return;
+            }
+
             // Handle file selection and drag start
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
@@ -656,6 +663,13 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 _previousMouseState.LeftButton == ButtonState.Released &&
                 _isContextMenuVisible && _contextMenuBounds.Contains(_currentMouseState.Position))
             {
+                // Don't handle clicks if TopBar has already handled them (prevents click-through)
+                if (GameEngine.Instance.HasTopBarHandledClick())
+                {
+                    _engine.Log("Desktop: TopBar handled click, skipping context menu click processing");
+                    return;
+                }
+
                 // Handle clicks on menu items
                 
                 // Calculate the maximum width needed for the main menu

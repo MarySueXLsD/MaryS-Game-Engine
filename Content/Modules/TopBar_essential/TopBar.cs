@@ -425,6 +425,9 @@ namespace MarySGameEngine.Modules.TopBar_essential
                             clickedInside = true;
                             System.Diagnostics.Debug.WriteLine($"TopBar: Click inside dropdown bound {i} for item: {menuItem.DropdownItems[i].Text}");
                             
+                            // Set the flag to prevent other modules from processing this click
+                            GameEngine.Instance.SetTopBarHandledClick(true);
+                            
                             // Check if click was on settings icon
                             if (menuItem.DropdownItems[i].HasSettingsIcon && _settingsIcon != null)
                             {
