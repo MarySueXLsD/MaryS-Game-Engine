@@ -517,48 +517,46 @@ public class GameEngine : Game
                 }
             }
 
-            // Update modules based on window interaction
+            // Always update all modules to ensure animations continue running
             foreach (var module in _activeModules)
             {
-                if (module is IModule moduleWithWindow)
+                // Skip modules that were already updated earlier
+                if (module is TaskBar || module is TopBar || module is Desktop)
                 {
-                    var windowManagementField = moduleWithWindow.GetType().GetField("_windowManagement", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    
-                    if (windowManagementField != null)
+                    continue;
+                }
+                
+                // Update all other modules
+                module.Update();
+            }
+
+            // Handle window input interactions (separate from core updates)
+            if (topMostWindow != null)
+            {
+                // Find the module that owns the top-most window and handle its input
+                foreach (var module in _activeModules)
+                {
+                    if (module is IModule moduleWithWindow)
                     {
-                        var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
-                        if (windowManagement != null)
+                        var windowManagementField = moduleWithWindow.GetType().GetField("_windowManagement", 
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        
+                        if (windowManagementField != null)
                         {
-                            // Log if window is animating
-                            if (windowManagement.IsAnimating())
+                            var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
+                            if (windowManagement == topMostWindow)
                             {
-                                Log($"Main: Window {windowManagement.GetWindowTitle()} is animating");
-                            }
-                            
-                            // If we have a top-most window, only update that window's module
-                            if (topMostWindow != null)
-                            {
-                                if (windowManagement == topMostWindow)
+                                // Log if window is animating
+                                if (windowManagement.IsAnimating())
                                 {
-                                    module.Update();
-                                    break;
+                                    Log($"Main: Window {windowManagement.GetWindowTitle()} is animating");
                                 }
-                            }
-                            else
-                            {
-                                // If no window is handling the click, update all modules
-                                module.Update();
+                                
+                                // Handle input for this specific window (but core updates already happened above)
+                                // The window's Update() method already handles input, so we don't need to do anything extra here
+                                break;
                             }
                         }
-                    }
-                }
-                else if (!(module is TaskBar) && !(module is TopBar) && !(module is Desktop)) // Skip TaskBar, TopBar, and Desktop as they're already handled
-                {
-                    // Update non-window modules if no window is handling the click
-                    if (topMostWindow == null)
-                    {
-                        module.Update();
                     }
                 }
             }
