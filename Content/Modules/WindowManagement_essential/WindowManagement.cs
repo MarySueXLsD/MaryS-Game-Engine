@@ -754,12 +754,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     GameEngine.Instance.SetAnyWindowHandledClick(true);
                     _engine.Log($"WindowManagement: Window {_windowTitle} handling click, setting window click flag");
 
-                    // Only bring to front if this window is pinned or if there are no pinned windows
-                    bool hasPinnedWindows = _pinnedWindows.Count > 0;
-                    if (_isPinned || !hasPinnedWindows)
-                    {
-                        BringToFront();
-                    }
+                    // Always bring to front when clicked, regardless of pinned status
+                    // This allows unpinned windows to compete with each other
+                    BringToFront();
 
                     if (_properties.IsMovable && titleBarBounds.Contains(_currentMouseState.Position))
                     {
@@ -1090,9 +1087,15 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     // Remove from pinned order list
                     _pinnedWindowsOrder.Remove(this);
                     
-                    // Bring to front of normal windows (without highlighting)
-                    BringToFrontWithoutHighlight();
-                    _engine.Log($"WindowManagement: Window {_windowTitle} unpinned");
+                    // Don't change the window's position in the active windows list
+                    // Let it compete naturally for z-order when clicked
+                    // Just update z-orders to reflect current list order
+                    for (int i = 0; i < _activeWindows.Count; i++)
+                    {
+                        _activeWindows[i]._zOrder = i;
+                    }
+                    
+                    _engine.Log($"WindowManagement: Window {_windowTitle} unpinned - position unchanged");
                 }
             }
             catch (Exception ex)
@@ -1491,17 +1494,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
             else
             {
-                // For normal windows, add before any pinned windows
-                int insertIndex = _activeWindows.Count;
-                for (int i = 0; i < _activeWindows.Count; i++)
-                {
-                    if (_activeWindows[i]._isPinned)
-                    {
-                        insertIndex = i;
-                        break;
-                    }
-                }
-                _activeWindows.Insert(insertIndex, this);
+                // For normal windows, add to the end of the list (before any pinned windows)
+                // This ensures unpinned windows compete fairly with other unpinned windows
+                _activeWindows.Add(this);
             }
             
             // Update z-order
@@ -1543,7 +1538,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
             else
             {
-                // For normal windows, add before any pinned windows
+                // For normal windows, add to the end of the unpinned section
+                // Find the position before the first pinned window
                 int insertIndex = _activeWindows.Count;
                 for (int i = 0; i < _activeWindows.Count; i++)
                 {
