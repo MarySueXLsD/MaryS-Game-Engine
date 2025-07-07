@@ -658,7 +658,16 @@ public class GameEngine : Game
                 windowModule.Module.Draw(_spriteBatch);
             }
 
-            // Draw TopBar dropdowns
+            // Draw window highlights before TopBar dropdowns to ensure proper z-order
+            foreach (var windowModule in windowModules)
+            {
+                if (windowModule.WindowManagement != null)
+                {
+                    windowModule.WindowManagement.DrawHighlight(_spriteBatch);
+                }
+            }
+
+            // Draw TopBar dropdowns after window highlights
             if (topBar != null)
             {
                 topBar.DrawDropdowns(_spriteBatch);
@@ -668,15 +677,6 @@ public class GameEngine : Game
             if (_desktop != null)
             {
                 _desktop.DrawContextMenu(_spriteBatch);
-            }
-
-            // Draw window highlights last to ensure they're always on top
-            foreach (var windowModule in windowModules)
-            {
-                if (windowModule.WindowManagement != null)
-                {
-                    windowModule.WindowManagement.DrawHighlight(_spriteBatch);
-                }
             }
 
             // Draw Desktop and TopBar highlights last to ensure they're always on top
