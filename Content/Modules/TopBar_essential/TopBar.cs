@@ -448,7 +448,9 @@ namespace MarySGameEngine.Modules.TopBar_essential
                                     System.Diagnostics.Debug.WriteLine($"TopBar: Settings icon clicked for module: {menuItem.DropdownItems[i].Text}");
                                     System.Diagnostics.Debug.WriteLine($"TopBar: Settings icon bounds: {settingsIconBounds}, Mouse position: {_currentMouseState.Position}");
                                     OpenModuleSettings(menuItem.DropdownItems[i].Text);
-                                    break; // Don't close dropdown when settings icon is clicked
+                                    // Close the dropdown after handling the settings action
+                                    menuItem.IsDropdownVisible = false;
+                                    break;
                                 }
                                 else
                                 {

@@ -33,7 +33,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
         private const int TASK_BAR_SIZE = 60;
         private TaskBar _taskBar;
         private GameEngine _engine;
-        private bool _showGrid = true;
+        private bool _showGrid = false;
 
         // Grid system related fields
         private const float IDEAL_CELL_ASPECT_RATIO = 1.0f; // Square cells
