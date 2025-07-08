@@ -71,6 +71,10 @@ public class GameEngine : Game
     private bool _topBarHandledClick = false;
     private bool _anyWindowHandledClick = false;
 
+    // Cursor management
+    private bool _shouldShowHandCursor = false;
+    private bool _cursorStateChanged = false;
+
     // Window dimensions
     private const int InitialWindowWidth = 800;
     private const int InitialWindowHeight = 600;
@@ -424,6 +428,9 @@ public class GameEngine : Game
             // Update previous mouse state
             _previousMouseState = mouseState;
 
+            // Update cursor state
+            UpdateCursor();
+
             // First find TaskBar and TopBar
             TaskBar taskBar = null;
             TopBar topBar = null;
@@ -758,5 +765,47 @@ public class GameEngine : Game
     public void SetAnyWindowHandledClick(bool handled)
     {
         _anyWindowHandledClick = handled;
+    }
+
+    // Cursor management methods
+    public void RequestHandCursor()
+    {
+        if (!_shouldShowHandCursor)
+        {
+            _shouldShowHandCursor = true;
+            _cursorStateChanged = true;
+        }
+    }
+
+    public void ReleaseHandCursor()
+    {
+        if (_shouldShowHandCursor)
+        {
+            _shouldShowHandCursor = false;
+            _cursorStateChanged = true;
+        }
+    }
+
+    private void UpdateCursor()
+    {
+        if (_cursorStateChanged)
+        {
+            try
+            {
+                if (_shouldShowHandCursor)
+                {
+                    Mouse.SetCursor(MouseCursor.Hand);
+                }
+                else
+                {
+                    Mouse.SetCursor(MouseCursor.Arrow);
+                }
+                _cursorStateChanged = false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"GameEngine: Error updating cursor: {ex.Message}");
+            }
+        }
     }
 }

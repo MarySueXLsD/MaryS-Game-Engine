@@ -123,6 +123,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private const int TOOLTIP_DELAY = 500; // milliseconds
         private float _tooltipTimer = 0f;
         private bool _showTooltip = false;
+        private bool _isHoveringOverInteractive = false;
 
         public WindowManagement(GraphicsDevice graphicsDevice, SpriteFont menuFont, int windowWidth, WindowProperties properties)
         {
@@ -552,6 +553,10 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _previousMouseState = _currentMouseState;
             _currentMouseState = Mouse.GetState();
 
+            // Track if we're hovering over any interactive element
+            bool wasHoveringOverInteractive = _isHoveringOverInteractive;
+            _isHoveringOverInteractive = false;
+
             // Update highlight timer
             if (_isHighlighted)
             {
@@ -723,6 +728,20 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
             // Check if mouse is over any part of the window
             bool isMouseOverWindow = scaledBounds.Contains(_currentMouseState.Position);
+            
+            // Check for interactive elements (only buttons and resize handle, not entire title bar)
+            if (isMouseOverWindow && IsTopmostWindowUnderMouse(this, _currentMouseState.Position))
+            {
+                if (maximizeButtonBounds.Contains(_currentMouseState.Position) ||
+                    minimizeButtonBounds.Contains(_currentMouseState.Position) ||
+                    closeButtonBounds.Contains(_currentMouseState.Position) ||
+                    pinButtonBounds.Contains(_currentMouseState.Position) ||
+                    GetSettingsButtonBounds(scaledBounds).Contains(_currentMouseState.Position) ||
+                    (_properties.IsResizable && resizeHandleBounds.Contains(_currentMouseState.Position)))
+                {
+                    _isHoveringOverInteractive = true;
+                }
+            }
             
             // Debug: Log pin button bounds and mouse position occasionally
             if (_currentMouseState.Position.X % 100 == 0 && _currentMouseState.Position.Y % 100 == 0)
@@ -907,6 +926,36 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
             // Update tooltip
             UpdateTooltip(_currentMouseState);
+            
+            // Update cursor based on hover state
+            UpdateCursor(wasHoveringOverInteractive);
+        }
+
+        private void UpdateCursor(bool wasHoveringOverInteractive)
+        {
+            try
+            {
+                // Only change cursor if the hover state actually changed
+                if (_isHoveringOverInteractive != wasHoveringOverInteractive)
+                {
+                    if (_isHoveringOverInteractive)
+                    {
+                        // Request hand cursor when hovering over interactive elements
+                        _engine.RequestHandCursor();
+                        System.Diagnostics.Debug.WriteLine($"WindowManagement: Requested hand cursor (hovering over interactive element) for {_windowTitle}");
+                    }
+                    else
+                    {
+                        // Release hand cursor when not hovering over interactive elements
+                        _engine.ReleaseHandCursor();
+                        System.Diagnostics.Debug.WriteLine($"WindowManagement: Released hand cursor (not hovering over interactive element) for {_windowTitle}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"WindowManagement: Error updating cursor: {ex.Message}");
+            }
         }
 
         private void ToggleMaximize()
@@ -1326,10 +1375,27 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
         public void Dispose()
         {
+            // Reset cursor when disposing
+            ResetCursor();
+            
             _activeWindows.Remove(this);
             _pinnedWindows.Remove(this);
             _pinnedWindowsOrder.Remove(this);
             _pixel?.Dispose();
+        }
+
+        public void ResetCursor()
+        {
+            try
+            {
+                _engine.ReleaseHandCursor();
+                _isHoveringOverInteractive = false;
+                System.Diagnostics.Debug.WriteLine($"WindowManagement: Reset cursor to arrow for {_windowTitle}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"WindowManagement: Error resetting cursor: {ex.Message}");
+            }
         }
 
         public Rectangle GetWindowBounds()
@@ -1382,6 +1448,11 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         public string GetWindowTitle()
         {
             return _windowTitle;
+        }
+
+        public void SetWindowTitle(string title)
+        {
+            _windowTitle = title;
         }
 
         public void SetPosition(Vector2 newPosition)
@@ -1494,9 +1565,18 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
             else
             {
-                // For normal windows, add to the end of the list (before any pinned windows)
-                // This ensures unpinned windows compete fairly with other unpinned windows
-                _activeWindows.Add(this);
+                // For normal windows, add to the end of the unpinned section
+                // Find the position before the first pinned window
+                int insertIndex = _activeWindows.Count;
+                for (int i = 0; i < _activeWindows.Count; i++)
+                {
+                    if (_activeWindows[i]._isPinned)
+                    {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+                _activeWindows.Insert(insertIndex, this);
             }
             
             // Update z-order

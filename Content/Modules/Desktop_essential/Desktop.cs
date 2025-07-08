@@ -1418,7 +1418,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
         {
             _arrowTexture = content.Load<Texture2D>("Modules/Desktop_essential/arrow_down");
             _desktopFont = content.Load<SpriteFont>("Fonts/SpriteFonts/desktop_font");
-            _arialFont = content.Load<SpriteFont>("Fonts/SpriteFonts/arial_font");
+            _arialFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto_font");
 
             // Load all file icons
             _fileIcons["txt"] = content.Load<Texture2D>("Logos/text_file_icon");
