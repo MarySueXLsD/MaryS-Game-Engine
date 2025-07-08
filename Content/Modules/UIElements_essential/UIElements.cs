@@ -40,6 +40,21 @@ namespace MarySGameEngine.Modules.UIElements_essential
         private Action _onResetToDefaults;
         private bool _isHoveringOverButton = false;
 
+        // Add this struct at the top of the UIElements class
+        private struct UIComponentLayoutInfo
+        {
+            public string Alignment;
+            public float WidthPercent;
+            public UIComponentLayoutInfo(string alignment, float widthPercent)
+            {
+                Alignment = alignment;
+                WidthPercent = widthPercent;
+            }
+        }
+
+        // Add this field to UIElements
+        private List<UIComponentLayoutInfo> _componentLayoutInfos = new List<UIComponentLayoutInfo>();
+
         public UIElements(GraphicsDevice graphicsDevice, SpriteFont font, Rectangle bounds, string markdownContent = null, string markdownFilePath = null)
         {
             try
@@ -280,105 +295,146 @@ namespace MarySGameEngine.Modules.UIElements_essential
                 return;
             }
 
-            string[] lines = markdown.Split('\n');
-            int currentY = 10; // Start with some padding
+            string[] lines = markdown.TrimEnd().Split('\n');
+            int currentY = 15; // Increased starting padding
             int padding = 10;
+            int spacing = 10; // Base spacing between components
+            int emptyLineSpacing = 12; // Spacing for empty lines
+            int sectionSpacing = 20; // Extra spacing after section headers
+            int extraSpacing = 8; // Extra spacing for specific components
+
+            _componentLayoutInfos.Clear();
 
             for (int i = 0; i < lines.Length; i++)
             {
                 string line = lines[i].Trim();
-                if (string.IsNullOrEmpty(line)) continue;
+                
+                // Default alignment and width
+                string alignment = "left";
+                float widthPercent = 1.0f;
+
+                // Extract styling for every component (Input, Color, Scale, Button, Separator, etc.)
+                var colonIdx = line.IndexOf(":");
+                string afterColon = colonIdx != -1 && colonIdx + 1 < line.Length ? line.Substring(colonIdx + 1).TrimStart() : line;
+                var match = System.Text.RegularExpressions.Regex.Match(afterColon, @"^\(\s*(left|centered|right)\s*,\s*(\d+)%\s*\)");
+                if (match.Success)
+                {
+                    alignment = match.Groups[1].Value;
+                    widthPercent = int.Parse(match.Groups[2].Value) / 100f;
+                    System.Diagnostics.Debug.WriteLine($"Parsed alignment={alignment}, widthPercent={widthPercent} for line: {line}");
+                    int idx = afterColon.IndexOf(')');
+                    if (idx != -1 && idx + 1 < afterColon.Length)
+                    {
+                        if (colonIdx != -1)
+                            line = line.Substring(0, colonIdx + 1) + afterColon.Substring(idx + 1);
+                        else if (line.StartsWith("---"))
+                            line = "---" + afterColon.Substring(idx + 1);
+                        line = line.Trim();
+                    }
+                }
 
                 try
                 {
-                    // Parse different markdown elements
+                    // Handle empty lines - add generous spacing
+                    if (string.IsNullOrEmpty(line))
+                    {
+                        currentY += emptyLineSpacing;
+                        continue;
+                    }
+
                     if (line.StartsWith("# "))
                     {
-                        // H1 Title - largest scale
                         string title = line.Substring(2);
                         _components.Add(new UITitle(title, new Vector2(padding, currentY), _font, 1.5f));
-                        currentY += (int)(_font.MeasureString(title).Y * 1.5f) + 15;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += (int)(_font.MeasureString(title).Y * 1.5f) + sectionSpacing;
                     }
                     else if (line.StartsWith("## "))
                     {
-                        // H2 Subtitle - large scale
                         string subtitle = line.Substring(3);
                         _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 1.25f));
-                        currentY += (int)(_font.MeasureString(subtitle).Y * 1.25f) + 12;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 1.25f) + sectionSpacing;
                     }
                     else if (line.StartsWith("### "))
                     {
-                        // H3 Subtitle - medium-large scale
                         string subtitle = line.Substring(4);
                         _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 1.1f));
-                        currentY += (int)(_font.MeasureString(subtitle).Y * 1.1f) + 10;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 1.1f) + spacing;
                     }
                     else if (line.StartsWith("#### "))
                     {
-                        // H4 Subtitle - medium scale
                         string subtitle = line.Substring(5);
                         _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 1.0f));
-                        currentY += (int)(_font.MeasureString(subtitle).Y * 1.0f) + 8;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 1.0f) + spacing;
                     }
                     else if (line.StartsWith("##### "))
                     {
-                        // H5 Subtitle - small-medium scale
                         string subtitle = line.Substring(6);
                         _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 0.9f));
-                        currentY += (int)(_font.MeasureString(subtitle).Y * 0.9f) + 6;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 0.9f) + spacing;
                     }
                     else if (line.StartsWith("###### "))
                     {
-                        // H6 Subtitle - smallest scale
                         string subtitle = line.Substring(7);
                         _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 0.8f));
-                        currentY += (int)(_font.MeasureString(subtitle).Y * 0.8f) + 5;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 0.8f) + spacing;
                     }
                     else if (line.StartsWith("- [x] "))
                     {
-                        // Checked checkbox
                         string text = line.Substring(6);
                         var checkbox = new UICheckbox(text, new Vector2(padding, currentY), _font, true);
                         checkbox.SetOnChanged((isChecked) => OnCheckboxChanged(i, isChecked));
                         _components.Add(checkbox);
                         _namedComponents[$"checkbox_{i}"] = checkbox;
-                        currentY += Math.Max(16, (int)_font.MeasureString(text).Y) + 5;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += Math.Max(16, (int)_font.MeasureString(text).Y) + spacing + extraSpacing;
                     }
                     else if (line.StartsWith("- [ ] "))
                     {
-                        // Unchecked checkbox
                         string text = line.Substring(6);
                         var checkbox = new UICheckbox(text, new Vector2(padding, currentY), _font, false);
                         checkbox.SetOnChanged((isChecked) => OnCheckboxChanged(i, isChecked));
                         _components.Add(checkbox);
                         _namedComponents[$"checkbox_{i}"] = checkbox;
-                        currentY += Math.Max(16, (int)_font.MeasureString(text).Y) + 5;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += Math.Max(16, (int)_font.MeasureString(text).Y) + spacing + extraSpacing;
                     }
-                    else if (line.StartsWith("Input: "))
+                    else if (line.StartsWith("Input:"))
                     {
-                        // Text input
-                        string placeholder = line.Substring(7);
+                        string placeholder = line.Substring(7).Trim();
+                        if (placeholder.StartsWith("(") && placeholder.Contains(")"))
+                        {
+                            int closeIdx = placeholder.IndexOf(")");
+                            placeholder = placeholder.Substring(closeIdx + 1).Trim();
+                        }
                         var textInput = new UITextInput(placeholder, new Vector2(padding, currentY), _font, 200);
                         textInput.SetOnTextChanged((text) => OnTextInputChanged(i, text));
                         _components.Add(textInput);
                         _namedComponents[$"input_{i}"] = textInput;
-                        currentY += 25 + 5;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += 25;
                     }
-                    else if (line.StartsWith("Color: "))
+                    else if (line.StartsWith("Color:"))
                     {
-                        // Color picker
-                        string colorText = line.Substring(7);
+                        string colorText = line.Substring(7).Trim();
+                        if (colorText.StartsWith("(") && colorText.Contains(")"))
+                        {
+                            int closeIdx = colorText.IndexOf(")");
+                            colorText = colorText.Substring(closeIdx + 1).Trim();
+                        }
                         string colorHex = "";
                         string label = colorText;
-                        
-                        // Parse color hex if present
                         if (colorText.Contains(" "))
                         {
                             var parts = colorText.Split(' ', 2);
                             colorHex = parts[0];
                             label = parts[1];
                         }
-                        
                         var colorPicker = new UIColorPicker(label, new Vector2(padding, currentY), _font);
                         if (!string.IsNullOrEmpty(colorHex) && colorHex.StartsWith("#"))
                         {
@@ -387,35 +443,56 @@ namespace MarySGameEngine.Modules.UIElements_essential
                         colorPicker.SetOnColorChanged((color) => OnColorChanged(i, color));
                         _components.Add(colorPicker);
                         _namedComponents[$"color_{i}"] = colorPicker;
-                        currentY += 20 + 5;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += Math.Max(20, (int)_font.MeasureString(label).Y) + spacing + extraSpacing;
                     }
-                    else if (line.StartsWith("Scale ["))
+                    else if (line.StartsWith("Scale:"))
                     {
-                        // Scale with new format: "Scale [min=X, max=Y, step=Z, value=W] Label"
-                        string sliderText = line.Trim();
-                        var slider = ParseSlider(sliderText, new Vector2(padding, currentY));
-                        if (slider != null)
+                        int bracketStart = line.IndexOf('[');
+                        int bracketEnd = line.IndexOf(']');
+                        if (bracketStart != -1 && bracketEnd != -1 && bracketEnd > bracketStart)
                         {
-                            slider.SetOnValueChanged((value) => OnSliderChanged(i, value));
-                            _components.Add(slider);
-                            _namedComponents[$"slider_{i}"] = slider;
-                            currentY += slider.GetHeight() + 5;
+                            string configPart = line.Substring(bracketStart, bracketEnd - bracketStart + 1);
+                            string afterBracket = line.Substring(bracketEnd + 1).Trim();
+                            int varStart = afterBracket.LastIndexOf("{");
+                            string label = (varStart != -1) ? afterBracket.Substring(0, varStart).Trim() : afterBracket;
+                            if (label.StartsWith("(") && label.Contains(")"))
+                            {
+                                int closeIdx = label.IndexOf(")");
+                                label = label.Substring(closeIdx + 1).Trim();
+                            }
+                            var slider = ParseSlider("Scale " + configPart + " " + label, new Vector2(padding, currentY));
+                            if (slider != null)
+                            {
+                                slider.SetOnValueChanged((value) => OnSliderChanged(i, value));
+                                _components.Add(slider);
+                                _namedComponents[$"slider_{i}"] = slider;
+                                _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                                currentY += slider.GetHeight();
+                            }
                         }
                     }
-                    else if (line.StartsWith("Button: "))
+                    else if (line.StartsWith("Button:"))
                     {
-                        // Button
-                        string buttonText = line.Substring(8);
+                        string buttonText = line.Substring(8).Trim();
+                        if (buttonText.StartsWith("(") && buttonText.Contains(")"))
+                        {
+                            int closeIdx = buttonText.IndexOf(")");
+                            buttonText = buttonText.Substring(closeIdx + 1).Trim();
+                        }
                         var button = new UIButton(buttonText, new Vector2(padding, currentY), _font);
                         button.SetOnClick(() => OnButtonClicked(buttonText));
                         _components.Add(button);
-                        currentY += button.GetHeight() + 5;
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += button.GetHeight();
                     }
                     else if (line.StartsWith("---"))
                     {
-                        // Separator
-                        _components.Add(new UISeparator(new Vector2(padding, currentY), 300));
-                        currentY += 10 + 5;
+                        // Use widthPercent for separator width
+                        int sepWidth = (int)((_bounds.Width - 2 * padding) * widthPercent);
+                        _components.Add(new UISeparator(new Vector2(padding, currentY), sepWidth));
+                        _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
+                        currentY += 2 + spacing + 8;
                     }
                 }
                 catch (Exception ex)
@@ -423,36 +500,67 @@ namespace MarySGameEngine.Modules.UIElements_essential
                     System.Diagnostics.Debug.WriteLine($"UIElements: Error parsing line {i}: {line} - {ex.Message}");
                 }
             }
+
+            // After parsing all lines
+            if (_componentLayoutInfos.Count != _components.Count)
+            {
+                System.Diagnostics.Debug.WriteLine($"WARNING: _componentLayoutInfos.Count ({_componentLayoutInfos.Count}) != _components.Count ({_components.Count}) after ParseMarkdown");
+                int minCount = Math.Min(_componentLayoutInfos.Count, _components.Count);
+                while (_componentLayoutInfos.Count > minCount) _componentLayoutInfos.RemoveAt(_componentLayoutInfos.Count - 1);
+                while (_components.Count > minCount) _components.RemoveAt(_components.Count - 1);
+            }
         }
 
         private void UpdateComponentLayout()
         {
             System.Diagnostics.Debug.WriteLine($"UIElements: UpdateComponentLayout called with {_components.Count} components");
-            
-            // Recalculate component positions based on new bounds
-            // This is a simple implementation - could be more sophisticated
-            int currentY = 10;
             int padding = 10;
+            int contentWidth = _bounds.Width - 2 * padding; // Subtract both left and right padding
 
-            foreach (var component in _components)
+            for (int i = 0; i < _components.Count; i++)
             {
+                var component = _components[i];
+                var layoutInfo = (i < _componentLayoutInfos.Count) ? _componentLayoutInfos[i] : new UIComponentLayoutInfo("left", 1.0f);
+                float width = contentWidth * layoutInfo.WidthPercent;
+                float x = padding;
+
+                // Set width for components that support it
+                if (component is UISlider slider)
+                {
+                    slider.SetWidth((int)width);
+                }
+                else if (component is UITextInput input)
+                {
+                    input.SetWidth((int)width);
+                }
+                else if (component is UISeparator sep)
+                {
+                    sep.SetWidth((int)width);
+                }
+                else if (component is UIButton btn)
+                {
+                    btn.SetWidth((int)width);
+                }
+
+                // For separator and button, use actual width for alignment
+                int actualWidth = (component is UISeparator || component is UIButton)
+                    ? component.GetBounds(Point.Zero).Width
+                    : (int)width;
+
+                if (layoutInfo.Alignment == "centered")
+                {
+                    x = (_bounds.Width - actualWidth) / 2;
+                }
+                else if (layoutInfo.Alignment == "right")
+                {
+                    x = _bounds.Width - actualWidth - padding;
+                }
+
                 Vector2 oldPosition = component.GetPosition();
-                Vector2 newPosition = new Vector2(padding, currentY);
-                
-                // Use SetPositionPreservingState for checkboxes, regular SetPosition for others
-                if (component is UICheckbox checkbox)
-                {
-                    checkbox.SetPositionPreservingState(newPosition);
-                }
-                else
-                {
-                    component.SetPosition(newPosition);
-                }
-                
-                System.Diagnostics.Debug.WriteLine($"UIElements: Component moved from {oldPosition} to ({padding}, {currentY})");
-                currentY += component.GetHeight() + 5;
+                Vector2 newPosition = new Vector2(x, oldPosition.Y);
+                component.SetPosition(newPosition);
+                System.Diagnostics.Debug.WriteLine($"Component {i}: {component.GetType().Name}, alignment={layoutInfo.Alignment}, width={actualWidth}, position={newPosition}");
             }
-            
             System.Diagnostics.Debug.WriteLine($"UIElements: UpdateComponentLayout completed");
         }
 
@@ -828,6 +936,13 @@ namespace MarySGameEngine.Modules.UIElements_essential
         {
             _onClick = onClick;
         }
+
+        public void SetWidth(int width)
+        {
+            Vector2 textSize = _font.MeasureString(_text);
+            int minWidth = (int)textSize.X + 20;
+            _bounds.Width = Math.Max(width, minWidth);
+        }
     }
 
     // Checkbox component
@@ -1083,6 +1198,11 @@ namespace MarySGameEngine.Modules.UIElements_essential
         {
             _onTextChanged = onTextChanged;
         }
+
+        public void SetWidth(int width)
+        {
+            _maxWidth = width;
+        }
     }
 
     // Color picker component
@@ -1154,6 +1274,7 @@ namespace MarySGameEngine.Modules.UIElements_essential
 
         public override int GetHeight()
         {
+            // Account for color box height (20) and label height, whichever is larger
             return Math.Max(20, (int)_font.MeasureString(_label).Y);
         }
 
@@ -1295,7 +1416,8 @@ namespace MarySGameEngine.Modules.UIElements_essential
 
         public override int GetHeight()
         {
-            return 40; // Label height + slider height
+            // Account for label height + spacing + slider height
+            return (int)_font.LineSpacing + 2 + 20;
         }
 
         public override Rectangle GetBounds(Point offset)
@@ -1316,6 +1438,12 @@ namespace MarySGameEngine.Modules.UIElements_essential
         public void SetOnValueChanged(Action<float> onValueChanged)
         {
             _onValueChanged = onValueChanged;
+        }
+
+        public void SetWidth(int width)
+        {
+            _maxWidth = width;
+            _sliderBounds = new Rectangle((int)_position.X, (int)_position.Y, _maxWidth, 20);
         }
     }
 
@@ -1348,6 +1476,11 @@ namespace MarySGameEngine.Modules.UIElements_essential
         public override Rectangle GetBounds(Point offset)
         {
             return new Rectangle((int)(_position.X + offset.X), (int)(_position.Y + offset.Y), _width, 2);
+        }
+
+        public void SetWidth(int width)
+        {
+            _width = width;
         }
     }
 } 
