@@ -1,4 +1,4 @@
-#----------------------------- Global Properties ----------------------------#
+﻿#----------------------------- Global Properties ----------------------------#
 
 /outputDir:bin/$(Platform)
 /intermediateDir:obj/$(Platform)
@@ -11,41 +11,6 @@
 
 
 #---------------------------------- Content ---------------------------------#
-
-#begin Fonts/SpriteFonts/window_title_font.spritefont
-/importer:FontDescriptionImporter
-/processor:FontDescriptionProcessor
-/processorParam:PremultiplyAlpha=True
-/processorParam:TextureFormat=Compressed
-/build:Fonts/SpriteFonts/window_title_font.spritefont
-
-#begin Fonts/SpriteFonts/pixel_font.spritefont
-/importer:FontDescriptionImporter
-/processor:FontDescriptionProcessor
-/processorParam:PremultiplyAlpha=True
-/processorParam:TextureFormat=Compressed
-/build:Fonts/SpriteFonts/pixel_font.spritefont
-
-#begin Fonts/SpriteFonts/desktop_font.spritefont
-/importer:FontDescriptionImporter
-/processor:FontDescriptionProcessor
-/processorParam:PremultiplyAlpha=True
-/processorParam:TextureFormat=Compressed
-/build:Fonts/SpriteFonts/desktop_font.spritefont
-
-#begin Fonts/SpriteFonts/roboto_font.spritefont
-/importer:FontDescriptionImporter
-/processor:FontDescriptionProcessor
-/processorParam:PremultiplyAlpha=True
-/processorParam:TextureFormat=Compressed
-/build:Fonts/SpriteFonts/roboto_font.spritefont
-
-#begin Fonts/SpriteFonts/dropdown_font.spritefont
-/importer:FontDescriptionImporter
-/processor:FontDescriptionProcessor
-/processorParam:PremultiplyAlpha=True
-/processorParam:TextureFormat=Compressed
-/build:Fonts/SpriteFonts/dropdown_font.spritefont
 
 #begin Logos/text_file_icon.png
 /importer:TextureImporter
@@ -466,3 +431,1292 @@
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
 /build:Modules/ModuleSettings_essential/logo.png
+
+############ SpriteFont Files ############
+# Generated automatically from TTF fonts #
+##########################################
+
+#begin Fonts/SpriteFonts/bitcount_grid/black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/black.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/bold.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/cursive_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/cursive_black.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/cursive_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/cursive_bold.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/cursive_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/cursive_extrabold.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/cursive_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/cursive_extralight.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/cursive_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/cursive_light.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/cursive_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/cursive_medium.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/cursive_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/cursive_regular.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/cursive_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/cursive_semibold.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/cursive_thin.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/cursive_thin.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/extrabold.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/extralight.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/light.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/medium.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/regular.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/roman_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/roman_black.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/roman_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/roman_bold.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/roman_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/roman_extrabold.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/roman_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/roman_extralight.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/roman_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/roman_light.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/roman_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/roman_medium.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/roman_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/roman_regular.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/roman_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/roman_semibold.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/roman_thin.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/roman_thin.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/semibold.spritefont
+#begin Fonts/SpriteFonts/bitcount_grid/thin.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/bitcount_grid/thin.spritefont
+#begin Fonts/SpriteFonts/dancing_script/bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/dancing_script/bold.spritefont
+#begin Fonts/SpriteFonts/dancing_script/medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/dancing_script/medium.spritefont
+#begin Fonts/SpriteFonts/dancing_script/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/dancing_script/regular.spritefont
+#begin Fonts/SpriteFonts/dancing_script/semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/dancing_script/semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/black.spritefont
+#begin Fonts/SpriteFonts/inconsolata/bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/bold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/condensed_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/condensed_black.spritefont
+#begin Fonts/SpriteFonts/inconsolata/condensed_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/condensed_bold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/condensed_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/condensed_extrabold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/condensed_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/condensed_extralight.spritefont
+#begin Fonts/SpriteFonts/inconsolata/condensed_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/condensed_light.spritefont
+#begin Fonts/SpriteFonts/inconsolata/condensed_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/condensed_medium.spritefont
+#begin Fonts/SpriteFonts/inconsolata/condensed_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/condensed_regular.spritefont
+#begin Fonts/SpriteFonts/inconsolata/condensed_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/condensed_semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/expanded_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/expanded_black.spritefont
+#begin Fonts/SpriteFonts/inconsolata/expanded_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/expanded_bold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/expanded_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/expanded_extrabold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/expanded_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/expanded_extralight.spritefont
+#begin Fonts/SpriteFonts/inconsolata/expanded_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/expanded_light.spritefont
+#begin Fonts/SpriteFonts/inconsolata/expanded_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/expanded_medium.spritefont
+#begin Fonts/SpriteFonts/inconsolata/expanded_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/expanded_regular.spritefont
+#begin Fonts/SpriteFonts/inconsolata/expanded_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/expanded_semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extrabold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extracondensed_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extracondensed_black.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extracondensed_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extracondensed_bold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extracondensed_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extracondensed_extrabold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extracondensed_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extracondensed_extralight.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extracondensed_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extracondensed_light.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extracondensed_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extracondensed_medium.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extracondensed_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extracondensed_regular.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extracondensed_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extracondensed_semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extraexpanded_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extraexpanded_black.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extraexpanded_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extraexpanded_bold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extraexpanded_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extraexpanded_extrabold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extraexpanded_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extraexpanded_extralight.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extraexpanded_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extraexpanded_light.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extraexpanded_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extraexpanded_medium.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extraexpanded_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extraexpanded_regular.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extraexpanded_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extraexpanded_semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/extralight.spritefont
+#begin Fonts/SpriteFonts/inconsolata/light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/light.spritefont
+#begin Fonts/SpriteFonts/inconsolata/medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/medium.spritefont
+#begin Fonts/SpriteFonts/inconsolata/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/regular.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semicondensed_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semicondensed_black.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semicondensed_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semicondensed_bold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semicondensed_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semicondensed_extrabold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semicondensed_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semicondensed_extralight.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semicondensed_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semicondensed_light.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semicondensed_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semicondensed_medium.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semicondensed_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semicondensed_regular.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semicondensed_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semicondensed_semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semiexpanded_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semiexpanded_black.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semiexpanded_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semiexpanded_bold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semiexpanded_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semiexpanded_extrabold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semiexpanded_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semiexpanded_extralight.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semiexpanded_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semiexpanded_light.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semiexpanded_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semiexpanded_medium.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semiexpanded_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semiexpanded_regular.spritefont
+#begin Fonts/SpriteFonts/inconsolata/semiexpanded_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/semiexpanded_semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultracondensed_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultracondensed_black.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultracondensed_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultracondensed_bold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultracondensed_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultracondensed_extrabold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultracondensed_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultracondensed_extralight.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultracondensed_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultracondensed_light.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultracondensed_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultracondensed_medium.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultracondensed_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultracondensed_regular.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultracondensed_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultracondensed_semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultraexpanded_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultraexpanded_black.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultraexpanded_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultraexpanded_bold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultraexpanded_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultraexpanded_extrabold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultraexpanded_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultraexpanded_extralight.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultraexpanded_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultraexpanded_light.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultraexpanded_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultraexpanded_medium.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultraexpanded_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultraexpanded_regular.spritefont
+#begin Fonts/SpriteFonts/inconsolata/ultraexpanded_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/ultraexpanded_semibold.spritefont
+#begin Fonts/SpriteFonts/inconsolata/variablefont_wdth_wght.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/inconsolata/variablefont_wdth_wght.spritefont
+#begin Fonts/SpriteFonts/libertinus_mono/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/libertinus_mono/regular.spritefont
+#begin Fonts/SpriteFonts/manufacturing_consent/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/manufacturing_consent/regular.spritefont
+#begin Fonts/SpriteFonts/open_sans/bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/bold.spritefont
+#begin Fonts/SpriteFonts/open_sans/bold_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/bold_italic.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_bold.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_bolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_bolditalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_extrabold.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_extrabolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_extrabolditalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_italic.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_light.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_lightitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_lightitalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_medium.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_mediumitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_mediumitalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_regular.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_semibold.spritefont
+#begin Fonts/SpriteFonts/open_sans/condensed_semibolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/condensed_semibolditalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/extrabold.spritefont
+#begin Fonts/SpriteFonts/open_sans/extrabold_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/extrabold_italic.spritefont
+#begin Fonts/SpriteFonts/open_sans/italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/italic.spritefont
+#begin Fonts/SpriteFonts/open_sans/light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/light.spritefont
+#begin Fonts/SpriteFonts/open_sans/light_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/light_italic.spritefont
+#begin Fonts/SpriteFonts/open_sans/medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/medium.spritefont
+#begin Fonts/SpriteFonts/open_sans/medium_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/medium_italic.spritefont
+#begin Fonts/SpriteFonts/open_sans/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/regular.spritefont
+#begin Fonts/SpriteFonts/open_sans/semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semibold.spritefont
+#begin Fonts/SpriteFonts/open_sans/semibold_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semibold_italic.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_bold.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_bolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_bolditalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_extrabold.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_extrabolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_extrabolditalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_italic.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_light.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_lightitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_lightitalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_medium.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_mediumitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_mediumitalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_regular.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_semibold.spritefont
+#begin Fonts/SpriteFonts/open_sans/semicondensed_semibolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/semicondensed_semibolditalic.spritefont
+#begin Fonts/SpriteFonts/open_sans/variablefont_wdth_wght.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/open_sans/variablefont_wdth_wght.spritefont
+#begin Fonts/SpriteFonts/oswald/bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/oswald/bold.spritefont
+#begin Fonts/SpriteFonts/oswald/extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/oswald/extralight.spritefont
+#begin Fonts/SpriteFonts/oswald/light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/oswald/light.spritefont
+#begin Fonts/SpriteFonts/oswald/medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/oswald/medium.spritefont
+#begin Fonts/SpriteFonts/oswald/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/oswald/regular.spritefont
+#begin Fonts/SpriteFonts/oswald/semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/oswald/semibold.spritefont
+#begin Fonts/SpriteFonts/pixel_font/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/pixel_font/regular.spritefont
+#begin Fonts/SpriteFonts/roboto/black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/black.spritefont
+#begin Fonts/SpriteFonts/roboto/black_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/black_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/bold.spritefont
+#begin Fonts/SpriteFonts/roboto/bold_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/bold_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_black.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_blackitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_blackitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_bold.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_bolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_bolditalic.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_extrabold.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_extrabolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_extrabolditalic.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_extralight.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_extralightitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_extralightitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_light.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_lightitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_lightitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_medium.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_mediumitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_mediumitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_regular.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_semibold.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_semibolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_semibolditalic.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_thin.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_thin.spritefont
+#begin Fonts/SpriteFonts/roboto/condensed_thinitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/condensed_thinitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/extrabold.spritefont
+#begin Fonts/SpriteFonts/roboto/extrabold_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/extrabold_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/extralight.spritefont
+#begin Fonts/SpriteFonts/roboto/extralight_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/extralight_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/italic.spritefont
+#begin Fonts/SpriteFonts/roboto/light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/light.spritefont
+#begin Fonts/SpriteFonts/roboto/light_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/light_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/medium.spritefont
+#begin Fonts/SpriteFonts/roboto/medium_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/medium_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/regular.spritefont
+#begin Fonts/SpriteFonts/roboto/semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semibold.spritefont
+#begin Fonts/SpriteFonts/roboto/semibold_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semibold_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_black.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_blackitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_blackitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_bold.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_bolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_bolditalic.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_extrabold.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_extrabolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_extrabolditalic.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_extralight.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_extralightitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_extralightitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_light.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_lightitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_lightitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_medium.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_mediumitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_mediumitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_regular.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_semibold.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_semibolditalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_semibolditalic.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_thin.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_thin.spritefont
+#begin Fonts/SpriteFonts/roboto/semicondensed_thinitalic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/semicondensed_thinitalic.spritefont
+#begin Fonts/SpriteFonts/roboto/thin.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/thin.spritefont
+#begin Fonts/SpriteFonts/roboto/thin_italic.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/thin_italic.spritefont
+#begin Fonts/SpriteFonts/roboto/variablefont_wdth_wght.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/roboto/variablefont_wdth_wght.spritefont
+#begin Fonts/SpriteFonts/smooch_sans/black.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/smooch_sans/black.spritefont
+#begin Fonts/SpriteFonts/smooch_sans/bold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/smooch_sans/bold.spritefont
+#begin Fonts/SpriteFonts/smooch_sans/extrabold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/smooch_sans/extrabold.spritefont
+#begin Fonts/SpriteFonts/smooch_sans/extralight.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/smooch_sans/extralight.spritefont
+#begin Fonts/SpriteFonts/smooch_sans/light.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/smooch_sans/light.spritefont
+#begin Fonts/SpriteFonts/smooch_sans/medium.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/smooch_sans/medium.spritefont
+#begin Fonts/SpriteFonts/smooch_sans/regular.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/smooch_sans/regular.spritefont
+#begin Fonts/SpriteFonts/smooch_sans/semibold.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/smooch_sans/semibold.spritefont
+#begin Fonts/SpriteFonts/smooch_sans/thin.spritefont
+/importer:FontDescriptionImporter
+/processor:FontDescriptionProcessor
+/processorParam:PremultiplyAlpha=True
+/processorParam:TextureFormat=Compressed
+/build:Fonts/SpriteFonts/smooch_sans/thin.spritefont
