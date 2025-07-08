@@ -88,6 +88,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private float _highlightTimer = 0f;
         private bool _isHighlighted = false;
 
+        // Font scaling
+        private const float TITLE_FONT_SCALE = 0.9f; // Scale to 18px (assuming base font is 16px)
+
         // Resources
         private SpriteFont _menuFont;
         private SpriteFont _titleFont;
@@ -1236,9 +1239,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             // Draw title text with the title font
             Vector2 titleTextPos = new Vector2(
                 scaledBounds.X + TITLE_LEFT_PADDING,
-                scaledBounds.Y + (_titleBarHeight - _titleFont.LineSpacing) / 2
+                scaledBounds.Y + (_titleBarHeight - _titleFont.LineSpacing * TITLE_FONT_SCALE) / 2
             );
-            spriteBatch.DrawString(_titleFont, title, titleTextPos, Color.White);
+            spriteBatch.DrawString(_titleFont, title, titleTextPos, Color.White, 0f, Vector2.Zero, TITLE_FONT_SCALE, SpriteEffects.None, 0f);
 
             // Draw maximize/restore button
             Rectangle maximizeButtonBounds = GetMaximizeButtonBounds(scaledBounds);
@@ -1679,7 +1682,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _settingsIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/settings");
             _pinIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/pin");
             _unpinIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/unpin");
-            _titleFont = content.Load<SpriteFont>("Fonts/SpriteFonts/window_title_font");
+            _titleFont = content.Load<SpriteFont>("Fonts/SpriteFonts/bitcount_grid/regular");
         }
 
         private string GetButtonTooltip(Rectangle bounds)

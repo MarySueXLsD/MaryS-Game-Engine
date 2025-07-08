@@ -16,6 +16,7 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         private WindowManagement _windowManagement;
         private GraphicsDevice _graphicsDevice;
         private SpriteFont _menuFont;
+        private SpriteFont _uiFont; // Separate font for UI elements
         private int _windowWidth;
         private TaskBar _taskBar;
         private ContentManager _content;
@@ -62,7 +63,7 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 Rectangle uiBounds = new Rectangle(10, 50, _windowWidth - 20, _windowWidth - 60);
                 string markdownFilePath = Path.Combine(Directory.GetCurrentDirectory(), "Content", "Modules", "ModuleSettings_essential", "ui_layout.md");
                 
-                _uiElements = new UIElements(_graphicsDevice, _menuFont, uiBounds, markdownLayout, markdownFilePath);
+                _uiElements = new UIElements(_graphicsDevice, _uiFont, uiBounds, markdownLayout, markdownFilePath);
                 
                 // Set up callbacks
                 _uiElements.SetSaveSettingsCallback(OnSaveSettings);
@@ -169,6 +170,9 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         {
             _content = content;
             _windowManagement.LoadContent(content);
+            
+            // Load the dancing_script font for UI elements
+            _uiFont = content.Load<SpriteFont>("Fonts/SpriteFonts/inconsolata/regular");
         }
 
         public void Dispose()

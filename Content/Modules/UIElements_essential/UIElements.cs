@@ -121,16 +121,13 @@ namespace MarySGameEngine.Modules.UIElements_essential
                     component.Update(_currentMouseState, _previousMouseState, _bounds.Location, _pixel);
                     
                     // Check if this component is interactive and we're hovering over it
-                    if (component.IsHovered(_currentMouseState.Position, _bounds.Location))
+                    if (component is UIButton || 
+                        component is UICheckbox || 
+                        component is UITextInput || 
+                        component is UIColorPicker || 
+                        component is UISlider)
                     {
-                        if (component is UIButton || 
-                            component is UICheckbox || 
-                            component is UITextInput || 
-                            component is UIColorPicker || 
-                            component is UISlider)
-                        {
-                            _isHoveringOverButton = true;
-                        }
+                        _isHoveringOverButton = true;
                     }
                 }
                 catch (Exception ex)
@@ -297,17 +294,45 @@ namespace MarySGameEngine.Modules.UIElements_essential
                     // Parse different markdown elements
                     if (line.StartsWith("# "))
                     {
-                        // Title
+                        // H1 Title - largest scale
                         string title = line.Substring(2);
-                        _components.Add(new UITitle(title, new Vector2(padding, currentY), _font));
-                        currentY += (int)_font.MeasureString(title).Y + 10;
+                        _components.Add(new UITitle(title, new Vector2(padding, currentY), _font, 1.5f));
+                        currentY += (int)(_font.MeasureString(title).Y * 1.5f) + 15;
                     }
                     else if (line.StartsWith("## "))
                     {
-                        // Subtitle
+                        // H2 Subtitle - large scale
                         string subtitle = line.Substring(3);
-                        _components.Add(new UIText(subtitle, new Vector2(padding, currentY), _font, UITheme.Primary));
-                        currentY += (int)_font.MeasureString(subtitle).Y + 10;
+                        _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 1.25f));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 1.25f) + 12;
+                    }
+                    else if (line.StartsWith("### "))
+                    {
+                        // H3 Subtitle - medium-large scale
+                        string subtitle = line.Substring(4);
+                        _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 1.1f));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 1.1f) + 10;
+                    }
+                    else if (line.StartsWith("#### "))
+                    {
+                        // H4 Subtitle - medium scale
+                        string subtitle = line.Substring(5);
+                        _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 1.0f));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 1.0f) + 8;
+                    }
+                    else if (line.StartsWith("##### "))
+                    {
+                        // H5 Subtitle - small-medium scale
+                        string subtitle = line.Substring(6);
+                        _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 0.9f));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 0.9f) + 6;
+                    }
+                    else if (line.StartsWith("###### "))
+                    {
+                        // H6 Subtitle - smallest scale
+                        string subtitle = line.Substring(7);
+                        _components.Add(new UITitle(subtitle, new Vector2(padding, currentY), _font, 0.8f));
+                        currentY += (int)(_font.MeasureString(subtitle).Y * 0.8f) + 5;
                     }
                     else if (line.StartsWith("- [x] "))
                     {
@@ -664,12 +689,14 @@ namespace MarySGameEngine.Modules.UIElements_essential
         private string _text;
         private SpriteFont _font;
         private Color _color;
+        private float _scale;
 
-        public UITitle(string text, Vector2 position, SpriteFont font) : base(position)
+        public UITitle(string text, Vector2 position, SpriteFont font, float scale = 1.0f) : base(position)
         {
             _text = text;
             _font = font;
             _color = UITheme.Primary;
+            _scale = scale;
         }
 
         public override void Update(MouseState currentMouse, MouseState previousMouse, Point offset, Texture2D pixel)
@@ -680,17 +707,17 @@ namespace MarySGameEngine.Modules.UIElements_essential
         public override void Draw(SpriteBatch spriteBatch, Point offset, Texture2D pixel)
         {
             Vector2 drawPos = _position + new Vector2(offset.X, offset.Y);
-            spriteBatch.DrawString(_font, _text, drawPos, _color);
+            spriteBatch.DrawString(_font, _text, drawPos, _color, 0f, Vector2.Zero, _scale, SpriteEffects.None, 0f);
         }
 
         public override int GetHeight()
         {
-            return (int)_font.MeasureString(_text).Y;
+            return (int)(_font.MeasureString(_text).Y * _scale);
         }
 
         public override Rectangle GetBounds(Point offset)
         {
-            Vector2 size = _font.MeasureString(_text);
+            Vector2 size = _font.MeasureString(_text) * _scale;
             return new Rectangle((int)(_position.X + offset.X), (int)(_position.Y + offset.Y), (int)size.X, (int)size.Y);
         }
     }

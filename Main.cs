@@ -349,9 +349,9 @@ public class GameEngine : Game
             _menuFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font");
             Log("Main: Loaded pixel font");
 
-            // Load the larger dropdown font
-            _dropdownFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/dropdown_font");
-            Log("Main: Loaded dropdown font");
+            // Use the same pixel font for dropdowns
+            _dropdownFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font");
+            Log("Main: Loaded dropdown font (using pixel_font)");
 
             // Load all modules
             LoadModules();
