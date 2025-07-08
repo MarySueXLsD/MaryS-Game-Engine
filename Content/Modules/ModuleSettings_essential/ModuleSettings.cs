@@ -8,6 +8,8 @@ using MarySGameEngine.Modules.WindowManagement_essential;
 using MarySGameEngine.Modules.TaskBar_essential;
 using MarySGameEngine.Modules.UIElements_essential;
 using System.IO;
+using System.Text.Json;
+using System.Linq;
 
 namespace MarySGameEngine.Modules.ModuleSettings_essential
 {
@@ -22,6 +24,32 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         private ContentManager _content;
         private UIElements _uiElements;
         private GameEngine _engine;
+        private Texture2D _pixel;
+        private MouseState _prevMouseState;
+
+        private class ModuleTab
+        {
+            public string Name;
+            public string SettingsPath;
+            public string BridgePath;
+            public string FolderName;
+        }
+        private List<ModuleTab> _tabs = new List<ModuleTab>();
+        private int _activeTabIndex = 0;
+        private int _firstVisibleTabIndex = 0;
+        private int _maxVisibleTabs = 1;
+        private SpriteFont _tabFont;
+        private Texture2D _arrowTexture;
+        private int _tabBarHeight = 38; // 30px + padding
+        private int _tabPadding = 10;
+        private int _tabOverlap = 18; // How much tabs overlap each other
+        private int _arrowSize = 28;
+        private Rectangle _tabBarBounds;
+        private int _tabBarSpacing = 8; // Spacing between title bar and tab bar, and between tab bar and UI
+        private int _titleBarHeight = 40; // Should match WindowManagement's title bar height
+
+        // Store clickable tab rectangles for click detection
+        private List<(Rectangle rect, int tabIndex)> _tabRects = new List<(Rectangle, int)>();
 
         public ModuleSettings(GraphicsDevice graphicsDevice, SpriteFont menuFont, int windowWidth)
         {
@@ -29,6 +57,10 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             _menuFont = menuFont;
             _windowWidth = windowWidth;
             _engine = (GameEngine)GameEngine.Instance;
+            
+            // Create 1x1 white pixel texture
+            _pixel = new Texture2D(graphicsDevice, 1, 1);
+            _pixel.SetData(new[] { Color.White });
             
             // Create window properties from bridge.json
             var properties = new WindowProperties
@@ -49,35 +81,6 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             _uiElements = null;
         }
 
-        private void InitializeUIElements()
-        {
-            try
-            {
-                _engine.Log("ModuleSettings: Initializing UI Elements");
-                
-                // Load markdown layout
-                string markdownLayout = LoadMarkdownLayout();
-                _engine.Log($"ModuleSettings: Loaded markdown layout ({markdownLayout.Length} characters)");
-                
-                // Create UI elements with markdown content
-                Rectangle uiBounds = new Rectangle(10, 50, _windowWidth - 20, _windowWidth - 60);
-                string markdownFilePath = Path.Combine(Directory.GetCurrentDirectory(), "Content", "Modules", "ModuleSettings_essential", "ui_layout.md");
-                
-                _uiElements = new UIElements(_graphicsDevice, _uiFont, uiBounds, markdownLayout, markdownFilePath);
-                
-                // Set up callbacks
-                _uiElements.SetSaveSettingsCallback(OnSaveSettings);
-                _uiElements.SetResetToDefaultsCallback(OnResetToDefaults);
-                
-                _engine.Log("ModuleSettings: UI Elements initialized successfully");
-            }
-            catch (Exception ex)
-            {
-                _engine.Log($"ModuleSettings: Error initializing UI Elements: {ex.Message}");
-                _engine.Log($"ModuleSettings: Stack trace: {ex.StackTrace}");
-            }
-        }
-
         public void SetTaskBar(TaskBar taskBar)
         {
             _taskBar = taskBar;
@@ -89,34 +92,37 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             try
             {
                 _windowManagement.Update();
-                
-                // Initialize UI elements if window is visible and they haven't been initialized yet
+                Rectangle windowBounds = _windowManagement.GetWindowBounds();
+                // Tab bar is now inside the window, just below the title bar
+                _tabBarBounds = new Rectangle(
+                    windowBounds.X,
+                    windowBounds.Y + _titleBarHeight + _tabBarSpacing,
+                    windowBounds.Width,
+                    _tabBarHeight
+                );
+                UpdateTabBarInput();
+
+                // If window is visible and UIElements is null, load the current tab's settings_ui.md
                 if (_windowManagement.IsVisible() && _uiElements == null)
                 {
-                    System.Diagnostics.Debug.WriteLine("ModuleSettings: Window is visible, initializing UI elements");
-                    InitializeUIElements();
+                    LoadTabUI(_activeTabIndex);
                 }
                 
                 // Update UI elements if window is visible and initialized
                 if (_windowManagement.IsVisible() && _uiElements != null)
                 {
-                    // Only update UI bounds if window bounds have changed
-                    Rectangle windowBounds = _windowManagement.GetWindowBounds();
-                    Rectangle contentBounds = new Rectangle(
+                    // UI area starts below the tab bar
+                    Rectangle uiBounds = new Rectangle(
                         windowBounds.X,
-                        windowBounds.Y + 40, // Title bar height
+                        windowBounds.Y + _titleBarHeight + _tabBarSpacing + _tabBarHeight + _tabBarSpacing,
                         windowBounds.Width,
-                        windowBounds.Height - 40
+                        windowBounds.Height - _titleBarHeight - _tabBarHeight - 2 * _tabBarSpacing
                     );
-                    
-                    // Check if bounds have actually changed to avoid unnecessary layout updates
                     Rectangle currentBounds = _uiElements.GetBounds();
-                    if (currentBounds != contentBounds)
+                    if (currentBounds != uiBounds)
                     {
-                        System.Diagnostics.Debug.WriteLine($"ModuleSettings: Bounds changed from {currentBounds} to {contentBounds}");
-                        _uiElements.SetBounds(contentBounds);
+                        _uiElements.SetBounds(uiBounds);
                     }
-                    
                     _uiElements.Update();
                 }
             }
@@ -132,10 +138,10 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             try
             {
                 _windowManagement.Draw(spriteBatch, "Module Settings");
-                
-                // Draw UI elements if window is visible and initialized
-                if (_windowManagement.IsVisible() && _uiElements != null)
+                if (_windowManagement.IsVisible())
                 {
+                    DrawTabBar(spriteBatch);
+                    if (_uiElements != null)
                     _uiElements.Draw(spriteBatch);
                 }
             }
@@ -156,13 +162,7 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             if (_uiElements != null)
             {
                 Rectangle windowBounds = _windowManagement.GetWindowBounds();
-                Rectangle contentBounds = new Rectangle(
-                    windowBounds.X,
-                    windowBounds.Y + 40, // Title bar height
-                    windowBounds.Width,
-                    windowBounds.Height - 40
-                );
-                _uiElements.SetBounds(contentBounds);
+                _uiElements.SetBounds(windowBounds);
             }
         }
 
@@ -170,9 +170,15 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         {
             _content = content;
             _windowManagement.LoadContent(content);
-            
-            // Load the dancing_script font for UI elements
-            _uiFont = content.Load<SpriteFont>("Fonts/SpriteFonts/inconsolata/regular");
+            // Try to load Roboto for UIElements
+            try {
+                _uiFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");
+            } catch {
+                _uiFont = _menuFont;
+            }
+            _tabFont = _menuFont;
+            _arrowTexture = null; // No arrow texture, skip drawing arrows
+            BuildTabs();
         }
 
         public void Dispose()
@@ -193,35 +199,250 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             }
         }
 
-        private string LoadMarkdownLayout()
+        private void BuildTabs()
         {
-            try
+            _tabs.Clear();
+            string modulesRoot = Path.Combine(Directory.GetCurrentDirectory(), "Content", "Modules");
+            foreach (var dir in Directory.GetDirectories(modulesRoot))
             {
-                string layoutPath = Path.Combine(Directory.GetCurrentDirectory(), "Content", "Modules", "ModuleSettings_essential", "ui_layout.md");
-                System.Diagnostics.Debug.WriteLine($"ModuleSettings: Attempting to load layout from: {layoutPath}");
-                
-                if (File.Exists(layoutPath))
+                string folderName = Path.GetFileName(dir);
+                string bridgePath = Path.Combine(dir, "bridge.json");
+                string settingsPath = Path.Combine(dir, "settings_ui.md");
+                if (File.Exists(bridgePath) && File.Exists(settingsPath))
                 {
-                    string content = File.ReadAllText(layoutPath);
-                    System.Diagnostics.Debug.WriteLine($"ModuleSettings: Successfully loaded layout file, length: {content.Length}");
-                    return content;
+                    string json = File.ReadAllText(bridgePath);
+                    string name = "";
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("name", out var n))
+                            name = n.GetString();
+                    }
+                    catch { name = folderName; }
+                    _tabs.Add(new ModuleTab { Name = name, SettingsPath = settingsPath, BridgePath = bridgePath, FolderName = folderName });
+                }
+            }
+            // Always include ModuleSettings itself, even if not found above
+            if (!_tabs.Any(t => t.FolderName == "ModuleSettings_essential"))
+            {
+                string dir = Path.Combine(modulesRoot, "ModuleSettings_essential");
+                string bridgePath = Path.Combine(dir, "bridge.json");
+                string settingsPath = Path.Combine(dir, "settings_ui.md");
+                string name = "Module Settings";
+                if (File.Exists(bridgePath))
+                {
+                    string json = File.ReadAllText(bridgePath);
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("name", out var n))
+                            name = n.GetString();
+                    }
+                    catch { }
+                }
+                _tabs.Insert(0, new ModuleTab { Name = name, SettingsPath = settingsPath, BridgePath = bridgePath, FolderName = "ModuleSettings_essential" });
+            }
+            _engine.Log($"[ModuleSettingsTabs] Built tab list. Count: {_tabs.Count}");
+            foreach (var t in _tabs)
+                _engine.Log($"[ModuleSettingsTabs] Tab: {t.Name} | Path: {t.SettingsPath}");
+            if (_tabs.Count == 0)
+                _engine.Log("[ModuleSettingsTabs] WARNING: No tabs found!");
+            _activeTabIndex = 0;
+            _firstVisibleTabIndex = 0;
+            LoadTabUI(_activeTabIndex);
+        }
+
+        private void LoadTabUI(int tabIndex)
+        {
+            if (tabIndex < 0 || tabIndex >= _tabs.Count) return;
+            var tab = _tabs[tabIndex];
+            _engine.Log($"[ModuleSettingsTabs] Loading tab {tabIndex}: {tab.Name} | File: {tab.SettingsPath}");
+            string markdown = File.Exists(tab.SettingsPath) ? File.ReadAllText(tab.SettingsPath) : "# No settings found";
+            if (!File.Exists(tab.SettingsPath))
+                _engine.Log($"[ModuleSettingsTabs] WARNING: settings_ui.md not found for {tab.Name} at {tab.SettingsPath}");
+            if (string.IsNullOrWhiteSpace(markdown))
+                _engine.Log($"[ModuleSettingsTabs] WARNING: settings_ui.md is empty for {tab.Name} at {tab.SettingsPath}");
+            // UI area starts below the tab bar
+            Rectangle windowBounds = _windowManagement.GetWindowBounds();
+            Rectangle uiBounds = new Rectangle(
+                windowBounds.X,
+                windowBounds.Y + _titleBarHeight + _tabBarSpacing + _tabBarHeight + _tabBarSpacing,
+                windowBounds.Width,
+                windowBounds.Height - _titleBarHeight - _tabBarHeight - 2 * _tabBarSpacing
+            );
+            _uiElements = new UIElements(_graphicsDevice, _uiFont, uiBounds, markdown, tab.SettingsPath);
+            _uiElements.SetSaveSettingsCallback(OnSaveSettings);
+            _uiElements.SetResetToDefaultsCallback(OnResetToDefaults);
+            if (_uiElements == null)
+                _engine.Log($"[ModuleSettingsTabs] ERROR: UIElements is null after loading tab {tab.Name}");
+        }
+
+        private void UpdateTabBarInput()
+        {
+            var mouse = Mouse.GetState();
+            var mousePos = mouse.Position;
+            bool leftPressed = mouse.LeftButton == ButtonState.Pressed;
+            bool leftJustPressed = leftPressed && _prevMouseState.LeftButton == ButtonState.Released;
+            if (!_windowManagement.IsVisible() || !_tabBarBounds.Contains(mousePos)) { _prevMouseState = mouse; return; }
+            // Use _tabRects for click detection
+            if (leftJustPressed)
+            {
+                foreach (var (rect, tabIndex) in _tabRects)
+                {
+                    if (rect.Contains(mousePos))
+                    {
+                        if (_activeTabIndex != tabIndex)
+                        {
+                            _activeTabIndex = tabIndex;
+                            LoadTabUI(tabIndex);
+                        }
+                        _prevMouseState = mouse;
+                        return;
+                    }
+                }
+            }
+            _prevMouseState = mouse;
+        }
+
+        private int GetTabWidth(string text)
+        {
+            return (int)(_tabFont.MeasureString(text).X * 0.7f) + 2 * _tabPadding;
+        }
+        private int GetMaxVisibleTabs(int availableWidth)
+        {
+            int total = 0, count = 0;
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                int w = GetTabWidth(_tabs[i].Name);
+                if (total + w - (count > 0 ? _tabOverlap : 0) > availableWidth - 2 * _arrowSize - 2 * _tabPadding)
+                    break;
+                total += w - (count > 0 ? _tabOverlap : 0);
+                count++;
+            }
+            return Math.Max(1, count);
+        }
+
+        // Helper to draw a polygonal tab with a cut top-left corner and gradient
+        private void DrawTabPolygon(SpriteBatch spriteBatch, Rectangle rect, bool isActive, Color color1, Color color2, int cutSize = 12, int borderThickness = 2)
+        {
+            // We'll draw the tab as two rectangles: top (with cut) and bottom
+            // For a real polygon, you'd use a custom vertex buffer, but we'll fake it with rectangles
+            // Top rectangle (with cut)
+            Rectangle topRect = new Rectangle(rect.X + cutSize, rect.Y, rect.Width - cutSize, rect.Height / 2);
+            Rectangle cutRect = new Rectangle(rect.X, rect.Y + cutSize, cutSize, rect.Height / 2 - cutSize);
+            Rectangle bottomRect = new Rectangle(rect.X, rect.Y + rect.Height / 2, rect.Width, rect.Height / 2);
+            // Gradient: draw top with color1, bottom with color2
+            spriteBatch.Draw(_pixel, topRect, color1);
+            spriteBatch.Draw(_pixel, cutRect, color1);
+            spriteBatch.Draw(_pixel, bottomRect, color2);
+            // Border: left, right, bottom
+            Color border = isActive ? Color.White : new Color(80, 60, 120);
+            // Left border (slanted)
+            for (int i = 0; i < borderThickness; i++)
+                spriteBatch.Draw(_pixel, new Rectangle(rect.X + i, rect.Y + cutSize, borderThickness, rect.Height - cutSize), border);
+            // Top border (horizontal, after cut)
+            spriteBatch.Draw(_pixel, new Rectangle(rect.X + cutSize, rect.Y, rect.Width - cutSize, borderThickness), border);
+            // Right border
+            for (int i = 0; i < borderThickness; i++)
+                spriteBatch.Draw(_pixel, new Rectangle(rect.Right - borderThickness + i, rect.Y, borderThickness, rect.Height), border);
+            // Bottom border
+            spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Bottom - borderThickness, rect.Width, borderThickness), border);
+        }
+
+        private void DrawTabBar(SpriteBatch spriteBatch)
+        {
+            if (_tabFont == null || _tabs.Count == 0) return;
+            _engine.Log($"[ModuleSettingsTabs] Drawing tab bar. Tab count: {_tabs.Count}, Active: {_activeTabIndex}");
+            spriteBatch.Draw(_pixel, _tabBarBounds, new Color(60, 40, 90, 220));
+            int cutSize = 5;
+            int borderThickness = 2;
+            int minSliver = 24; // px minimum visible for any tab
+            int[] tabWidths = _tabs.Select(t => GetTabWidth(t.Name)).ToArray();
+            int totalTabs = _tabs.Count;
+            int availableWidth = _tabBarBounds.Width - 2 * _tabPadding;
+            int active = _activeTabIndex;
+            // 1. Assign full width to active and its neighbors, minSliver to others
+            int[] visibleWidths = new int[totalTabs];
+            int fullTabsWidth = 0;
+            for (int i = 0; i < totalTabs; i++)
+            {
+                if (i == active || i == active - 1 || i == active + 1)
+                {
+                    visibleWidths[i] = tabWidths[i];
+                    fullTabsWidth += tabWidths[i];
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"ModuleSettings: Layout file not found at: {layoutPath}");
-                    _engine.Log($"ModuleSettings: ERROR - ui_layout.md file not found at {layoutPath}");
-                    return null;
+                    visibleWidths[i] = minSliver;
                 }
             }
-            catch (Exception ex)
+            int minTotalWidth = fullTabsWidth + minSliver * (totalTabs - 3);
+            int extraSpace = availableWidth - minTotalWidth;
+            // 2. Distribute extra space to sliver tabs if any
+            if (extraSpace > 0)
             {
-                System.Diagnostics.Debug.WriteLine($"ModuleSettings: Error loading markdown layout: {ex.Message}");
-                _engine.Log($"ModuleSettings: ERROR loading markdown layout: {ex.Message}");
-                return null;
+                int sliverCount = totalTabs - 3;
+                if (sliverCount > 0)
+                {
+                    int addPerSliver = extraSpace / sliverCount;
+                    for (int i = 0; i < totalTabs; i++)
+                    {
+                        if (!(i == active || i == active - 1 || i == active + 1))
+                            visibleWidths[i] += addPerSliver;
+                    }
+                }
+            }
+            // 3. Calculate starting X so all tabs fit
+            int totalWidth = visibleWidths.Sum();
+            int startX = _tabBarBounds.X + _tabPadding;
+            if (totalWidth < availableWidth)
+                startX += (availableWidth - totalWidth) / 2;
+            // 4. Layout: store rectangles for each tab
+            int[] tabXs = new int[totalTabs];
+            int x = startX;
+            for (int i = 0; i < totalTabs; i++)
+            {
+                tabXs[i] = x;
+                x += visibleWidths[i];
+            }
+            // 5. Draw tabs in pyramid z-order: furthest first, active last
+            _tabRects.Clear();
+            // Build draw order: for each distance from active, left first then right
+            List<int> drawOrder = new List<int>();
+            int maxDist = Math.Max(active, totalTabs - 1 - active);
+            for (int d = maxDist; d > 0; d--)
+            {
+                int left = active - d;
+                int right = active + d;
+                if (left >= 0) drawOrder.Add(left);
+                if (right < totalTabs) drawOrder.Add(right);
+            }
+            // Then immediate neighbors
+            if (active - 1 >= 0) drawOrder.Add(active - 1);
+            if (active + 1 < totalTabs) drawOrder.Add(active + 1);
+            // Then active tab last (on top)
+            drawOrder.Add(active);
+            // Draw in this order
+            foreach (int i in drawOrder)
+            {
+                int width = tabWidths[i];
+                int visible = visibleWidths[i];
+                int tabX = tabXs[i];
+                Rectangle tabRect = new Rectangle(tabX, _tabBarBounds.Y + 2, width, _tabBarHeight - 4);
+                bool isActive = (i == active);
+                DrawTabPolygon(spriteBatch, tabRect, isActive, isActive ? new Color(180, 145, 250) : new Color(147, 112, 219), new Color(110, 70, 180), cutSize, borderThickness);
+                // Only the visible part is clickable (not covered by the next tab)
+                Rectangle clickRect = new Rectangle(tabX + width - visible, tabRect.Y, visible, tabRect.Height);
+                if (_tabRects.Count <= i) _tabRects.Add((clickRect, i));
+                else _tabRects[i] = (clickRect, i);
+                // Draw text if enough space
+                if (visible > 32) {
+                    Vector2 textPos = new Vector2(tabX + _tabPadding, tabRect.Y + (tabRect.Height - _tabFont.LineSpacing * 0.7f) / 2);
+                    spriteBatch.DrawString(_tabFont, _tabs[i].Name, textPos + new Vector2(1, 1), Color.Black * (isActive ? 0.7f : 0.5f), 0f, Vector2.Zero, 0.7f, SpriteEffects.None, 0f);
+                    spriteBatch.DrawString(_tabFont, _tabs[i].Name, textPos, Color.White, 0f, Vector2.Zero, 0.7f, SpriteEffects.None, 0f);
+                }
             }
         }
-
-
 
         private void OnSaveSettings(Dictionary<string, object> values)
         {
@@ -276,7 +497,7 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             try
             {
                 // Load the current markdown content to get the structure
-                string currentMarkdown = LoadMarkdownLayout();
+                string currentMarkdown = File.Exists(_tabs[_activeTabIndex].SettingsPath) ? File.ReadAllText(_tabs[_activeTabIndex].SettingsPath) : "";
                 if (string.IsNullOrEmpty(currentMarkdown))
                 {
                     _engine.Log("ModuleSettings: ERROR - No current markdown layout found, cannot save settings");
