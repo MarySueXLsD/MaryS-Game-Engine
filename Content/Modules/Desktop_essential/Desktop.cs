@@ -16,8 +16,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
     {
         private GraphicsDevice _graphicsDevice;
         private SpriteFont _menuFont;
-        private SpriteFont _desktopFont;
-        private SpriteFont _arialFont;
+        private SpriteFont _filenameFont;
         private int _windowWidth;
         private int _windowHeight;
         private Texture2D _pixel;
@@ -83,7 +82,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
         private const int FILE_NAME_MAX_WIDTH = 120;
         private int _currentIconSize;
         private const int ICON_TOP_OFFSET = -2; // Negative offset to move icon to the top of cell
-        private const int TEXT_TOP_OFFSET = 2; // Keep text close to icon
+        private const int TEXT_TOP_OFFSET = 0; // Move text closer to the middle of the icon
         private DesktopFile _lastSelectedFile; // Track the last selected file for Shift+Click
         private bool _isCtrlPressed; // Track if Ctrl is pressed
         private bool _isShiftPressed; // Track if Shift is pressed
@@ -118,6 +117,10 @@ namespace MarySGameEngine.Modules.Desktop_essential
         private const float HIGHLIGHT_BLINK_SPEED = 2.0f; // Match WindowManagement
         private const float HIGHLIGHT_MIN_ALPHA = 0.3f; // Match WindowManagement
         private const float HIGHLIGHT_MAX_ALPHA = 0.7f; // Match WindowManagement
+
+        // Font scaling
+        private const float DESKTOP_FONT_SCALE = 0.6f; // Scale to 10px (assuming base font is 16px)
+        private const float FILENAME_FONT_SCALE = 0.6f; // Scale to 10px for consistency
 
         public class DesktopFile
         {
@@ -1349,10 +1352,10 @@ namespace MarySGameEngine.Modules.Desktop_essential
                     // Draw text indicating number of files being dragged
                     string dragText = _draggedFiles.Count > 1 ? $"{_draggedFiles.Count} files" : "1 file";
                     Vector2 textPos = new Vector2(
-                        cursorIconPosition.X + CURSOR_ICON_SIZE / 2 - _desktopFont.MeasureString(dragText).X / 2,
-                        cursorIconPosition.Y + CURSOR_ICON_SIZE / 2 - _desktopFont.LineSpacing / 2
+                        cursorIconPosition.X + CURSOR_ICON_SIZE / 2 - _filenameFont.MeasureString(dragText).X * FILENAME_FONT_SCALE / 2,
+                        cursorIconPosition.Y + CURSOR_ICON_SIZE / 2 - _filenameFont.LineSpacing * FILENAME_FONT_SCALE / 2
                     );
-                    spriteBatch.DrawString(_desktopFont, dragText, textPos, Color.White);
+                    spriteBatch.DrawString(_filenameFont, dragText, textPos, Color.White, 0f, Vector2.Zero, FILENAME_FONT_SCALE, SpriteEffects.None, 0f);
                     
                     _engine.Log($"Desktop: Drew fallback cursor indicator for {_draggedFiles.Count} files");
                 }
@@ -1417,8 +1420,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
         public void LoadContent(ContentManager content)
         {
             _arrowTexture = content.Load<Texture2D>("Modules/Desktop_essential/arrow_down");
-            _desktopFont = content.Load<SpriteFont>("Fonts/SpriteFonts/desktop_font");
-            _arialFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto_font");
+            _filenameFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");
 
             // Load all file icons
             _fileIcons["txt"] = content.Load<Texture2D>("Logos/text_file_icon");
@@ -1664,7 +1666,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
                             (int)newPosition.X - FILE_NAME_PADDING,
                             (int)newPosition.Y + _currentIconSize + TEXT_TOP_OFFSET,
                             _currentIconSize + (FILE_NAME_PADDING * 2),
-                            (int)_desktopFont.MeasureString(file.Name).Y
+                            (int)(_filenameFont.MeasureString(file.Name).Y * FILENAME_FONT_SCALE)
                         );
                         
                         _engine.Log($"Desktop: File {file.Name} stays at Row {row}, Column {column}");
@@ -1720,7 +1722,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
                     (int)newPosition.X - FILE_NAME_PADDING,
                     (int)newPosition.Y + _currentIconSize + TEXT_TOP_OFFSET,
                     _currentIconSize + (FILE_NAME_PADDING * 2),
-                    (int)_desktopFont.MeasureString(file.Name).Y
+                    (int)(_filenameFont.MeasureString(file.Name).Y * FILENAME_FONT_SCALE)
                 );
                 
                 usedCells.Add((newColumn, newRow));
@@ -1843,7 +1845,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
                         (int)position.X - FILE_NAME_PADDING,
                         (int)position.Y + _currentIconSize + TEXT_TOP_OFFSET,
                         _currentIconSize + (FILE_NAME_PADDING * 2),
-                        (int)_desktopFont.MeasureString(fileName).Y
+                        (int)(_filenameFont.MeasureString(fileName).Y * FILENAME_FONT_SCALE)
                     ),
                     IsSelected = false,
                     Icon = icon
@@ -1868,105 +1870,57 @@ namespace MarySGameEngine.Modules.Desktop_essential
                 // Draw file icon
                 spriteBatch.Draw(file.Icon, file.IconBounds, Color.White);
 
-                // Draw file name with word wrapping if needed
+                // Draw file name with smart truncation
                 string fileName = file.Name;
-                string extension = Path.GetExtension(file.Name); // includes the dot
-                string nameWithoutExt = Path.GetFileNameWithoutExtension(file.Name);
+                string extension = Path.GetExtension(fileName);
+                string nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
                 
-                // Calculate text layout
-                float lineHeight = _desktopFont.LineSpacing;
-                float totalHeight = lineHeight * 2; // Space for two lines
-                float iconBottom = file.IconBounds.Bottom;
-                float textStartY = iconBottom - 8; // Reduced gap between icon and text (was -16)
-                float textCenterY = textStartY + (totalHeight / 2); // Center point between two potential lines
-
-                // Split name into main part and extension
-                extension = extension.TrimStart('.'); // Remove the dot
-                bool needsTruncation = nameWithoutExt.Length > 9;
-
-                // Calculate widths for layout decisions
-                float nameWidth = _desktopFont.MeasureString(nameWithoutExt).X;
-                float dotsWidth = needsTruncation ? _arialFont.MeasureString("...").X : 0;
-                float dotWidth = _arialFont.MeasureString(".").X;
-                float extWidth = _desktopFont.MeasureString(extension).X;
-                float totalWidth = nameWidth + dotsWidth + dotWidth + extWidth;
-
-                // Decide if we need two lines - check if filename part alone fits on one line
-                bool useTwoLines = needsTruncation || nameWidth > file.IconBounds.Width * 0.9f;
-
-                if (useTwoLines)
+                // Check if filename is too long for single line
+                Vector2 fullTextSize = _filenameFont.MeasureString(fileName) * FILENAME_FONT_SCALE;
+                bool needsTwoLines = fullTextSize.X > file.IconBounds.Width * 0.9f;
+                
+                // Use two lines if filename is too long OR if it has an extension and is moderately long
+                bool shouldUseTwoLines = needsTwoLines || (fileName.Length > 15 && !string.IsNullOrEmpty(extension));
+                
+                if (shouldUseTwoLines && !string.IsNullOrEmpty(extension))
                 {
-                    // First line: name (truncated if needed)
+                    // Two-line display: name + extension
                     string displayName = nameWithoutExt;
-                    if (needsTruncation)
-                    {
-                        displayName = nameWithoutExt.Substring(0, 9);
-                    }
-
-                    // Calculate total width for first line (including dots if needed)
-                    float displayNameWidth = _desktopFont.MeasureString(displayName).X;
-                    float totalFirstLineWidth = displayNameWidth + dotsWidth;
-
-                    // Draw main part on first line
-                    Vector2 mainTextPos = new Vector2(
-                        file.IconBounds.X + (file.IconBounds.Width - totalFirstLineWidth) / 2,
-                        textStartY
-                    );
-                    spriteBatch.DrawString(_desktopFont, displayName, mainTextPos, Color.White);
-
-                    // Draw dots if needed
-                    if (needsTruncation)
-                    {
-                        Vector2 dotsPos = new Vector2(
-                            mainTextPos.X + displayNameWidth,
-                            mainTextPos.Y - (_arialFont.LineSpacing - _desktopFont.LineSpacing)
-                        );
-                        spriteBatch.DrawString(_arialFont, "...", dotsPos, Color.White);
-                    }
-
-                    // Draw extension on second line with dot
-                    float totalSecondLineWidth = dotWidth + extWidth;
-                    float secondLineY = textStartY + lineHeight;
+                    bool needsTruncation = displayName.Length > 12;
                     
-                    // Draw the dot in Arial, aligned with the extension
-                    Vector2 dotPos = new Vector2(
-                        file.IconBounds.X + (file.IconBounds.Width - totalSecondLineWidth) / 2,
-                        secondLineY + (_desktopFont.LineSpacing - _arialFont.LineSpacing) // Increased offset to move dot higher
+                    if (needsTruncation)
+                    {
+                        displayName = displayName.Substring(0, 12);
+                    }
+                    
+                    // Calculate positions for two lines
+                    string firstLineText = needsTruncation ? displayName + "..." : displayName;
+                    Vector2 nameSize = _filenameFont.MeasureString(firstLineText) * FILENAME_FONT_SCALE;
+                    Vector2 extSize = _filenameFont.MeasureString(extension) * FILENAME_FONT_SCALE;
+                    
+                    // First line: name (with dots only if truncated)
+                    Vector2 namePos = new Vector2(
+                        file.IconBounds.X + (file.IconBounds.Width - nameSize.X) / 2,
+                        file.IconBounds.Bottom + TEXT_TOP_OFFSET
                     );
-                    spriteBatch.DrawString(_arialFont, ".", dotPos, Color.White);
-
-                    // Then draw the extension in desktop font
-                    Vector2 extTextPos = new Vector2(
-                        dotPos.X + dotWidth,
-                        secondLineY
+                    spriteBatch.DrawString(_filenameFont, firstLineText, namePos, Color.White, 0f, Vector2.Zero, FILENAME_FONT_SCALE, SpriteEffects.None, 0f);
+                    
+                    // Second line: extension
+                    Vector2 extPos = new Vector2(
+                        file.IconBounds.X + (file.IconBounds.Width - extSize.X) / 2,
+                        namePos.Y + _filenameFont.LineSpacing * FILENAME_FONT_SCALE
                     );
-                    spriteBatch.DrawString(_desktopFont, extension, extTextPos, Color.White);
+                    spriteBatch.DrawString(_filenameFont, extension, extPos, Color.White, 0f, Vector2.Zero, FILENAME_FONT_SCALE, SpriteEffects.None, 0f);
                 }
                 else
                 {
-                    // Single line - center vertically between the two potential lines
-                    float singleLineY = textCenterY - (lineHeight / 2);
-                    
-                    // Draw the filename
-                    Vector2 namePos = new Vector2(
-                        file.IconBounds.X + (file.IconBounds.Width - totalWidth) / 2,
-                        singleLineY
+                    // Single line display
+                    Vector2 textSize = _filenameFont.MeasureString(fileName) * FILENAME_FONT_SCALE;
+                    Vector2 textPos = new Vector2(
+                        file.IconBounds.X + (file.IconBounds.Width - textSize.X) / 2,
+                        file.IconBounds.Bottom + TEXT_TOP_OFFSET
                     );
-                    spriteBatch.DrawString(_desktopFont, nameWithoutExt, namePos, Color.White);
-
-                    // Draw the dot in Arial, aligned with the extension
-                    Vector2 dotPos = new Vector2(
-                        namePos.X + nameWidth,
-                        singleLineY + (_desktopFont.LineSpacing - _arialFont.LineSpacing) // Increased offset to move dot higher
-                    );
-                    spriteBatch.DrawString(_arialFont, ".", dotPos, Color.White);
-
-                    // Then draw the extension in desktop font
-                    Vector2 extTextPos = new Vector2(
-                        dotPos.X + dotWidth,
-                        singleLineY
-                    );
-                    spriteBatch.DrawString(_desktopFont, extension, extTextPos, Color.White);
+                    spriteBatch.DrawString(_filenameFont, fileName, textPos, Color.White, 0f, Vector2.Zero, FILENAME_FONT_SCALE, SpriteEffects.None, 0f);
                 }
 
                 // Draw selection highlight if selected
@@ -2051,7 +2005,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
                         (int)targetPosition.X - FILE_NAME_PADDING,
                         (int)targetPosition.Y + _currentIconSize + TEXT_TOP_OFFSET,
                         _currentIconSize + (FILE_NAME_PADDING * 2),
-                        (int)_desktopFont.MeasureString(file.Name).Y
+                        (int)(_filenameFont.MeasureString(file.Name).Y * FILENAME_FONT_SCALE)
                     );
                     
                     _engine.Log($"Desktop: Moved {file.Name} to position {targetPosition}");
