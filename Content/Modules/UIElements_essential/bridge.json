@@ -1,0 +1,11 @@
+{
+  "name": "UI Elements",
+  "version": "1.0.0",
+  "author": "MaryS Game Engine",
+  "description": "UI elements module for creating interactive components within windows",
+  "shortcut": "Ctrl+U",
+  "dependencies": [],
+  "min_engine_version": "1.0.0",
+  "is_visible": false,
+  "last_updated": "2024-01-01"
+} 

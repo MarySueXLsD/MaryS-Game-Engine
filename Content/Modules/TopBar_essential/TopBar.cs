@@ -102,6 +102,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
         private Texture2D _settingsIcon;
         private MouseState _currentMouseState;
         private MouseState _previousMouseState;
+        private bool _isHoveringOverInteractive = false;
         // Highlight effect
         private bool _isHighlighted = false;
         private float _highlightTimer = 0f;
@@ -362,6 +363,10 @@ namespace MarySGameEngine.Modules.TopBar_essential
             _previousMouseState = _currentMouseState;
             _currentMouseState = Mouse.GetState();
 
+            // Track if we're hovering over any interactive element
+            bool wasHoveringOverInteractive = _isHoveringOverInteractive;
+            _isHoveringOverInteractive = false;
+
             // Update highlight timer
             if (_isHighlighted)
             {
@@ -379,6 +384,26 @@ namespace MarySGameEngine.Modules.TopBar_essential
                 var menuItem = _menuItems[menuIndex];
                 // Check if mouse is over the button area
                 menuItem.IsHovered = menuItem.ButtonBounds.Contains(_currentMouseState.Position);
+
+                // Check for interactive elements
+                if (menuItem.IsHovered)
+                {
+                    _isHoveringOverInteractive = true;
+                }
+
+                // Check for dropdown items if dropdown is visible
+                if (menuItem.IsDropdownVisible)
+                {
+                    for (int i = 0; i < menuItem.DropdownBounds.Count; i++)
+                    {
+                        var bound = menuItem.DropdownBounds[i];
+                        if (bound.Contains(_currentMouseState.Position))
+                        {
+                            _isHoveringOverInteractive = true;
+                            break;
+                        }
+                    }
+                }
 
                 // Handle dropdown visibility
                 if (menuItem.IsHovered && _currentMouseState.LeftButton == ButtonState.Released && 
@@ -423,6 +448,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
                         if (bound.Contains(_currentMouseState.Position))
                         {
                             clickedInside = true;
+                            _isHoveringOverInteractive = true;
                             System.Diagnostics.Debug.WriteLine($"TopBar: Click inside dropdown bound {i} for item: {menuItem.DropdownItems[i].Text}");
                             
                             // Set the flag to prevent other modules from processing this click
@@ -479,6 +505,36 @@ namespace MarySGameEngine.Modules.TopBar_essential
                         menuItem.IsDropdownVisible = false;
                     }
                 }
+            }
+
+            // Update cursor based on hover state
+            UpdateCursor(wasHoveringOverInteractive);
+        }
+
+        private void UpdateCursor(bool wasHoveringOverInteractive)
+        {
+            try
+            {
+                // Only change cursor if the hover state actually changed
+                if (_isHoveringOverInteractive != wasHoveringOverInteractive)
+                {
+                    if (_isHoveringOverInteractive)
+                    {
+                        // Request hand cursor when hovering over interactive elements
+                        GameEngine.Instance.RequestHandCursor();
+                        System.Diagnostics.Debug.WriteLine("TopBar: Requested hand cursor (hovering over interactive element)");
+                    }
+                    else
+                    {
+                        // Release hand cursor when not hovering over interactive elements
+                        GameEngine.Instance.ReleaseHandCursor();
+                        System.Diagnostics.Debug.WriteLine("TopBar: Released hand cursor (not hovering over interactive element)");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error updating cursor: {ex.Message}");
             }
         }
 
@@ -942,8 +998,25 @@ namespace MarySGameEngine.Modules.TopBar_essential
 
         public void Dispose()
         {
+            // Reset cursor when disposing
+            ResetCursor();
+            
             _pixel.Dispose();
             _settingsIcon?.Dispose();
+        }
+
+        public void ResetCursor()
+        {
+            try
+            {
+                GameEngine.Instance.ReleaseHandCursor();
+                _isHoveringOverInteractive = false;
+                System.Diagnostics.Debug.WriteLine("TopBar: Reset cursor to arrow");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error resetting cursor: {ex.Message}");
+            }
         }
 
         public List<MenuItem> GetMenuItems()
