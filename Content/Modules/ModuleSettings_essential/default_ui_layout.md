@@ -1,26 +1,23 @@
-# Module Settings
+TABS {modules}
+
 ## General Settings
-- [ ] Enable Grid
-- [x] Show FPS Counter
-- [ ] Auto-save on changes
+- [ ] Enable Grid {isGridEnabled}
+- [x] Show FPS Counter {isFPSShowed}
 
-Input: Project Name
-Color: #9370DB Background Color
-Scale [min=1, max=100, step=1, value=35] UI
+Input: Enter something here {inputValue}
+Color: #9370DB Background Color {backgroundColor}
+Scale [min=1, max=100, step=1, value=35] UI {UIScale}
 
-Button: Save Settings
-Button: Reset to Defaults
+Button: Save Settings {saveSettings()}
+Button: Reset to Defaults {resetToDefaults()}
 
 ---
 
 ## Display Settings
-- [ ] Fullscreen Mode
-- [x] VSync Enabled
+- [ ] Fullscreen Mode {isFullscreen}
+- [x] VSync Enabled {isVSyncEnabled}
 
-Input: Window Width
-Input: Window Height
+Scale [min=0, max=100, step=5, value=75] Brightness {brightness}
+Scale [min=0, max=100, step=5, value=50] Contrast {contrast}
 
-Scale [min=0, max=100, step=5, value=75] Brightness
-Scale [min=0, max=100, step=5, value=50] Contrast
-
-Button: Apply Display Settings 
+Button: Apply Display Settings {applyDisplaySettings()}
