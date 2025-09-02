@@ -55,3 +55,4 @@ Scale: (left, 100%) [min=0, max=100, step=1, value=70] Highlight Max Alpha
 
 Button: (left, 50%) Save Desktop Settings
 Button: (left, 50%) Reset to Defaults
+- [x] [ ] 
