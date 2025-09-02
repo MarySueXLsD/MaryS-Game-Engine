@@ -346,11 +346,11 @@ public class GameEngine : Game
             Log("Main: Created SpriteBatch");
             
             // Load the pixel font
-            _menuFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font");
+            _menuFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font/regular");
             Log("Main: Loaded pixel font");
 
             // Use the same pixel font for dropdowns
-            _dropdownFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font");
+            _dropdownFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font/regular");
             Log("Main: Loaded dropdown font (using pixel_font)");
 
             // Load all modules
@@ -707,6 +707,16 @@ public class GameEngine : Game
             if (_taskBar != null)
             {
                 _taskBar.DrawTooltips(_spriteBatch);
+            }
+
+            // Draw top layer elements for all modules (like dropdowns)
+            foreach (var module in _activeModules)
+            {
+                var drawTopLayerMethod = module.GetType().GetMethod("DrawTopLayer");
+                if (drawTopLayerMethod != null)
+                {
+                    drawTopLayerMethod.Invoke(module, new object[] { _spriteBatch });
+                }
             }
 
             _spriteBatch.End();

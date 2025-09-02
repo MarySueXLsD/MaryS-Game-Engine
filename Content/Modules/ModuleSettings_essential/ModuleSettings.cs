@@ -26,6 +26,7 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         private GameEngine _engine;
         private Texture2D _pixel;
         private MouseState _prevMouseState;
+        private MouseState _currentMouseState;
 
         private class ModuleTab
         {
@@ -48,8 +49,17 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         private int _tabBarSpacing = 8; // Spacing between title bar and tab bar, and between tab bar and UI
         private int _titleBarHeight = 40; // Should match WindowManagement's title bar height
 
-        // Store clickable tab rectangles for click detection
-        private List<(Rectangle rect, int tabIndex)> _tabRects = new List<(Rectangle, int)>();
+        // Dropdown state
+        private bool _isDropdownOpen = false;
+        private Rectangle _dropdownBounds;
+        private int _hoveredDropdownItem = -1;
+        private int _scrollOffset = 0;
+        private int _maxVisibleItems = 6;
+        private int _itemHeight = 36;
+        private bool _isScrolling = false;
+        private Rectangle _scrollBarBounds;
+        private bool _isDraggingScroll = false;
+        private Vector2 _scrollDragStart;
 
         public ModuleSettings(GraphicsDevice graphicsDevice, SpriteFont menuFont, int windowWidth)
         {
@@ -91,6 +101,12 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         {
             try
             {
+                // Close dropdown if window is not visible
+                if (!_windowManagement.IsVisible())
+                {
+                    CloseDropdown();
+                }
+                
                 _windowManagement.Update();
                 Rectangle windowBounds = _windowManagement.GetWindowBounds();
                 // Tab bar is now inside the window, just below the title bar
@@ -151,9 +167,21 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 System.Diagnostics.Debug.WriteLine($"ModuleSettings: Stack trace: {ex.StackTrace}");
             }
         }
+        
+        public void DrawTopLayer(SpriteBatch spriteBatch)
+        {
+            // Draw dropdown menu on top layer if open
+            if (_isDropdownOpen)
+            {
+                DrawDropdownMenu(spriteBatch);
+            }
+        }
 
         public void UpdateWindowWidth(int newWidth)
         {
+            // Close dropdown when window is being resized to avoid positioning confusion
+            CloseDropdown();
+            
             _windowWidth = newWidth;
             _windowManagement.UpdateWindowWidth(newWidth);
             UpdateBounds(); // Maintain center positioning
@@ -163,6 +191,31 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             {
                 Rectangle windowBounds = _windowManagement.GetWindowBounds();
                 _uiElements.SetBounds(windowBounds);
+            }
+        }
+        
+        private void CloseDropdown()
+        {
+            if (_isDropdownOpen)
+            {
+                _isDropdownOpen = false;
+                _hoveredDropdownItem = -1;
+                _scrollOffset = 0;
+            }
+        }
+        
+        public void OnWindowStateChanged()
+        {
+            // Close dropdown when window state changes (minimize, maximize, etc.)
+            CloseDropdown();
+        }
+        
+        public void OnWindowVisibilityChanged(bool isVisible)
+        {
+            // Close dropdown when window becomes invisible (minimized, etc.)
+            if (!isVisible)
+            {
+                CloseDropdown();
             }
         }
 
@@ -283,166 +336,361 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             var mousePos = mouse.Position;
             bool leftPressed = mouse.LeftButton == ButtonState.Pressed;
             bool leftJustPressed = leftPressed && _prevMouseState.LeftButton == ButtonState.Released;
-            if (!_windowManagement.IsVisible() || !_tabBarBounds.Contains(mousePos)) { _prevMouseState = mouse; return; }
-            // Use _tabRects for click detection
-            if (leftJustPressed)
+            
+            // Store current mouse state for scroll wheel
+            _currentMouseState = mouse;
+            
+            if (!_windowManagement.IsVisible()) 
+            { 
+                _prevMouseState = mouse; 
+                return; 
+            }
+            
+            // Handle dropdown menu clicks
+            if (_isDropdownOpen)
             {
-                foreach (var (rect, tabIndex) in _tabRects)
+                if (leftJustPressed)
                 {
-                    if (rect.Contains(mousePos))
+                    // Check if clicked on scrollbar
+                    if (!_scrollBarBounds.IsEmpty && _scrollBarBounds.Contains(mousePos))
                     {
-                        if (_activeTabIndex != tabIndex)
-                        {
-                            _activeTabIndex = tabIndex;
-                            LoadTabUI(tabIndex);
-                        }
+                        _isDraggingScroll = true;
+                        _scrollDragStart = new Vector2(mousePos.X, mousePos.Y);
                         _prevMouseState = mouse;
                         return;
                     }
+                    
+                    // Check if clicked on dropdown item
+                    int visibleItems = Math.Min(_tabs.Count, _maxVisibleItems);
+                    for (int i = 0; i < visibleItems; i++)
+                    {
+                        int actualIndex = i + _scrollOffset;
+                        if (actualIndex >= _tabs.Count) break;
+                        
+                        Rectangle itemRect = new Rectangle(
+                            _dropdownBounds.X,
+                            _dropdownBounds.Y + (i * _itemHeight),
+                            _dropdownBounds.Width - (_scrollBarBounds.IsEmpty ? 0 : 16),
+                            _itemHeight
+                        );
+                        
+                        if (itemRect.Contains(mousePos))
+                        {
+                            _activeTabIndex = actualIndex;
+                            LoadTabUI(actualIndex);
+                            CloseDropdown();
+                            _prevMouseState = mouse;
+                            return;
+                        }
+                    }
+                    
+                    // If clicked outside dropdown, close it
+                    if (!_dropdownBounds.Contains(mousePos) && !_tabBarBounds.Contains(mousePos))
+                    {
+                        CloseDropdown();
+                    }
                 }
-            }
-            _prevMouseState = mouse;
-        }
-
-        private int GetTabWidth(string text)
-        {
-            return (int)(_tabFont.MeasureString(text).X * 0.7f) + 2 * _tabPadding;
-        }
-        private int GetMaxVisibleTabs(int availableWidth)
-        {
-            int total = 0, count = 0;
-            for (int i = 0; i < _tabs.Count; i++)
-            {
-                int w = GetTabWidth(_tabs[i].Name);
-                if (total + w - (count > 0 ? _tabOverlap : 0) > availableWidth - 2 * _arrowSize - 2 * _tabPadding)
-                    break;
-                total += w - (count > 0 ? _tabOverlap : 0);
-                count++;
-            }
-            return Math.Max(1, count);
-        }
-
-        // Helper to draw a polygonal tab with a cut top-left corner and gradient
-        private void DrawTabPolygon(SpriteBatch spriteBatch, Rectangle rect, bool isActive, Color color1, Color color2, int cutSize = 12, int borderThickness = 2)
-        {
-            // We'll draw the tab as two rectangles: top (with cut) and bottom
-            // For a real polygon, you'd use a custom vertex buffer, but we'll fake it with rectangles
-            // Top rectangle (with cut)
-            Rectangle topRect = new Rectangle(rect.X + cutSize, rect.Y, rect.Width - cutSize, rect.Height / 2);
-            Rectangle cutRect = new Rectangle(rect.X, rect.Y + cutSize, cutSize, rect.Height / 2 - cutSize);
-            Rectangle bottomRect = new Rectangle(rect.X, rect.Y + rect.Height / 2, rect.Width, rect.Height / 2);
-            // Gradient: draw top with color1, bottom with color2
-            spriteBatch.Draw(_pixel, topRect, color1);
-            spriteBatch.Draw(_pixel, cutRect, color1);
-            spriteBatch.Draw(_pixel, bottomRect, color2);
-            // Border: left, right, bottom
-            Color border = isActive ? Color.White : new Color(80, 60, 120);
-            // Left border (slanted)
-            for (int i = 0; i < borderThickness; i++)
-                spriteBatch.Draw(_pixel, new Rectangle(rect.X + i, rect.Y + cutSize, borderThickness, rect.Height - cutSize), border);
-            // Top border (horizontal, after cut)
-            spriteBatch.Draw(_pixel, new Rectangle(rect.X + cutSize, rect.Y, rect.Width - cutSize, borderThickness), border);
-            // Right border
-            for (int i = 0; i < borderThickness; i++)
-                spriteBatch.Draw(_pixel, new Rectangle(rect.Right - borderThickness + i, rect.Y, borderThickness, rect.Height), border);
-            // Bottom border
-            spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Bottom - borderThickness, rect.Width, borderThickness), border);
-        }
-
-        private void DrawTabBar(SpriteBatch spriteBatch)
-        {
-            if (_tabFont == null || _tabs.Count == 0) return;
-            _engine.Log($"[ModuleSettingsTabs] Drawing tab bar. Tab count: {_tabs.Count}, Active: {_activeTabIndex}");
-            spriteBatch.Draw(_pixel, _tabBarBounds, new Color(60, 40, 90, 220));
-            int cutSize = 5;
-            int borderThickness = 2;
-            int minSliver = 24; // px minimum visible for any tab
-            int[] tabWidths = _tabs.Select(t => GetTabWidth(t.Name)).ToArray();
-            int totalTabs = _tabs.Count;
-            int availableWidth = _tabBarBounds.Width - 2 * _tabPadding;
-            int active = _activeTabIndex;
-            // 1. Assign full width to active and its neighbors, minSliver to others
-            int[] visibleWidths = new int[totalTabs];
-            int fullTabsWidth = 0;
-            for (int i = 0; i < totalTabs; i++)
-            {
-                if (i == active || i == active - 1 || i == active + 1)
+                else if (leftPressed && _isDraggingScroll)
                 {
-                    visibleWidths[i] = tabWidths[i];
-                    fullTabsWidth += tabWidths[i];
+                    // Handle scrollbar dragging
+                    float deltaY = mousePos.Y - _scrollDragStart.Y;
+                    float maxScroll = _tabs.Count - _maxVisibleItems;
+                    float scrollBarHeight = _scrollBarBounds.Height;
+                    
+                    // Calculate new scroll offset based on mouse position relative to scrollbar
+                    float mouseRatio = (mousePos.Y - _scrollBarBounds.Y) / scrollBarHeight;
+                    mouseRatio = Math.Max(0, Math.Min(1, mouseRatio));
+                    
+                    _scrollOffset = (int)(mouseRatio * maxScroll);
+                    _scrollDragStart = new Vector2(mousePos.X, mousePos.Y);
+                }
+                else if (!leftPressed && _isDraggingScroll)
+                {
+                    _isDraggingScroll = false;
                 }
                 else
                 {
-                    visibleWidths[i] = minSliver;
-                }
-            }
-            int minTotalWidth = fullTabsWidth + minSliver * (totalTabs - 3);
-            int extraSpace = availableWidth - minTotalWidth;
-            // 2. Distribute extra space to sliver tabs if any
-            if (extraSpace > 0)
-            {
-                int sliverCount = totalTabs - 3;
-                if (sliverCount > 0)
-                {
-                    int addPerSliver = extraSpace / sliverCount;
-                    for (int i = 0; i < totalTabs; i++)
+                    // Update hover state for dropdown items
+                    _hoveredDropdownItem = -1;
+                    int visibleItems = Math.Min(_tabs.Count, _maxVisibleItems);
+                    for (int i = 0; i < visibleItems; i++)
                     {
-                        if (!(i == active || i == active - 1 || i == active + 1))
-                            visibleWidths[i] += addPerSliver;
+                        int actualIndex = i + _scrollOffset;
+                        if (actualIndex >= _tabs.Count) break;
+                        
+                        Rectangle itemRect = new Rectangle(
+                            _dropdownBounds.X,
+                            _dropdownBounds.Y + (i * _itemHeight),
+                            _dropdownBounds.Width - (_scrollBarBounds.IsEmpty ? 0 : 16),
+                            _itemHeight
+                        );
+                        
+                        if (itemRect.Contains(mousePos))
+                        {
+                            _hoveredDropdownItem = actualIndex;
+                            break;
+                        }
                     }
                 }
             }
-            // 3. Calculate starting X so all tabs fit
-            int totalWidth = visibleWidths.Sum();
-            int startX = _tabBarBounds.X + _tabPadding;
-            if (totalWidth < availableWidth)
-                startX += (availableWidth - totalWidth) / 2;
-            // 4. Layout: store rectangles for each tab
-            int[] tabXs = new int[totalTabs];
-            int x = startX;
-            for (int i = 0; i < totalTabs; i++)
+            else
             {
-                tabXs[i] = x;
-                x += visibleWidths[i];
-            }
-            // 5. Draw tabs in pyramid z-order: furthest first, active last
-            _tabRects.Clear();
-            // Build draw order: for each distance from active, left first then right
-            List<int> drawOrder = new List<int>();
-            int maxDist = Math.Max(active, totalTabs - 1 - active);
-            for (int d = maxDist; d > 0; d--)
-            {
-                int left = active - d;
-                int right = active + d;
-                if (left >= 0) drawOrder.Add(left);
-                if (right < totalTabs) drawOrder.Add(right);
-            }
-            // Then immediate neighbors
-            if (active - 1 >= 0) drawOrder.Add(active - 1);
-            if (active + 1 < totalTabs) drawOrder.Add(active + 1);
-            // Then active tab last (on top)
-            drawOrder.Add(active);
-            // Draw in this order
-            foreach (int i in drawOrder)
-            {
-                int width = tabWidths[i];
-                int visible = visibleWidths[i];
-                int tabX = tabXs[i];
-                Rectangle tabRect = new Rectangle(tabX, _tabBarBounds.Y + 2, width, _tabBarHeight - 4);
-                bool isActive = (i == active);
-                DrawTabPolygon(spriteBatch, tabRect, isActive, isActive ? new Color(180, 145, 250) : new Color(147, 112, 219), new Color(110, 70, 180), cutSize, borderThickness);
-                // Only the visible part is clickable (not covered by the next tab)
-                Rectangle clickRect = new Rectangle(tabX + width - visible, tabRect.Y, visible, tabRect.Height);
-                if (_tabRects.Count <= i) _tabRects.Add((clickRect, i));
-                else _tabRects[i] = (clickRect, i);
-                // Draw text if enough space
-                if (visible > 32) {
-                    Vector2 textPos = new Vector2(tabX + _tabPadding, tabRect.Y + (tabRect.Height - _tabFont.LineSpacing * 0.7f) / 2);
-                    spriteBatch.DrawString(_tabFont, _tabs[i].Name, textPos + new Vector2(1, 1), Color.Black * (isActive ? 0.7f : 0.5f), 0f, Vector2.Zero, 0.7f, SpriteEffects.None, 0f);
-                    spriteBatch.DrawString(_tabFont, _tabs[i].Name, textPos, Color.White, 0f, Vector2.Zero, 0.7f, SpriteEffects.None, 0f);
+                // Calculate label width for click detection
+                string labelText = "Module:";
+                Vector2 labelSize = _uiFont.MeasureString(labelText) * 1.0f;
+                int labelWidth = (int)labelSize.X + 10;
+                
+                // Create dropdown click area (excluding label)
+                Rectangle dropdownClickArea = new Rectangle(
+                    _tabBarBounds.X + labelWidth,
+                    _tabBarBounds.Y,
+                    _tabBarBounds.Width - labelWidth,
+                    _tabBarBounds.Height
+                );
+                
+                // Handle dropdown button click
+                if (leftJustPressed && dropdownClickArea.Contains(mousePos))
+                {
+                    _isDropdownOpen = true;
+                    UpdateDropdownBounds();
                 }
             }
+            
+            // Handle mouse wheel scrolling when dropdown is open (regardless of other conditions)
+            if (_isDropdownOpen && _tabs.Count > _maxVisibleItems)
+            {
+                int scrollDelta = _currentMouseState.ScrollWheelValue - _prevMouseState.ScrollWheelValue;
+                if (scrollDelta != 0)
+                {
+                    int scrollStep = scrollDelta > 0 ? -1 : 1; // Scroll up/down
+                    _scrollOffset = Math.Max(0, Math.Min(_tabs.Count - _maxVisibleItems, _scrollOffset + scrollStep));
+                }
+            }
+            
+            _prevMouseState = mouse;
         }
+
+        private void UpdateDropdownBounds()
+        {
+            // Calculate label width using UI font
+            string labelText = "Module:";
+            Vector2 labelSize = _uiFont.MeasureString(labelText) * 1.0f;
+            int labelWidth = (int)labelSize.X + 10; // Add some padding
+            
+            // Calculate dropdown menu bounds (accounting for label)
+            int dropdownWidth = _tabBarBounds.Width - labelWidth;
+            int visibleItems = Math.Min(_tabs.Count, _maxVisibleItems);
+            int dropdownHeight = visibleItems * _itemHeight;
+            int dropdownX = _tabBarBounds.X + labelWidth;
+            int dropdownY = _tabBarBounds.Bottom;
+            
+            // Check if dropdown would go off screen
+            if (dropdownY + dropdownHeight > _graphicsDevice.Viewport.Height)
+            {
+                // Position dropdown above the selector
+                dropdownY = _tabBarBounds.Y - dropdownHeight;
+            }
+            
+            _dropdownBounds = new Rectangle(dropdownX, dropdownY, dropdownWidth, dropdownHeight);
+            
+            // Calculate scrollbar bounds if needed
+            if (_tabs.Count > _maxVisibleItems)
+            {
+                int scrollBarWidth = 16;
+                _scrollBarBounds = new Rectangle(
+                    _dropdownBounds.Right - scrollBarWidth,
+                    _dropdownBounds.Y,
+                    scrollBarWidth,
+                    _dropdownBounds.Height
+                );
+            }
+            else
+            {
+                _scrollBarBounds = Rectangle.Empty;
+            }
+        }
+        
+        private void DrawDropdownMenu(SpriteBatch spriteBatch)
+        {
+            if (_tabs.Count == 0) return;
+            
+            // Draw dropdown background
+            spriteBatch.Draw(_pixel, _dropdownBounds, new Color(40, 40, 40, 240));
+            
+            // Draw dropdown border
+            Color borderColor = new Color(147, 112, 219);
+            int borderThickness = 2;
+            
+            // Top border
+            spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.X, _dropdownBounds.Y, _dropdownBounds.Width, borderThickness), borderColor);
+            // Bottom border
+            spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.X, _dropdownBounds.Bottom - borderThickness, _dropdownBounds.Width, borderThickness), borderColor);
+            // Left border
+            spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.X, _dropdownBounds.Y, borderThickness, _dropdownBounds.Height), borderColor);
+            // Right border
+            spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.Right - borderThickness, _dropdownBounds.Y, borderThickness, _dropdownBounds.Height), borderColor);
+            
+            // Draw dropdown items (only visible ones)
+            int visibleItems = Math.Min(_tabs.Count, _maxVisibleItems);
+            for (int i = 0; i < visibleItems; i++)
+            {
+                int actualIndex = i + _scrollOffset;
+                if (actualIndex >= _tabs.Count) break;
+                
+                Rectangle itemRect = new Rectangle(
+                    _dropdownBounds.X,
+                    _dropdownBounds.Y + (i * _itemHeight),
+                    _dropdownBounds.Width - (_scrollBarBounds.IsEmpty ? 0 : 16),
+                    _itemHeight
+                );
+                
+                // Draw item background if hovered or selected
+                if (actualIndex == _hoveredDropdownItem)
+                {
+                    spriteBatch.Draw(_pixel, itemRect, new Color(147, 112, 219, 120));
+                }
+                else if (actualIndex == _activeTabIndex)
+                {
+                    spriteBatch.Draw(_pixel, itemRect, new Color(147, 112, 219, 150));
+                }
+                
+                // Draw item text with normal font size
+                string itemText = _tabs[actualIndex].Name;
+                Vector2 textSize = _tabFont.MeasureString(itemText) * 0.9f; // Normal font size
+                Vector2 textPos = new Vector2(
+                    itemRect.X + _tabPadding,
+                    itemRect.Y + (itemRect.Height - textSize.Y) / 2
+                );
+                
+                // Use high contrast colors for better readability
+                Color textColor = (actualIndex == _activeTabIndex) ? Color.White : Color.White;
+                if (actualIndex == _hoveredDropdownItem)
+                {
+                    textColor = Color.White;
+                }
+                spriteBatch.DrawString(_tabFont, itemText, textPos, textColor, 0f, Vector2.Zero, 0.9f, SpriteEffects.None, 0f);
+                
+                // Draw arrow down on the right side of each item
+                if (_arrowTexture != null)
+                {
+                    float arrowScale = 0.4f;
+                    Vector2 arrowOrigin = new Vector2(_arrowTexture.Width / 2f, _arrowTexture.Height / 2f);
+                    Vector2 arrowPos = new Vector2(
+                        itemRect.Right - 15,
+                        itemRect.Y + itemRect.Height / 2f
+                    );
+                    spriteBatch.Draw(_arrowTexture, arrowPos, null, Color.White, 0f, arrowOrigin, arrowScale, SpriteEffects.None, 0f);
+                }
+            }
+            
+            // Draw scrollbar if needed
+            if (!_scrollBarBounds.IsEmpty)
+            {
+                DrawScrollBar(spriteBatch);
+            }
+        }
+        
+        private void DrawScrollBar(SpriteBatch spriteBatch)
+        {
+            // Draw scrollbar background
+            spriteBatch.Draw(_pixel, _scrollBarBounds, new Color(60, 60, 60, 200));
+            
+            // Calculate scrollbar thumb size and position
+            float scrollRatio = (float)_scrollOffset / Math.Max(1, _tabs.Count - _maxVisibleItems);
+            int thumbHeight = Math.Max(20, (int)(_scrollBarBounds.Height * (_maxVisibleItems / (float)_tabs.Count)));
+            int thumbY = _scrollBarBounds.Y + (int)((_scrollBarBounds.Height - thumbHeight) * scrollRatio);
+            
+            Rectangle thumbBounds = new Rectangle(
+                _scrollBarBounds.X + 2,
+                thumbY,
+                _scrollBarBounds.Width - 4,
+                thumbHeight
+            );
+            
+            // Draw scrollbar thumb
+            Color thumbColor = _isDraggingScroll ? new Color(180, 145, 250) : new Color(147, 112, 219);
+            spriteBatch.Draw(_pixel, thumbBounds, thumbColor);
+            
+            // Draw scrollbar border
+            Color scrollBorderColor = new Color(100, 100, 100);
+            spriteBatch.Draw(_pixel, new Rectangle(_scrollBarBounds.X, _scrollBarBounds.Y, 1, _scrollBarBounds.Height), scrollBorderColor);
+        }
+        
+        private void DrawTabBar(SpriteBatch spriteBatch)
+        {
+            if (_tabFont == null || _tabs.Count == 0) return;
+            _engine.Log($"[ModuleSettingsTabs] Drawing module selector. Tab count: {_tabs.Count}, Active: {_activeTabIndex}");
+            
+            // Calculate label width using UI font
+            string labelText = "Module:";
+            Vector2 labelSize = _uiFont.MeasureString(labelText) * 1.0f;
+            int labelWidth = (int)labelSize.X + 10; // Add some padding
+            
+            // Adjust dropdown bounds to make room for label
+            Rectangle dropdownBounds = new Rectangle(
+                _tabBarBounds.X + labelWidth,
+                _tabBarBounds.Y,
+                _tabBarBounds.Width - labelWidth,
+                _tabBarBounds.Height
+            );
+            
+            // Draw label using UI font
+            Vector2 labelPos = new Vector2(
+                _tabBarBounds.X + 5,
+                _tabBarBounds.Y + (_tabBarBounds.Height - labelSize.Y) / 2
+            );
+            spriteBatch.DrawString(_uiFont, labelText, labelPos, Color.White, 0f, Vector2.Zero, 1.0f, SpriteEffects.None, 0f);
+            
+            // Draw dropdown background
+            spriteBatch.Draw(_pixel, dropdownBounds, new Color(60, 40, 90, 220));
+            
+            // Draw dropdown border
+            Color borderColor = new Color(147, 112, 219);
+            int borderThickness = 2;
+            
+            // Top border
+            spriteBatch.Draw(_pixel, new Rectangle(dropdownBounds.X, dropdownBounds.Y, dropdownBounds.Width, borderThickness), borderColor);
+            // Bottom border
+            spriteBatch.Draw(_pixel, new Rectangle(dropdownBounds.X, dropdownBounds.Bottom - borderThickness, dropdownBounds.Width, borderThickness), borderColor);
+            // Left border
+            spriteBatch.Draw(_pixel, new Rectangle(dropdownBounds.X, dropdownBounds.Y, borderThickness, dropdownBounds.Height), borderColor);
+            // Right border
+            spriteBatch.Draw(_pixel, new Rectangle(dropdownBounds.Right - borderThickness, dropdownBounds.Y, borderThickness, dropdownBounds.Height), borderColor);
+            
+            // Draw current selection with larger font
+            if (_activeTabIndex >= 0 && _activeTabIndex < _tabs.Count)
+            {
+                string currentModule = _tabs[_activeTabIndex].Name;
+                Vector2 textSize = _uiFont.MeasureString(currentModule) * 1.0f;
+                Vector2 textPos = new Vector2(
+                    dropdownBounds.X + _tabPadding,
+                    dropdownBounds.Y + (dropdownBounds.Height - textSize.Y) / 2
+                );
+                
+                spriteBatch.DrawString(_uiFont, currentModule, textPos, Color.White, 0f, Vector2.Zero, 1.0f, SpriteEffects.None, 0f);
+            }
+            
+            // Draw dropdown arrow to indicate it's clickable
+            if (_arrowTexture != null)
+            {
+                float arrowScale = 0.7f; // Slightly larger for better visibility
+                Vector2 arrowOrigin = new Vector2(_arrowTexture.Width / 2f, _arrowTexture.Height / 2f);
+                Vector2 arrowPos = new Vector2(
+                    dropdownBounds.Right - 20,
+                    dropdownBounds.Y + dropdownBounds.Height / 2f
+                );
+                spriteBatch.Draw(_arrowTexture, arrowPos, null, Color.White, 0f, arrowOrigin, arrowScale, SpriteEffects.None, 0f);
+            }
+        }
+
+
+
+
+
+        
+
+        
+
 
         private void OnSaveSettings(Dictionary<string, object> values)
         {
