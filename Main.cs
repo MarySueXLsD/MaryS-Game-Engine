@@ -303,10 +303,10 @@ public class GameEngine : Game
             base.Initialize();
             Window.AllowUserResizing = true;
             
-            // Set initial window size
+            // Set maximized windowed mode immediately
             _graphics.IsFullScreen = false;
-            _graphics.PreferredBackBufferWidth = InitialWindowWidth;
-            _graphics.PreferredBackBufferHeight = InitialWindowHeight;
+            _graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
+            _graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
             _graphics.ApplyChanges();
 
             // Handle window size changes
@@ -318,19 +318,11 @@ public class GameEngine : Game
                 }
             };
 
-            // Maximize after a frame
-            System.Threading.Tasks.Task.Delay(16).ContinueWith(_ =>
+            // Update all modules after maximizing
+            foreach (var module in _activeModules)
             {
-                _graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
-                _graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
-                _graphics.ApplyChanges();
-                
-                // Update all modules after maximizing
-                foreach (var module in _activeModules)
-                {
-                    module.UpdateWindowWidth(Window.ClientBounds.Width);
-                }
-            });
+                module.UpdateWindowWidth(Window.ClientBounds.Width);
+            }
         }
         catch (Exception ex)
         {
@@ -353,6 +345,10 @@ public class GameEngine : Game
             // Use the same pixel font for dropdowns
             _dropdownFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font/regular");
             Log("Main: Loaded dropdown font (using pixel_font)");
+
+            // Ensure GraphicsDevice viewport is updated to match the maximized window
+            GraphicsDevice.Viewport = new Viewport(0, 0, Window.ClientBounds.Width, Window.ClientBounds.Height);
+            Log($"Main: Updated GraphicsDevice viewport to {Window.ClientBounds.Width}x{Window.ClientBounds.Height}");
 
             // Load all modules
             LoadModules();
@@ -390,6 +386,20 @@ public class GameEngine : Game
                         Log($"Main: ERROR loading content for {module.GetType().Name}: {ex.Message}");
                         Log($"Main: Stack trace: {ex.StackTrace}");
                     }
+                }
+            }
+
+            // Force all modules to update their window dimensions after everything is loaded
+            Log("Main: Forcing all modules to update window dimensions");
+            foreach (var module in _activeModules)
+            {
+                try
+                {
+                    module.UpdateWindowWidth(Window.ClientBounds.Width);
+                }
+                catch (Exception ex)
+                {
+                    Log($"Main: ERROR updating window width for {module.GetType().Name}: {ex.Message}");
                 }
             }
         }
