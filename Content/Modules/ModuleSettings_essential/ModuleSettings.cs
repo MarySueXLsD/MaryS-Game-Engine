@@ -101,10 +101,35 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         {
             try
             {
+                // Track window visibility changes
+                bool isCurrentlyVisible = _windowManagement.IsVisible();
+                
                 // Close dropdown if window is not visible
-                if (!_windowManagement.IsVisible())
+                if (!isCurrentlyVisible)
                 {
                     CloseDropdown();
+                }
+                
+                // Update TaskBar about window state changes
+                if (_taskBar != null)
+                {
+                    if (!isCurrentlyVisible)
+                    {
+                        // Window is minimized - set as minimized but keep icon visible
+                        _taskBar.SetModuleMinimized("Module Settings", true);
+                        System.Diagnostics.Debug.WriteLine("ModuleSettings: Window not visible, set as minimized in TaskBar");
+                    }
+                    else
+                    {
+                        // Window is visible - ensure module icon exists and is not marked as minimized
+                        _taskBar.EnsureModuleIconExists("Module Settings", _content);
+                        _taskBar.SetModuleMinimized("Module Settings", false);
+                        System.Diagnostics.Debug.WriteLine("ModuleSettings: Window visible, ensured icon exists and not minimized in TaskBar");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("ModuleSettings: WARNING - TaskBar is null in Update method!");
                 }
                 
                 _windowManagement.Update();
@@ -192,6 +217,24 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 Rectangle windowBounds = _windowManagement.GetWindowBounds();
                 _uiElements.SetBounds(windowBounds);
             }
+            
+            // Ensure TaskBar communication is maintained after window resize
+            if (_taskBar != null)
+            {
+                bool isCurrentlyVisible = _windowManagement.IsVisible();
+                if (isCurrentlyVisible)
+                {
+                    // Ensure the module icon exists and is properly registered
+                    _taskBar.EnsureModuleIconExists("Module Settings", _content);
+                    // Ensure the module is not marked as minimized in TaskBar after resize
+                    _taskBar.SetModuleMinimized("Module Settings", false);
+                    System.Diagnostics.Debug.WriteLine("ModuleSettings: Ensured module icon exists and is not minimized in TaskBar after window resize");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("ModuleSettings: WARNING - TaskBar is null during window resize!");
+            }
         }
         
         private void CloseDropdown()
@@ -216,6 +259,23 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             if (!isVisible)
             {
                 CloseDropdown();
+            }
+            
+            // Update TaskBar about window state changes
+            if (_taskBar != null)
+            {
+                if (!isVisible)
+                {
+                    // Window is minimized - set as minimized but keep icon visible
+                    _taskBar.SetModuleMinimized("Module Settings", true);
+                    System.Diagnostics.Debug.WriteLine("ModuleSettings: Set module as minimized in TaskBar");
+                }
+                else
+                {
+                    // Window is restored - ensure it's not marked as minimized
+                    _taskBar.SetModuleMinimized("Module Settings", false);
+                    System.Diagnostics.Debug.WriteLine("ModuleSettings: Set module as not minimized in TaskBar");
+                }
             }
         }
 
@@ -379,10 +439,10 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                             _activeTabIndex = actualIndex;
                             LoadTabUI(actualIndex);
                             CloseDropdown();
-                            _prevMouseState = mouse;
-                            return;
-                        }
+                        _prevMouseState = mouse;
+                        return;
                     }
+                }
                     
                     // If clicked outside dropdown, close it
                     if (!_dropdownBounds.Contains(mousePos) && !_tabBarBounds.Contains(mousePos))
@@ -428,7 +488,7 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                         if (itemRect.Contains(mousePos))
                         {
                             _hoveredDropdownItem = actualIndex;
-                            break;
+                    break;
                         }
                     }
                 }
@@ -503,9 +563,9 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                     scrollBarWidth,
                     _dropdownBounds.Height
                 );
-            }
-            else
-            {
+                }
+                else
+                {
                 _scrollBarBounds = Rectangle.Empty;
             }
         }
@@ -957,6 +1017,9 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 System.Diagnostics.Debug.WriteLine("ModuleSettings: TaskBar is available, ensuring icon exists");
                 // Ensure TaskBar has an icon for this module with logo loading
                 _taskBar.EnsureModuleIconExists("Module Settings", _content);
+                // Ensure the module is not marked as minimized in TaskBar
+                _taskBar.SetModuleMinimized("Module Settings", false);
+                System.Diagnostics.Debug.WriteLine("ModuleSettings: Set module as not minimized in TaskBar");
             }
             else
             {
@@ -974,6 +1037,22 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             // Highlight the window
             _windowManagement.HandleTaskBarClick();
             System.Diagnostics.Debug.WriteLine("ModuleSettings: Window highlighted");
+        }
+        
+        public void Close()
+        {
+            System.Diagnostics.Debug.WriteLine("ModuleSettings: Close() method called");
+            
+            // Remove icon from TaskBar
+            if (_taskBar != null)
+            {
+                _taskBar.RemoveModuleIcon("Module Settings");
+                System.Diagnostics.Debug.WriteLine("ModuleSettings: Removed icon from TaskBar");
+            }
+            
+            // Set the window to invisible
+            _windowManagement.SetVisible(false);
+            System.Diagnostics.Debug.WriteLine("ModuleSettings: Window set to invisible");
         }
     }
 } 
