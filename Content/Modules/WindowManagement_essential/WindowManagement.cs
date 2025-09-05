@@ -1376,6 +1376,26 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             UpdateWindowBounds();
         }
 
+        public void OnTaskBarPositionChanged(TaskBarPosition newPosition)
+        {
+            try
+            {
+                _engine.Log($"WindowManagement: TaskBar position changed to {newPosition}, updating window bounds for {_windowTitle}");
+                
+                // Force window bounds update to check for TaskBar overlap
+                UpdateWindowBounds();
+                
+                // If the window is currently overlapping with the TaskBar, adjust its position
+                SmartAdjustWindowPosition();
+                
+                _engine.Log($"WindowManagement: Updated window bounds for {_windowTitle} after TaskBar position change");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"WindowManagement: Error handling TaskBar position change: {ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
             // Reset cursor when disposing
