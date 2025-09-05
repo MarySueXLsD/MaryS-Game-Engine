@@ -40,11 +40,9 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         private int _firstVisibleTabIndex = 0;
         private int _maxVisibleTabs = 1;
         private SpriteFont _tabFont;
-        private Texture2D _arrowTexture;
         private int _tabBarHeight = 38; // 30px + padding
         private int _tabPadding = 10;
         private int _tabOverlap = 18; // How much tabs overlap each other
-        private int _arrowSize = 28;
         private Rectangle _tabBarBounds;
         private int _tabBarSpacing = 8; // Spacing between title bar and tab bar, and between tab bar and UI
         private int _titleBarHeight = 40; // Should match WindowManagement's title bar height
@@ -290,7 +288,6 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 _uiFont = _menuFont;
             }
             _tabFont = _menuFont;
-            _arrowTexture = null; // No arrow texture, skip drawing arrows
             BuildTabs();
         }
 
@@ -629,18 +626,6 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                     textColor = Color.White;
                 }
                 spriteBatch.DrawString(_tabFont, itemText, textPos, textColor, 0f, Vector2.Zero, 0.9f, SpriteEffects.None, 0f);
-                
-                // Draw arrow down on the right side of each item
-                if (_arrowTexture != null)
-                {
-                    float arrowScale = 0.4f;
-                    Vector2 arrowOrigin = new Vector2(_arrowTexture.Width / 2f, _arrowTexture.Height / 2f);
-                    Vector2 arrowPos = new Vector2(
-                        itemRect.Right - 15,
-                        itemRect.Y + itemRect.Height / 2f
-                    );
-                    spriteBatch.Draw(_arrowTexture, arrowPos, null, Color.White, 0f, arrowOrigin, arrowScale, SpriteEffects.None, 0f);
-                }
             }
             
             // Draw scrollbar if needed
@@ -730,21 +715,34 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 spriteBatch.DrawString(_uiFont, currentModule, textPos, Color.White, 0f, Vector2.Zero, 1.0f, SpriteEffects.None, 0f);
             }
             
-            // Draw dropdown arrow to indicate it's clickable
-            if (_arrowTexture != null)
-            {
-                float arrowScale = 0.7f; // Slightly larger for better visibility
-                Vector2 arrowOrigin = new Vector2(_arrowTexture.Width / 2f, _arrowTexture.Height / 2f);
-                Vector2 arrowPos = new Vector2(
-                    dropdownBounds.Right - 20,
-                    dropdownBounds.Y + dropdownBounds.Height / 2f
-                );
-                spriteBatch.Draw(_arrowTexture, arrowPos, null, Color.White, 0f, arrowOrigin, arrowScale, SpriteEffects.None, 0f);
-            }
+            // Draw dropdown burger icon (three horizontal lines) to indicate it's clickable
+            DrawBurgerIcon(spriteBatch, dropdownBounds);
         }
 
-
-
+        private void DrawBurgerIcon(SpriteBatch spriteBatch, Rectangle dropdownBounds)
+        {
+            // Calculate icon position (right side of dropdown, centered vertically)
+            int iconWidth = 24; // Increased from 16 to 24 for wider lines
+            int iconHeight = 12;
+            int lineThickness = 2;
+            int lineSpacing = 2;
+            
+            int iconX = dropdownBounds.Right - iconWidth - 12; // Increased from 8 to 12px padding from right edge (moves icon left)
+            int iconY = dropdownBounds.Y + (dropdownBounds.Height - iconHeight) / 2;
+            
+            // Draw three horizontal lines (burger icon)
+            for (int i = 0; i < 3; i++)
+            {
+                int lineY = iconY + (i * (lineThickness + lineSpacing));
+                Rectangle lineRect = new Rectangle(
+                    iconX,
+                    lineY,
+                    iconWidth,
+                    lineThickness
+                );
+                spriteBatch.Draw(_pixel, lineRect, Color.White);
+            }
+        }
 
 
         
