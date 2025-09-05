@@ -234,6 +234,30 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 System.Diagnostics.Debug.WriteLine("ModuleSettings: WARNING - TaskBar is null during window resize!");
             }
         }
+
+        public void OnTaskBarPositionChanged(TaskBarPosition newPosition)
+        {
+            try
+            {
+                _engine.Log($"ModuleSettings: TaskBar position changed to {newPosition}, updating window bounds");
+                
+                // Update window management bounds
+                _windowManagement.OnTaskBarPositionChanged(newPosition);
+                
+                // Update UI elements bounds if they exist
+                if (_uiElements != null)
+                {
+                    Rectangle windowBounds = _windowManagement.GetWindowBounds();
+                    _uiElements.SetBounds(windowBounds);
+                }
+                
+                _engine.Log($"ModuleSettings: Updated window bounds after TaskBar position change");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"ModuleSettings: Error handling TaskBar position change: {ex.Message}");
+            }
+        }
         
         private void CloseDropdown()
         {

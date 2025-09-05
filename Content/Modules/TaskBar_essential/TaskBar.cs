@@ -437,6 +437,9 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                         UpdateModuleIcons();
                         _engine.Log($"TaskBar: Moved to {_currentPosition} position");
                         
+                        // Notify all modules about the TaskBar position change
+                        NotifyModulesOfPositionChange();
+                        
                         // Update drag start position to prevent continuous movement
                         _dragStartPosition = new Vector2(currentMousePosition.X, currentMousePosition.Y);
                     }
@@ -1304,6 +1307,54 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             catch (Exception ex)
             {
                 _engine.Log($"TaskBar: Error ensuring icon exists for {moduleName}: {ex.Message}");
+            }
+        }
+
+        private void NotifyModulesOfPositionChange()
+        {
+            try
+            {
+                _engine.Log($"TaskBar: Notifying all modules of position change to {_currentPosition}");
+                
+                // Get all active modules
+                var modules = GameEngine.Instance.GetActiveModules();
+                
+                foreach (var module in modules)
+                {
+                    try
+                    {
+                        // Use reflection to find and call UpdateWindowWidth method if it exists
+                        var updateMethod = module.GetType().GetMethod("UpdateWindowWidth", 
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                        
+                        if (updateMethod != null)
+                        {
+                            // Call UpdateWindowWidth with current window width to trigger bounds update
+                            updateMethod.Invoke(module, new object[] { _windowWidth });
+                            _engine.Log($"TaskBar: Notified {module.GetType().Name} of position change");
+                        }
+                        
+                        // Also try to find and call any TaskBar position change notification method
+                        var taskBarChangeMethod = module.GetType().GetMethod("OnTaskBarPositionChanged", 
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                        
+                        if (taskBarChangeMethod != null)
+                        {
+                            taskBarChangeMethod.Invoke(module, new object[] { _currentPosition });
+                            _engine.Log($"TaskBar: Called OnTaskBarPositionChanged on {module.GetType().Name}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _engine.Log($"TaskBar: Error notifying module {module.GetType().Name}: {ex.Message}");
+                    }
+                }
+                
+                _engine.Log($"TaskBar: Finished notifying all modules of position change");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"TaskBar: Error in NotifyModulesOfPositionChange: {ex.Message}");
             }
         }
     }
