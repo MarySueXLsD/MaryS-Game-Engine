@@ -21,6 +21,9 @@ namespace MarySGameEngine.Modules.UIElements_essential
         public static readonly Color Disabled = new Color(128, 128, 128);
         public static readonly Color InputBackground = new Color(60, 60, 60);
         public static readonly Color InputBorder = new Color(100, 100, 100);
+        public static readonly Color ScrollbarBackground = new Color(60, 60, 60);
+        public static readonly Color ScrollbarThumb = new Color(147, 112, 219);
+        public static readonly Color ScrollbarThumbHover = new Color(180, 145, 250);
     }
 
     public class UIElements
@@ -39,6 +42,17 @@ namespace MarySGameEngine.Modules.UIElements_essential
         private Action<Dictionary<string, object>> _onSaveSettings;
         private Action _onResetToDefaults;
         private bool _isHoveringOverButton = false;
+
+        // Scrolling properties
+        private int _scrollY = 0;
+        private int _contentHeight = 0;
+        private bool _needsScrollbar = false;
+        private Rectangle _scrollbarBounds;
+        private bool _isDraggingScrollbar = false;
+        private Vector2 _scrollbarDragStart;
+        private const int SCROLLBAR_WIDTH = 16;
+        private const int SCROLLBAR_PADDING = 2;
+        private bool _isHoveringScrollbar = false;
 
         // Add this struct at the top of the UIElements class
         private struct UIComponentLayoutInfo
@@ -121,6 +135,9 @@ namespace MarySGameEngine.Modules.UIElements_essential
             _previousMouseState = _currentMouseState;
             _currentMouseState = Mouse.GetState();
 
+            // Update scrolling
+            UpdateScrolling();
+
             // Create a copy of the component list to prevent modification during iteration
             var componentsCopy = _components.ToList();
 
@@ -128,12 +145,38 @@ namespace MarySGameEngine.Modules.UIElements_essential
             bool wasHoveringOverInteractive = _isHoveringOverButton;
             _isHoveringOverButton = false;
 
-            // Update all components
+            // Update all components with scroll offset
             foreach (var component in componentsCopy)
             {
                 try
                 {
-                    component.Update(_currentMouseState, _previousMouseState, _bounds.Location, _pixel);
+                    // Adjust mouse position for scrolling
+                    Point adjustedMousePos = new Point(
+                        _currentMouseState.Position.X,
+                        _currentMouseState.Position.Y + _scrollY
+                    );
+                    
+                    MouseState adjustedCurrentMouse = new MouseState(
+                        adjustedMousePos.X, adjustedMousePos.Y,
+                        _currentMouseState.ScrollWheelValue,
+                        _currentMouseState.LeftButton,
+                        _currentMouseState.MiddleButton,
+                        _currentMouseState.RightButton,
+                        _currentMouseState.XButton1,
+                        _currentMouseState.XButton2
+                    );
+                    
+                    MouseState adjustedPreviousMouse = new MouseState(
+                        _previousMouseState.Position.X, _previousMouseState.Position.Y + _scrollY,
+                        _previousMouseState.ScrollWheelValue,
+                        _previousMouseState.LeftButton,
+                        _previousMouseState.MiddleButton,
+                        _previousMouseState.RightButton,
+                        _previousMouseState.XButton1,
+                        _previousMouseState.XButton2
+                    );
+                    
+                    component.Update(adjustedCurrentMouse, adjustedPreviousMouse, _bounds.Location, _pixel);
                     
                     // Check if this component is interactive and we're hovering over it
                     if (component is UIButton || 
@@ -182,27 +225,207 @@ namespace MarySGameEngine.Modules.UIElements_essential
             }
         }
 
+        private void UpdateScrolling()
+        {
+            // Calculate content height
+            _contentHeight = CalculateContentHeight();
+            
+            // Reserve space for resize handle (16x16 pixels in bottom-right corner) plus some padding
+            int resizeHandleSize = 30; // Increased from 16 to 30 to add padding
+            int availableHeight = _bounds.Height - resizeHandleSize;
+            
+            // Check if scrollbar is needed based on available height
+            _needsScrollbar = _contentHeight > availableHeight;
+            
+            if (_needsScrollbar)
+            {
+                // Update scrollbar bounds - leave space for resize handle
+                _scrollbarBounds = new Rectangle(
+                    _bounds.Right - SCROLLBAR_WIDTH - 2, // Move scrollbar 2 pixels left to avoid overlap
+                    _bounds.Y,
+                    SCROLLBAR_WIDTH,
+                    availableHeight
+                );
+                
+                // Handle scrollbar interaction
+                HandleScrollbarInteraction();
+                
+                // Handle mouse wheel scrolling
+                HandleMouseWheelScrolling();
+                
+                // Clamp scroll position based on available height
+                int maxScroll = Math.Max(0, _contentHeight - availableHeight);
+                _scrollY = MathHelper.Clamp(_scrollY, 0, maxScroll);
+            }
+            else
+            {
+                _scrollY = 0;
+                _scrollbarBounds = Rectangle.Empty;
+            }
+        }
+
+        private void HandleScrollbarInteraction()
+        {
+            if (_scrollbarBounds.IsEmpty) return;
+            
+            Point mousePos = _currentMouseState.Position;
+            bool leftPressed = _currentMouseState.LeftButton == ButtonState.Pressed;
+            bool leftJustPressed = leftPressed && _previousMouseState.LeftButton == ButtonState.Released;
+            
+            // Check if hovering over scrollbar
+            _isHoveringScrollbar = _scrollbarBounds.Contains(mousePos);
+            
+            if (leftJustPressed && _isHoveringScrollbar)
+            {
+                _isDraggingScrollbar = true;
+                _scrollbarDragStart = new Vector2(mousePos.X, mousePos.Y);
+            }
+            
+            if (_isDraggingScrollbar)
+            {
+                if (leftPressed)
+                {
+                    // Calculate scroll position based on mouse position
+                    float mouseRatio = (mousePos.Y - _scrollbarBounds.Y) / (float)_scrollbarBounds.Height;
+                    mouseRatio = MathHelper.Clamp(mouseRatio, 0f, 1f);
+                    
+                    // Use available height for scroll calculation
+                    int resizeHandleSize = 30; // Increased from 16 to 30 to add padding
+                    int availableHeight = _bounds.Height - resizeHandleSize;
+                    int maxScroll = Math.Max(0, _contentHeight - availableHeight);
+                    _scrollY = (int)(mouseRatio * maxScroll);
+                }
+                else
+                {
+                    _isDraggingScrollbar = false;
+                }
+            }
+        }
+
+        private void HandleMouseWheelScrolling()
+        {
+            if (!_needsScrollbar) return;
+            
+            int scrollDelta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
+            if (scrollDelta != 0)
+            {
+                int scrollStep = scrollDelta > 0 ? -20 : 20; // Scroll up/down
+                _scrollY += scrollStep;
+                
+                // Clamp scroll position using available height
+                int resizeHandleSize = 30; // Increased from 16 to 30 to add padding
+                int availableHeight = _bounds.Height - resizeHandleSize;
+                int maxScroll = Math.Max(0, _contentHeight - availableHeight);
+                _scrollY = MathHelper.Clamp(_scrollY, 0, maxScroll);
+            }
+        }
+
+        private int CalculateContentHeight()
+        {
+            if (_components.Count == 0) return 0;
+            
+            int maxY = 0;
+            foreach (var component in _components)
+            {
+                Rectangle bounds = component.GetBounds(Point.Zero);
+                maxY = Math.Max(maxY, bounds.Bottom);
+            }
+            
+            return maxY + 20; // Add some padding at the bottom
+        }
+
         public void Draw(SpriteBatch spriteBatch)
         {
             if (_pixel == null) return; // Don't draw if pixel texture failed to create
             
             System.Diagnostics.Debug.WriteLine($"UIElements: Drawing {_components.Count} components");
             
+            // Reserve space for resize handle
+            int resizeHandleSize = 30; // Increased from 16 to 30 to add padding
+            int availableHeight = _bounds.Height - resizeHandleSize;
+            
+            // Set up scissor rectangle for clipping - leave space for resize handle
+            Rectangle originalScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
+            Rectangle scissorRect = new Rectangle(_bounds.X, _bounds.Y, _bounds.Width, availableHeight);
+            
+            // Enable scissor test
+            spriteBatch.GraphicsDevice.ScissorRectangle = scissorRect;
+            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+            {
+                ScissorTestEnable = true
+            };
+            
             // Create a copy of the component list to prevent modification during iteration
             var componentsCopy = _components.ToList();
             
-            // Draw all components
+            // Draw all components with scroll offset
             foreach (var component in componentsCopy)
             {
                 try
                 {
-                    component.Draw(spriteBatch, _bounds.Location, _pixel);
+                    // Calculate component bounds with scroll offset
+                    Rectangle componentBounds = component.GetBounds(_bounds.Location);
+                    componentBounds.Y -= _scrollY; // Apply scroll offset
+                    
+                    // Check if component is at least partially visible within the clipped bounds
+                    if (componentBounds.Bottom > _bounds.Y && componentBounds.Y < _bounds.Y + availableHeight)
+                    {
+                        component.Draw(spriteBatch, new Point(_bounds.X, _bounds.Y - _scrollY), _pixel);
+                    }
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"UIElements: Error drawing component: {ex.Message}");
                 }
             }
+            
+            // Restore scissor test
+            spriteBatch.GraphicsDevice.ScissorRectangle = originalScissor;
+            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+            {
+                ScissorTestEnable = false
+            };
+            
+            // Draw scrollbar if needed
+            if (_needsScrollbar)
+            {
+                DrawScrollbar(spriteBatch);
+            }
+        }
+
+        private void DrawScrollbar(SpriteBatch spriteBatch)
+        {
+            if (_scrollbarBounds.IsEmpty) return;
+            
+            // Draw scrollbar background
+            spriteBatch.Draw(_pixel, _scrollbarBounds, UITheme.ScrollbarBackground);
+            
+            // Draw scrollbar border
+            spriteBatch.Draw(_pixel, new Rectangle(_scrollbarBounds.X, _scrollbarBounds.Y, _scrollbarBounds.Width, 1), UITheme.Border);
+            spriteBatch.Draw(_pixel, new Rectangle(_scrollbarBounds.X, _scrollbarBounds.Bottom - 1, _scrollbarBounds.Width, 1), UITheme.Border);
+            spriteBatch.Draw(_pixel, new Rectangle(_scrollbarBounds.X, _scrollbarBounds.Y, 1, _scrollbarBounds.Height), UITheme.Border);
+            spriteBatch.Draw(_pixel, new Rectangle(_scrollbarBounds.Right - 1, _scrollbarBounds.Y, 1, _scrollbarBounds.Height), UITheme.Border);
+            
+            // Calculate thumb size and position using available height
+            int resizeHandleSize = 30; // Increased from 16 to 30 to add padding
+            int availableHeight = _bounds.Height - resizeHandleSize;
+            float scrollRatio = _contentHeight > 0 ? (float)availableHeight / _contentHeight : 1f;
+            int thumbHeight = Math.Max(20, (int)(_scrollbarBounds.Height * scrollRatio));
+            
+            float scrollPosition = _contentHeight > availableHeight ? (float)_scrollY / (_contentHeight - availableHeight) : 0f;
+            int thumbY = _scrollbarBounds.Y + (int)((_scrollbarBounds.Height - thumbHeight) * scrollPosition);
+            
+            Rectangle thumbBounds = new Rectangle(
+                _scrollbarBounds.X + SCROLLBAR_PADDING,
+                thumbY,
+                _scrollbarBounds.Width - 2 * SCROLLBAR_PADDING,
+                thumbHeight
+            );
+            
+            // Draw scrollbar thumb
+            Color thumbColor = _isDraggingScrollbar ? UITheme.ScrollbarThumbHover : 
+                              (_isHoveringScrollbar ? UITheme.ScrollbarThumbHover : UITheme.ScrollbarThumb);
+            spriteBatch.Draw(_pixel, thumbBounds, thumbColor);
         }
 
         public void SetBounds(Rectangle bounds)
@@ -210,6 +433,8 @@ namespace MarySGameEngine.Modules.UIElements_essential
             _bounds = bounds;
             // Update component positions if needed
             UpdateComponentLayout();
+            // Reset scroll position when bounds change
+            _scrollY = 0;
         }
 
         public Rectangle GetBounds()
@@ -224,6 +449,7 @@ namespace MarySGameEngine.Modules.UIElements_essential
                 System.Diagnostics.Debug.WriteLine("UIElements: LoadFromMarkdown called");
                 _components.Clear();
                 _namedComponents.Clear();
+                _scrollY = 0; // Reset scroll position
                 System.Diagnostics.Debug.WriteLine($"UIElements: Markdown length: {markdown?.Length ?? 0}");
                 ParseMarkdown(markdown);
                 System.Diagnostics.Debug.WriteLine($"UIElements: LoadFromMarkdown completed, {_components.Count} components created");
@@ -488,8 +714,9 @@ namespace MarySGameEngine.Modules.UIElements_essential
                     }
                     else if (line.StartsWith("---"))
                     {
-                        // Use widthPercent for separator width
-                        int sepWidth = (int)((_bounds.Width - 2 * padding) * widthPercent);
+                        // Use widthPercent for separator width, account for potential scrollbar
+                        int scrollbarSpace = _needsScrollbar ? SCROLLBAR_WIDTH + 2 : 0;
+                        int sepWidth = (int)((_bounds.Width - 2 * padding - scrollbarSpace) * widthPercent);
                         _components.Add(new UISeparator(new Vector2(padding, currentY), sepWidth));
                         _componentLayoutInfos.Add(new UIComponentLayoutInfo(alignment, widthPercent));
                         currentY += 2 + spacing + 8;
@@ -515,7 +742,10 @@ namespace MarySGameEngine.Modules.UIElements_essential
         {
             System.Diagnostics.Debug.WriteLine($"UIElements: UpdateComponentLayout called with {_components.Count} components");
             int padding = 10;
-            int contentWidth = _bounds.Width - 2 * padding; // Subtract both left and right padding
+            
+            // Account for scrollbar width if present
+            int scrollbarSpace = _needsScrollbar ? SCROLLBAR_WIDTH + 2 : 0; // 2 pixels for spacing
+            int contentWidth = _bounds.Width - 2 * padding - scrollbarSpace; // Subtract padding and scrollbar space
 
             for (int i = 0; i < _components.Count; i++)
             {
@@ -553,7 +783,7 @@ namespace MarySGameEngine.Modules.UIElements_essential
                 }
                 else if (layoutInfo.Alignment == "right")
                 {
-                    x = _bounds.Width - actualWidth - padding;
+                    x = _bounds.Width - actualWidth - padding - scrollbarSpace;
                 }
 
                 Vector2 oldPosition = component.GetPosition();
@@ -592,6 +822,32 @@ namespace MarySGameEngine.Modules.UIElements_essential
             {
                 System.Diagnostics.Debug.WriteLine($"UIElements: Error resetting cursor: {ex.Message}");
             }
+        }
+
+        public void ResetScroll()
+        {
+            _scrollY = 0;
+        }
+
+        public bool NeedsScrollbar()
+        {
+            return _needsScrollbar;
+        }
+
+        public int GetScrollPosition()
+        {
+            return _scrollY;
+        }
+
+        public int GetContentHeight()
+        {
+            return _contentHeight;
+        }
+
+        public int GetAvailableHeight()
+        {
+            int resizeHandleSize = 30; // Increased from 16 to 30 to add padding
+            return _bounds.Height - resizeHandleSize;
         }
 
         // Callback methods for component changes

@@ -151,10 +151,12 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 if (_windowManagement.IsVisible() && _uiElements != null)
                 {
                     // UI area starts below the tab bar
+                    // Account for scrollbar width if needed
+                    int uiWidth = windowBounds.Width;
                     Rectangle uiBounds = new Rectangle(
                         windowBounds.X,
                         windowBounds.Y + _titleBarHeight + _tabBarSpacing + _tabBarHeight + _tabBarSpacing,
-                        windowBounds.Width,
+                        uiWidth,
                         windowBounds.Height - _titleBarHeight - _tabBarHeight - 2 * _tabBarSpacing
                     );
                     Rectangle currentBounds = _uiElements.GetBounds();
@@ -398,10 +400,11 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 _engine.Log($"[ModuleSettingsTabs] WARNING: settings_ui.md is empty for {tab.Name} at {tab.SettingsPath}");
             // UI area starts below the tab bar
             Rectangle windowBounds = _windowManagement.GetWindowBounds();
+            int uiWidth = windowBounds.Width;
             Rectangle uiBounds = new Rectangle(
                 windowBounds.X,
                 windowBounds.Y + _titleBarHeight + _tabBarSpacing + _tabBarHeight + _tabBarSpacing,
-                windowBounds.Width,
+                uiWidth,
                 windowBounds.Height - _titleBarHeight - _tabBarHeight - 2 * _tabBarSpacing
             );
             _uiElements = new UIElements(_graphicsDevice, _uiFont, uiBounds, markdown, tab.SettingsPath);
