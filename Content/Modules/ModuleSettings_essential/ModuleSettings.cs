@@ -164,6 +164,10 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                     {
                         _uiElements.SetBounds(uiBounds);
                     }
+                    
+                    // Disable scrolling when dropdown is open
+                    _uiElements.SetScrollingEnabled(!_isDropdownOpen);
+                    
                     _uiElements.Update();
                 }
             }

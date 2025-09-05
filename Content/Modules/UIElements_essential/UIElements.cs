@@ -53,6 +53,7 @@ namespace MarySGameEngine.Modules.UIElements_essential
         private const int SCROLLBAR_WIDTH = 16;
         private const int SCROLLBAR_PADDING = 2;
         private bool _isHoveringScrollbar = false;
+        private bool _scrollingEnabled = true;
 
         // Add this struct at the top of the UIElements class
         private struct UIComponentLayoutInfo
@@ -266,7 +267,7 @@ namespace MarySGameEngine.Modules.UIElements_essential
 
         private void HandleScrollbarInteraction()
         {
-            if (_scrollbarBounds.IsEmpty) return;
+            if (_scrollbarBounds.IsEmpty || !_scrollingEnabled) return;
             
             Point mousePos = _currentMouseState.Position;
             bool leftPressed = _currentMouseState.LeftButton == ButtonState.Pressed;
@@ -304,7 +305,7 @@ namespace MarySGameEngine.Modules.UIElements_essential
 
         private void HandleMouseWheelScrolling()
         {
-            if (!_needsScrollbar) return;
+            if (!_needsScrollbar || !_scrollingEnabled) return;
             
             int scrollDelta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
             if (scrollDelta != 0)
@@ -848,6 +849,23 @@ namespace MarySGameEngine.Modules.UIElements_essential
         {
             int resizeHandleSize = 30; // Increased from 16 to 30 to add padding
             return _bounds.Height - resizeHandleSize;
+        }
+
+        public void SetScrollingEnabled(bool enabled)
+        {
+            _scrollingEnabled = enabled;
+            
+            // Reset scrollbar dragging state when scrolling is disabled
+            if (!enabled)
+            {
+                _isDraggingScrollbar = false;
+                _isHoveringScrollbar = false;
+            }
+        }
+
+        public bool IsScrollingEnabled()
+        {
+            return _scrollingEnabled;
         }
 
         // Callback methods for component changes
