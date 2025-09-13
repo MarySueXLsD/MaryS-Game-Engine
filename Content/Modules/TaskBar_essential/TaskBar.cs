@@ -151,6 +151,10 @@ namespace MarySGameEngine.Modules.TaskBar_essential
         {
             try
             {
+                // Store manually added icons before clearing
+                var manuallyAddedIcons = _moduleIcons.Where(icon => 
+                    icon.Name == "Console" || icon.Name == "Module Settings").ToList();
+                
                 _moduleIcons.Clear();
                 int currentX = _taskBarBounds.X;
                 int currentY = _taskBarBounds.Y;
@@ -262,6 +266,12 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             continue;
                         }
 
+                        // Skip Console module - it will be added when opened
+                        if (moduleInfo.Name == "Console")
+                        {
+                            continue;
+                        }
+
                         Rectangle bounds;
                         switch (_currentPosition)
                         {
@@ -298,6 +308,31 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     {
                         _engine.Log($"TaskBar: ERROR loading module info: {ex.Message}");
                     }
+                }
+                
+                // Re-add manually added icons after regular icons
+                foreach (var manualIcon in manuallyAddedIcons)
+                {
+                    // Recalculate position for manually added icons
+                    Rectangle bounds;
+                    switch (_currentPosition)
+                    {
+                        case TaskBarPosition.Left:
+                        case TaskBarPosition.Right:
+                            bounds = new Rectangle(currentX, currentY, squareSize, squareSize);
+                            currentY += squareSize + _spacing;
+                            break;
+                        default: // Top or Bottom
+                            bounds = new Rectangle(currentX, currentY, squareSize, squareSize);
+                            currentX += squareSize + _spacing;
+                            break;
+                    }
+                    
+                    // Update the icon bounds
+                    manualIcon.Bounds = bounds;
+                    manualIcon.TargetBounds = bounds;
+                    
+                    _moduleIcons.Add(manualIcon);
                 }
             }
             catch (Exception ex)
@@ -772,6 +807,18 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     {
                         icon.Logo = _logo;
                     }
+                }
+                
+                // Also preload Console logo since it's added manually
+                try
+                {
+                    var consoleLogo = content.Load<Texture2D>("Modules/Console_essential/logo");
+                    _moduleLogos["Console"] = consoleLogo;
+                    _engine.Log("TaskBar: Preloaded Console logo");
+                }
+                catch (Exception ex)
+                {
+                    _engine.Log($"TaskBar: Could not preload Console logo: {ex.Message}");
                 }
                 
                 // Update module icons one final time to ensure all logos are properly set

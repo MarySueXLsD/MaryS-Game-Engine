@@ -199,8 +199,8 @@ public class GameEngine : Game
                     Log($"Module info - Name: {moduleInfo.Name}, IsVisible: {moduleInfo.IsVisible}");
 
                     // Special case for Desktop module - always load it regardless of visibility
-                    // Also always load ModuleSettings as it's essential for the engine
-                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential";
+                    // Also always load ModuleSettings and Console as they're essential for the engine
+                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential";
 
                     if (!shouldLoad)
                     {
