@@ -808,16 +808,7 @@ namespace MarySGameEngine.Modules.Console_essential
             
             _windowManagement?.LoadContent(content);
             
-            // Ensure TaskBar has an icon for Console
-            var modules = GameEngine.Instance.GetActiveModules();
-            foreach (var module in modules)
-            {
-                if (module is MarySGameEngine.Modules.TaskBar_essential.TaskBar taskBar)
-                {
-                    taskBar.EnsureModuleIconExists("Console", content);
-                    break;
-                }
-            }
+            // Don't add TaskBar icon by default - it will be added when the window is opened
         }
 
         public void Dispose()
