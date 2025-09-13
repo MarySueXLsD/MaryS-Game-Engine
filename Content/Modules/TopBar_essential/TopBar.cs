@@ -838,6 +838,9 @@ namespace MarySGameEngine.Modules.TopBar_essential
                                 // Set the window to visible
                                 windowManagement.SetVisible(true);
                                 
+                                // Notify console of visibility change
+                                console.OnWindowVisibilityChanged(true);
+                                
                                 // Bring to front
                                 windowManagement.BringToFront();
                                 
