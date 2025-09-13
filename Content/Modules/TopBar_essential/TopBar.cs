@@ -575,6 +575,12 @@ namespace MarySGameEngine.Modules.TopBar_essential
                         System.Diagnostics.Debug.WriteLine($"TopBar: Opening Module Settings from HandleModuleAction");
                         OpenModuleSettings(moduleName);
                         return;
+                        
+                    case "Console":
+                        // Open the Console window
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Opening Console from HandleModuleAction");
+                        OpenConsole(moduleName);
+                        return;
                 }
                 
                 // For regular modules, find their WindowManagement and handle accordingly
@@ -799,6 +805,67 @@ namespace MarySGameEngine.Modules.TopBar_essential
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"TopBar: Error opening Module Settings for {moduleName}: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"TopBar: Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        private void OpenConsole(string moduleName)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Opening console for module: {moduleName}");
+                
+                // Find the Console module
+                var modules = GameEngine.Instance.GetActiveModules();
+                System.Diagnostics.Debug.WriteLine($"TopBar: Found {modules.Count} active modules");
+                
+                foreach (var module in modules)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TopBar: Checking module type: {module.GetType().FullName}");
+                    if (module is MarySGameEngine.Modules.Console_essential.Console console)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Found Console module, opening window");
+                        
+                        // Get the window management and open the window
+                        var windowManagementField = console.GetType().GetField("_windowManagement", 
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        
+                        if (windowManagementField != null)
+                        {
+                            var windowManagement = windowManagementField.GetValue(console) as WindowManagement;
+                            if (windowManagement != null)
+                            {
+                                // Set the window to visible
+                                windowManagement.SetVisible(true);
+                                
+                                // Bring to front
+                                windowManagement.BringToFront();
+                                
+                                // Highlight the window
+                                windowManagement.HandleTaskBarClick();
+                                
+                                // Ensure TaskBar has an icon for this module
+                                foreach (var taskBarModule in modules)
+                                {
+                                    if (taskBarModule is MarySGameEngine.Modules.TaskBar_essential.TaskBar taskBar)
+                                    {
+                                        taskBar.EnsureModuleIconExists(moduleName);
+                                        break;
+                                    }
+                                }
+                                
+                                System.Diagnostics.Debug.WriteLine($"TopBar: Successfully opened Console for {moduleName}");
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"TopBar: Console module not found among {modules.Count} modules");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error opening Console for {moduleName}: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"TopBar: Stack trace: {ex.StackTrace}");
             }
         }
