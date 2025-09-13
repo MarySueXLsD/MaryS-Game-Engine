@@ -809,18 +809,6 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     }
                 }
                 
-                // Also preload Console logo since it's added manually
-                try
-                {
-                    var consoleLogo = content.Load<Texture2D>("Modules/Console_essential/logo");
-                    _moduleLogos["Console"] = consoleLogo;
-                    _engine.Log("TaskBar: Preloaded Console logo");
-                }
-                catch (Exception ex)
-                {
-                    _engine.Log($"TaskBar: Could not preload Console logo: {ex.Message}");
-                }
-                
                 // Update module icons one final time to ensure all logos are properly set
                 UpdateModuleIcons();
             }
@@ -1345,6 +1333,20 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     catch (Exception ex)
                     {
                         _engine.Log($"TaskBar: Could not load logo for {moduleName}: {ex.Message}");
+                        // For Console specifically, try to load a fallback icon
+                        if (moduleName == "Console")
+                        {
+                            try
+                            {
+                                logo = content.Load<Texture2D>("Logos/shell_script_file_icon");
+                                _moduleLogos[moduleName] = logo;
+                                _engine.Log($"TaskBar: Loaded fallback logo for {moduleName}");
+                            }
+                            catch (Exception fallbackEx)
+                            {
+                                _engine.Log($"TaskBar: Could not load fallback logo for {moduleName}: {fallbackEx.Message}");
+                            }
+                        }
                     }
                 }
 

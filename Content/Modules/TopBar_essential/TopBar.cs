@@ -849,7 +849,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
                                 {
                                     if (taskBarModule is MarySGameEngine.Modules.TaskBar_essential.TaskBar taskBar)
                                     {
-                                        taskBar.EnsureModuleIconExists(moduleName);
+                                        taskBar.EnsureModuleIconExists(moduleName, GameEngine.Instance.Content);
                                         break;
                                     }
                                 }
