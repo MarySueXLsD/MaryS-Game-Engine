@@ -105,14 +105,30 @@ namespace MarySGameEngine.Modules.Console_essential
                 properties
             );
 
+            // Set custom default size for console (wider, less tall)
+            // Access the private fields using reflection
+            var defaultWidthField = _windowManagement.GetType().GetField("_defaultWidth", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var defaultHeightField = _windowManagement.GetType().GetField("_defaultHeight", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            
+            if (defaultWidthField != null)
+                defaultWidthField.SetValue(_windowManagement, 800);
+            if (defaultHeightField != null)
+                defaultHeightField.SetValue(_windowManagement, 300);
+
             _windowManagement.SetWindowTitle("Console");
             _windowManagement.SetTaskBar(_taskBar);
+
+            // Initialize console bounds with default values
+            _consoleBounds = new Rectangle(0, 0, 400, 300); // Default bounds
+            _inputBounds = new Rectangle(0, 0, 400, 25);
 
             // Initialize PowerShell process
             InitializePowerShell();
 
             // Add welcome message
-            AddConsoleLine("MaryS Game Engine Console v1.0.0", CONSOLE_SUCCESS);
+            AddConsoleLine("MaryS Game Engine Console v0.0.1.7", CONSOLE_SUCCESS);
             AddConsoleLine("Type 'help' for available commands or 'exit' to close console", CONSOLE_TEXT);
             AddConsoleLine("", CONSOLE_TEXT);
         }
@@ -209,8 +225,16 @@ namespace MarySGameEngine.Modules.Console_essential
         {
             lock (_consoleLock)
             {
-                // Handle line wrapping
-                var lines = WrapText(text, _consoleBounds.Width - _consolePadding * 2);
+                // Handle line wrapping - use the actual console bounds width
+                int availableWidth = _consoleBounds.Width - _consolePadding * 2;
+                
+                // Ensure we have a reasonable minimum width
+                availableWidth = Math.Max(availableWidth, 200);
+                
+                // Debug output for new lines
+                System.Diagnostics.Debug.WriteLine($"Console AddConsoleLine: ConsoleBounds={_consoleBounds}, AvailableWidth={availableWidth}, ConsolePadding={_consolePadding}, Text='{text}'");
+                
+                var lines = WrapText(text, availableWidth);
                 foreach (var line in lines)
                 {
                     _consoleLines.Add(line);
@@ -234,6 +258,17 @@ namespace MarySGameEngine.Modules.Console_essential
         private List<string> WrapText(string text, int maxWidth)
         {
             var lines = new List<string>();
+            
+            // If maxWidth is too small, just return the text as-is
+            if (maxWidth < 50)
+            {
+                lines.Add(text);
+                return lines;
+            }
+            
+            // Debug output for wrapping
+            System.Diagnostics.Debug.WriteLine($"Console WrapText: maxWidth={maxWidth}, text='{text}'");
+            
             var words = text.Split(' ');
             var currentLine = new StringBuilder();
 
@@ -241,6 +276,12 @@ namespace MarySGameEngine.Modules.Console_essential
             {
                 var testLine = currentLine.Length > 0 ? currentLine + " " + word : word;
                 var testWidth = _consoleFont.MeasureString(testLine).X;
+
+                // Debug output for each word (only for long lines to avoid spam)
+                if (text.Length > 50)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Console WrapText: word='{word}', testLine='{testLine}', testWidth={testWidth}, maxWidth={maxWidth}");
+                }
 
                 if (testWidth <= maxWidth)
                 {
@@ -279,6 +320,7 @@ namespace MarySGameEngine.Modules.Console_essential
                             }
                             else
                             {
+                                // If even one character doesn't fit, just add it anyway
                                 lines.Add(remaining.Substring(0, 1));
                                 remaining = remaining.Substring(1);
                             }
@@ -312,12 +354,40 @@ namespace MarySGameEngine.Modules.Console_essential
 
             _windowManagement?.Update();
 
+            // Always update bounds, even when not visible, to handle resizing
+            UpdateBounds();
+
+            // If window is being resized, update bounds more aggressively and force re-wrap
+            if (_windowManagement != null && _windowManagement.IsResizing())
+            {
+                UpdateBounds();
+                // Force re-wrap during resizing
+                if (_consoleLines.Count > 0)
+                {
+                    ReWrapAllText();
+                }
+            }
+
             if (!_windowManagement?.IsVisible() == true)
                 return;
 
             UpdateConsoleInput();
             UpdateCursor();
-            UpdateBounds();
+        }
+
+        // Method to force bounds update when window becomes visible
+        public void OnWindowVisibilityChanged(bool isVisible)
+        {
+            if (isVisible)
+            {
+                // Force bounds update when window becomes visible
+                UpdateBounds();
+                // Re-wrap all text with the correct bounds
+                if (_consoleLines.Count > 0)
+                {
+                    ReWrapAllText();
+                }
+            }
         }
 
         private void UpdateConsoleInput()
@@ -682,15 +752,29 @@ namespace MarySGameEngine.Modules.Console_essential
 
         private void UpdateBounds()
         {
-            if (_windowManagement?.IsVisible() == true)
+            if (_windowManagement != null)
             {
                 var windowBounds = _windowManagement.GetWindowBounds();
-                _consoleBounds = new Rectangle(
-                    windowBounds.X + _consoleMargin,
-                    windowBounds.Y + _consoleMargin + 40, // Account for title bar
-                    windowBounds.Width - _consoleMargin * 2,
-                    windowBounds.Height - _consoleMargin * 2 - 40 - 30 // Account for title bar and input area
-                );
+                
+                // Calculate console bounds with proper margins
+                int consoleX = windowBounds.X + _consoleMargin;
+                int consoleY = windowBounds.Y + _consoleMargin + 40; // Account for title bar
+                int consoleWidth = Math.Max(100, windowBounds.Width - _consoleMargin * 2); // Ensure minimum width
+                int consoleHeight = Math.Max(100, windowBounds.Height - _consoleMargin * 2 - 40 - 30); // Account for title bar and input area
+                
+                var newConsoleBounds = new Rectangle(consoleX, consoleY, consoleWidth, consoleHeight);
+
+                // Check if the console width or height has changed significantly
+                bool widthChanged = Math.Abs(_consoleBounds.Width - newConsoleBounds.Width) > 0;
+                bool heightChanged = Math.Abs(_consoleBounds.Height - newConsoleBounds.Height) > 0;
+                
+                // Debug output for bounds changes
+                if (widthChanged || heightChanged)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Console UpdateBounds: Width changed from {_consoleBounds.Width} to {newConsoleBounds.Width}, Height changed from {_consoleBounds.Height} to {newConsoleBounds.Height}, WindowBounds={windowBounds}");
+                }
+                
+                _consoleBounds = newConsoleBounds;
 
                 _inputBounds = new Rectangle(
                     _consoleBounds.X,
@@ -700,6 +784,110 @@ namespace MarySGameEngine.Modules.Console_essential
                 );
 
                 _maxVisibleLines = _consoleBounds.Height / _lineHeight;
+
+                // If width changed significantly and we have console lines, re-wrap them
+                if (widthChanged && _consoleLines.Count > 0 && _consoleBounds.Width > 50)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Console UpdateBounds: Triggering ReWrapAllText due to width change");
+                    ReWrapAllText();
+                }
+            }
+        }
+
+        private void ReWrapAllText()
+        {
+            lock (_consoleLock)
+            {
+                // Store the original lines and clear the current ones
+                var originalLines = new List<string>(_consoleLines);
+                _consoleLines.Clear();
+
+                // Re-wrap all text with the new width - use actual console bounds
+                int availableWidth = _consoleBounds.Width - _consolePadding * 2;
+                
+                // Ensure we have a reasonable minimum width
+                availableWidth = Math.Max(availableWidth, 200);
+                
+                // Debug output
+                System.Diagnostics.Debug.WriteLine($"Console ReWrapAllText: ConsoleBounds={_consoleBounds}, AvailableWidth={availableWidth}, ConsolePadding={_consolePadding}");
+                
+                // Group consecutive lines that are not command prompts or special lines
+                // This allows proper re-wrapping while preserving structure
+                var groupedLines = new List<List<string>>();
+                var currentGroup = new List<string>();
+                
+                foreach (var line in originalLines)
+                {
+                    // Check if this is a special line that should not be grouped
+                    bool isSpecialLine = line.StartsWith("> ") || // Command prompt
+                                       line.StartsWith("PS ") || // PowerShell prompt
+                                       string.IsNullOrWhiteSpace(line) || // Empty line
+                                       line.StartsWith("MaryS Game Engine") || // Welcome message
+                                       line.StartsWith("Type 'help'") || // Instructions
+                                       line.StartsWith("PowerShell initialized") || // Status message
+                                       line.StartsWith("Available commands:") || // Help header
+                                       line.StartsWith("  ") || // Help items (indented)
+                                       line.StartsWith("All other commands"); // Help footer
+                    
+                    if (isSpecialLine)
+                    {
+                        // If we have a current group, add it and start a new one
+                        if (currentGroup.Count > 0)
+                        {
+                            groupedLines.Add(new List<string>(currentGroup));
+                            currentGroup.Clear();
+                        }
+                        // Add the special line as its own group
+                        groupedLines.Add(new List<string> { line });
+                    }
+                    else
+                    {
+                        // Add to current group for potential re-wrapping
+                        currentGroup.Add(line);
+                    }
+                }
+                
+                // Add any remaining group
+                if (currentGroup.Count > 0)
+                {
+                    groupedLines.Add(currentGroup);
+                }
+                
+                // Process each group
+                foreach (var group in groupedLines)
+                {
+                    if (group.Count == 1)
+                    {
+                        // Single line - just add it
+                        _consoleLines.Add(group[0]);
+                    }
+                    else
+                    {
+                        // Multiple lines - re-wrap them as a single text
+                        var fullText = string.Join(" ", group);
+                        var wrappedLines = WrapText(fullText, availableWidth);
+                        
+                        foreach (var wrappedLine in wrappedLines)
+                        {
+                            _consoleLines.Add(wrappedLine);
+                        }
+                    }
+                }
+
+                // Adjust scroll offset to maintain relative position
+                if (_autoScroll)
+                {
+                    _scrollOffset = Math.Max(0, _consoleLines.Count - _maxVisibleLines);
+                }
+                else
+                {
+                    // Try to maintain the current scroll position proportionally
+                    if (originalLines.Count > 0)
+                    {
+                        float scrollRatio = (float)_scrollOffset / originalLines.Count;
+                        _scrollOffset = Math.Max(0, Math.Min((int)(scrollRatio * _consoleLines.Count), _consoleLines.Count - _maxVisibleLines));
+                    }
+                }
             }
         }
 
@@ -861,4 +1049,5 @@ namespace MarySGameEngine.Modules.Console_essential
         }
     }
 }
+
 
