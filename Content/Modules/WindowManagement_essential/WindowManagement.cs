@@ -61,6 +61,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private int _buttonSpacing = 5;
         private const int MIN_WINDOW_WIDTH = 200;
         private const int MIN_WINDOW_HEIGHT = 200;
+        private int _customMinWidth = -1;  // -1 means use default
+        private int _customMinHeight = -1; // -1 means use default
         private const int TOP_BAR_HEIGHT = 35;
         private const float UNSTICK_THRESHOLD = 100f;
         private const int TITLE_BUTTON_SPACING = 20;  // Spacing between title and first button
@@ -888,8 +890,12 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 float newWidth = _resizeStartSize.X + (_currentMouseState.Position.X - _resizeStartPos.X);
                 float newHeight = _resizeStartSize.Y + (_currentMouseState.Position.Y - _resizeStartPos.Y);
 
-                newWidth = Math.Max(MIN_WINDOW_WIDTH, newWidth);
-                newHeight = Math.Max(MIN_WINDOW_HEIGHT, newHeight);
+                // Use custom minimum sizes if set, otherwise use default
+                int minWidth = _customMinWidth > 0 ? _customMinWidth : MIN_WINDOW_WIDTH;
+                int minHeight = _customMinHeight > 0 ? _customMinHeight : MIN_WINDOW_HEIGHT;
+
+                newWidth = Math.Max(minWidth, newWidth);
+                newHeight = Math.Max(minHeight, newHeight);
 
                 newWidth = Math.Min(newWidth, _windowWidth - _windowBounds.X);
                 newHeight = Math.Min(newHeight, _windowHeight - _windowBounds.Y);
@@ -1476,6 +1482,12 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         public void SetWindowTitle(string title)
         {
             _windowTitle = title;
+        }
+
+        public void SetCustomMinimumSize(int minWidth, int minHeight)
+        {
+            _customMinWidth = minWidth;
+            _customMinHeight = minHeight;
         }
 
         public void SetPosition(Vector2 newPosition)
