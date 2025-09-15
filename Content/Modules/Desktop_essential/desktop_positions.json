@@ -1,51 +1,51 @@
 [
   {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\234324324324.ttf",
+    "Path": "C:\\Users\\extsyanavi\\PycharmProjects\\MaryS-Game-Engine-fresh\\MaryS-Game-Engine\\Content\\Desktop\\234324324324.ttf",
     "Cell": {
-      "Row": 2,
-      "Column": 8
+      "Row": 0,
+      "Column": 0
     }
   },
   {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\asdsd.png",
+    "Path": "C:\\Users\\extsyanavi\\PycharmProjects\\MaryS-Game-Engine-fresh\\MaryS-Game-Engine\\Content\\Desktop\\asdsd.png",
     "Cell": {
-      "Row": 3,
-      "Column": 10
+      "Row": 0,
+      "Column": 1
     }
   },
   {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\bridge.json",
-    "Cell": {
-      "Row": 1,
-      "Column": 2
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\hhh.txt",
+    "Path": "C:\\Users\\extsyanavi\\PycharmProjects\\MaryS-Game-Engine-fresh\\MaryS-Game-Engine\\Content\\Desktop\\bridge.json",
     "Cell": {
       "Row": 1,
-      "Column": 3
+      "Column": 0
     }
   },
   {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\test.py",
-    "Cell": {
-      "Row": 4,
-      "Column": 8
-    }
-  },
-  {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\test.txt",
+    "Path": "C:\\Users\\extsyanavi\\PycharmProjects\\MaryS-Game-Engine-fresh\\MaryS-Game-Engine\\Content\\Desktop\\hhh.txt",
     "Cell": {
       "Row": 1,
       "Column": 1
     }
   },
   {
-    "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\test210498.cs",
+    "Path": "C:\\Users\\extsyanavi\\PycharmProjects\\MaryS-Game-Engine-fresh\\MaryS-Game-Engine\\Content\\Desktop\\test.py",
+    "Cell": {
+      "Row": 0,
+      "Column": 2
+    }
+  },
+  {
+    "Path": "C:\\Users\\extsyanavi\\PycharmProjects\\MaryS-Game-Engine-fresh\\MaryS-Game-Engine\\Content\\Desktop\\test.txt",
     "Cell": {
       "Row": 2,
-      "Column": 4
+      "Column": 0
+    }
+  },
+  {
+    "Path": "C:\\Users\\extsyanavi\\PycharmProjects\\MaryS-Game-Engine-fresh\\MaryS-Game-Engine\\Content\\Desktop\\test210498.cs",
+    "Cell": {
+      "Row": 1,
+      "Column": 2
     }
   }
 ]

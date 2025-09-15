@@ -130,6 +130,7 @@ namespace MarySGameEngine.Modules.Console_essential
         private Task _outputReaderTask;
         private Task _errorReaderTask;
         private readonly object _consoleLock = new object();
+        private string _currentPowerShellDirectory = "";
 
         // Colors
         private readonly Color CONSOLE_BACKGROUND = new Color(12, 12, 12); // Dark console background
@@ -202,6 +203,9 @@ namespace MarySGameEngine.Modules.Console_essential
             // Initialize console bounds with default values
             _consoleBounds = new Rectangle(0, 0, 400, 300); // Default bounds
             _inputBounds = new Rectangle(0, 0, 400, 25);
+
+            // Initialize PowerShell directory tracking
+            _currentPowerShellDirectory = GetDesktopDirectory();
 
             // Initialize PowerShell process
             InitializePowerShell();
@@ -1129,45 +1133,120 @@ namespace MarySGameEngine.Modules.Console_essential
                 // Get the Content/Desktop directory as the root boundary
                 string desktopDirectory = GetDesktopDirectory();
                 
+                System.Diagnostics.Debug.WriteLine($"Console IsPathWithinDesktopDirectory: targetPath='{targetPath}', desktopDirectory='{desktopDirectory}'");
+                
                 if (string.IsNullOrEmpty(desktopDirectory))
                 {
+                    System.Diagnostics.Debug.WriteLine("Console IsPathWithinDesktopDirectory: Desktop directory is null/empty - blocking");
                     return false; // Can't determine desktop directory
                 }
                 
                 // For relative paths, we need to check if they would stay within desktop
                 if (!Path.IsPathRooted(targetPath))
                 {
-                    // Count how many levels up the path goes
-                    int upLevels = 0;
-                    string remainingPath = targetPath;
-                    while (remainingPath.StartsWith(".."))
-                    {
-                        upLevels++;
-                        remainingPath = remainingPath.Substring(3).TrimStart('\\', '/');
-                    }
+                    // Use the tracked PowerShell directory instead of C# current directory
+                    string currentDir = !string.IsNullOrEmpty(_currentPowerShellDirectory) ? 
+                        _currentPowerShellDirectory : Directory.GetCurrentDirectory();
                     
-                    // If it goes up more than 2 levels from Content/Desktop, it's outside
-                    // Content/Desktop -> Content -> MarySGameEngine (2 levels up)
-                    if (upLevels > 2)
-                    {
-                        return false;
-                    }
+                    System.Diagnostics.Debug.WriteLine($"Console IsPathWithinDesktopDirectory: Using currentDir='{currentDir}', tracked='{_currentPowerShellDirectory}'");
                     
-                    // Allow relative navigation within the desktop structure
-                    return true;
+                    // Try to resolve the target path relative to current directory
+                    try
+                    {
+                        string resolvedPath = Path.GetFullPath(Path.Combine(currentDir, targetPath));
+                        bool isWithin = resolvedPath.StartsWith(desktopDirectory, StringComparison.OrdinalIgnoreCase);
+                        
+                        System.Diagnostics.Debug.WriteLine($"Console IsPathWithinDesktopDirectory: resolvedPath='{resolvedPath}', isWithin={isWithin}");
+                        
+                        // Check if the resolved path is within or equal to the desktop directory
+                        return isWithin;
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Console IsPathWithinDesktopDirectory: Path resolution failed: {ex.Message}");
+                        
+                        // If path resolution fails, fall back to simple level counting
+                        // Count how many levels up the path goes
+                        int upLevels = 0;
+                        string remainingPath = targetPath;
+                        while (remainingPath.StartsWith(".."))
+                        {
+                            upLevels++;
+                            remainingPath = remainingPath.Substring(3).TrimStart('\\', '/');
+                        }
+                        
+                        System.Diagnostics.Debug.WriteLine($"Console IsPathWithinDesktopDirectory: Fallback - upLevels={upLevels}, currentDir starts with desktop: {currentDir.StartsWith(desktopDirectory, StringComparison.OrdinalIgnoreCase)}");
+                        
+                        // Special case: if we're in a subdirectory of Desktop and going up 1 level,
+                        // check if current directory is within Desktop structure
+                        if (upLevels == 1 && currentDir.StartsWith(desktopDirectory, StringComparison.OrdinalIgnoreCase))
+                        {
+                            System.Diagnostics.Debug.WriteLine("Console IsPathWithinDesktopDirectory: Allowing cd .. within Desktop structure");
+                            return true; // Allow going back to parent within Desktop structure
+                        }
+                        
+                        // If it goes up more than 2 levels from Content/Desktop, it's outside
+                        // Content/Desktop -> Content -> MarySGameEngine (2 levels up)
+                        if (upLevels > 2)
+                        {
+                            System.Diagnostics.Debug.WriteLine("Console IsPathWithinDesktopDirectory: Too many levels up - blocking");
+                            return false;
+                        }
+                        
+                        System.Diagnostics.Debug.WriteLine("Console IsPathWithinDesktopDirectory: Allowing relative navigation");
+                        // Allow relative navigation within the desktop structure
+                        return true;
+                    }
                 }
                 
                 // For absolute paths, check if they're within the desktop directory
                 string fullTargetPath = Path.GetFullPath(targetPath);
-                return fullTargetPath.StartsWith(desktopDirectory, StringComparison.OrdinalIgnoreCase);
+                bool absoluteIsWithin = fullTargetPath.StartsWith(desktopDirectory, StringComparison.OrdinalIgnoreCase);
+                System.Diagnostics.Debug.WriteLine($"Console IsPathWithinDesktopDirectory: Absolute path '{fullTargetPath}', isWithin={absoluteIsWithin}");
+                return absoluteIsWithin;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Console IsPathWithinDesktopDirectory: Exception occurred: {ex.Message}");
                 // If there's any error in path resolution, block the command for safety
                 return false;
             }
         }
 
+
+        private void UpdateTrackedDirectory(string command)
+        {
+            try
+            {
+                string lowerCommand = command.ToLower().Trim();
+                
+                // Check if this is a directory change command
+                if (lowerCommand.StartsWith("cd ") || lowerCommand.StartsWith("pushd ") || 
+                    lowerCommand.StartsWith("set-location ") || lowerCommand.StartsWith("sl "))
+                {
+                    string targetPath = ExtractPathFromCommand(command);
+                    if (!string.IsNullOrEmpty(targetPath))
+                    {
+                        // Try to resolve the new directory path
+                        if (Path.IsPathRooted(targetPath))
+                        {
+                            _currentPowerShellDirectory = targetPath;
+                        }
+                        else
+                        {
+                            // Relative path - combine with current directory
+                            string newPath = Path.GetFullPath(Path.Combine(_currentPowerShellDirectory, targetPath));
+                            _currentPowerShellDirectory = newPath;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // If updating fails, keep the current directory as-is
+                // We'll rely on the fallback logic in path validation
+            }
+        }
 
         private string GetDesktopDirectory()
         {
@@ -1237,7 +1316,12 @@ namespace MarySGameEngine.Modules.Console_essential
             // Check for directory change commands and restrict them
             if (IsDirectoryChangeCommand(command))
             {
+                // Add debug information about why the command was blocked
+                string debugInfo = $"Blocked command: '{command}', Current tracked dir: '{_currentPowerShellDirectory}', Desktop dir: '{GetDesktopDirectory()}'";
+                System.Diagnostics.Debug.WriteLine($"Console: {debugInfo}");
+                
                 AddConsoleLine("Directory navigation is restricted to the Content/Desktop directory.", CONSOLE_WARNING);
+                AddConsoleLine($"Debug: {debugInfo}", new Color(100, 100, 100)); // Gray debug text
                 _currentInput.Clear();
                 _cursorPosition = 0;
                 return;
@@ -1295,6 +1379,9 @@ namespace MarySGameEngine.Modules.Console_essential
                     
                     _powershellInput.WriteLine(command);
                     _powershellInput.Flush();
+                    
+                    // Update tracked directory for directory change commands
+                    UpdateTrackedDirectory(command);
                 }
                 catch (Exception ex)
                 {
