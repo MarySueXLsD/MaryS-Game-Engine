@@ -444,6 +444,30 @@
 /processorParam:TextureFormat=Color
 /build:Modules/Console_essential/logo.png
 
+#begin Modules/Chat/logo.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Modules/Chat/logo.png
+
+#begin Modules/Chat/Mary Sue.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Modules/Chat/Mary Sue.png
+
 ############ SpriteFont Files ############
 # Generated automatically from TTF fonts #
 ##########################################

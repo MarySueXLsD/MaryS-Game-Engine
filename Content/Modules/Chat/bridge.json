@@ -1,0 +1,13 @@
+{
+  "name": "Chat",
+  "version": "1.0.0",
+  "author": "MaryS Game Engine",
+  "description": "Chat with AI mascot",
+  "shortcut": "Ctrl 5",
+  "dependencies": [],
+  "category": "Development",
+  "is_essential": true,
+  "min_engine_version": "1.0.0",
+  "is_visible": true,
+  "last_updated": "2025-01-09"
+}
