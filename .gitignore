@@ -387,4 +387,7 @@ logs/
 .env.test.local
 .env.production.local 
 
+# API Keys and sensitive configuration
+**/api_key.ini
+
 .ps1

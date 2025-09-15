@@ -784,8 +784,18 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     {
                         try
                         {
-                            string moduleName = icon.Name.Replace(" ", "") + "_essential";
-                            string logoPath = $"Modules/{moduleName}/logo";
+                            string moduleName = icon.Name.Replace(" ", "");
+                            string logoPath;
+                            
+                            // Special case for Chat module which doesn't follow _essential naming
+                            if (moduleName == "Chat")
+                            {
+                                logoPath = $"Modules/{moduleName}/logo";
+                            }
+                            else
+                            {
+                                logoPath = $"Modules/{moduleName}_essential/logo";
+                            }
                             
                             try
                             {
@@ -1324,8 +1334,19 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     // Try to load the logo if it's not already loaded
                     try
                     {
-                        string moduleNameForPath = moduleName.Replace(" ", "") + "_essential";
-                        string logoPath = $"Modules/{moduleNameForPath}/logo";
+                        string moduleNameForPath = moduleName.Replace(" ", "");
+                        string logoPath;
+                        
+                        // Special case for Chat module which doesn't follow _essential naming
+                        if (moduleNameForPath == "Chat")
+                        {
+                            logoPath = $"Modules/{moduleNameForPath}/logo";
+                        }
+                        else
+                        {
+                            logoPath = $"Modules/{moduleNameForPath}_essential/logo";
+                        }
+                        
                         logo = content.Load<Texture2D>(logoPath);
                         _moduleLogos[moduleName] = logo;
                         _engine.Log($"TaskBar: Loaded logo for {moduleName} at path: {logoPath}");

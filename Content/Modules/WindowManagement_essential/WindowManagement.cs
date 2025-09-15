@@ -59,8 +59,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private int _defaultHeight = 400;
         private int _buttonSize = 30;
         private int _buttonSpacing = 5;
-        private const int MIN_WINDOW_WIDTH = 200;
-        private const int MIN_WINDOW_HEIGHT = 200;
+        private const int MIN_WINDOW_WIDTH = 170;
+        private const int MIN_WINDOW_HEIGHT = 170;
         private int _customMinWidth = -1;  // -1 means use default
         private int _customMinHeight = -1; // -1 means use default
         private const int TOP_BAR_HEIGHT = 35;
