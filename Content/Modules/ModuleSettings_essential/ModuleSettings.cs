@@ -27,6 +27,7 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         private Texture2D _pixel;
         private MouseState _prevMouseState;
         private MouseState _currentMouseState;
+        private bool _isFocused = false;
 
         private class ModuleTab
         {
@@ -99,6 +100,10 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         {
             try
             {
+                // Update mouse state
+                _prevMouseState = _currentMouseState;
+                _currentMouseState = Mouse.GetState();
+                
                 // Track window visibility changes
                 bool isCurrentlyVisible = _windowManagement.IsVisible();
                 
@@ -106,6 +111,31 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                 if (!isCurrentlyVisible)
                 {
                     CloseDropdown();
+                }
+                
+                // Handle focus - only if window is visible
+                if (isCurrentlyVisible)
+                {
+                    // Check if this window was clicked (gains focus)
+                    if (_currentMouseState.LeftButton == ButtonState.Pressed && 
+                        _prevMouseState.LeftButton == ButtonState.Released)
+                    {
+                        var mousePos = _currentMouseState.Position;
+                        var windowRect = _windowManagement.GetWindowBounds();
+                        
+                        // Check if click is within this window
+                        if (windowRect.Contains(mousePos))
+                        {
+                            // Clear focus from other modules
+                            ClearFocusFromOtherModules();
+                            _isFocused = true;
+                        }
+                        else
+                        {
+                            // Click outside window - lose focus
+                            _isFocused = false;
+                        }
+                    }
                 }
                 
                 // Update TaskBar about window state changes
@@ -168,7 +198,7 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                     // Disable scrolling when dropdown is open
                     _uiElements.SetScrollingEnabled(!_isDropdownOpen);
                     
-                    _uiElements.Update();
+                    _uiElements.Update(_isFocused);
                 }
             }
             catch (Exception ex)
@@ -1082,6 +1112,43 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
             // Set the window to invisible
             _windowManagement.SetVisible(false);
             System.Diagnostics.Debug.WriteLine("ModuleSettings: Window set to invisible");
+        }
+
+        public void ClearFocus()
+        {
+            _isFocused = false;
+        }
+
+        private void ClearFocusFromOtherModules()
+        {
+            // Get all active modules and clear focus from non-ModuleSettings modules
+            var engine = GameEngine.Instance;
+            if (engine != null)
+            {
+                var activeModulesField = engine.GetType().GetField("_activeModules", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                
+                if (activeModulesField != null)
+                {
+                    var activeModules = activeModulesField.GetValue(engine) as List<IModule>;
+                    if (activeModules != null)
+                    {
+                        foreach (var module in activeModules)
+                        {
+                            // Clear focus from Console module
+                            if (module is MarySGameEngine.Modules.Console_essential.Console consoleModule)
+                            {
+                                consoleModule.ClearFocus();
+                            }
+                            // Clear focus from Chat module
+                            else if (module is MarySGameEngine.Modules.Chat.Chat chatModule)
+                            {
+                                chatModule.ClearFocus();
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 } 

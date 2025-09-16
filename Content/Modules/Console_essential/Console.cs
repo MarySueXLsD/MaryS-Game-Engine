@@ -147,6 +147,12 @@ namespace MarySGameEngine.Modules.Console_essential
         private int _historyIndex = -1;
         private string _currentHistoryEntry = "";
 
+        // Key repeat handling
+        private Keys _lastRepeatedKey = Keys.None;
+        private float _keyRepeatTimer = 0f;
+        private const float KEY_REPEAT_DELAY = 0.5f; // Initial delay before repeat starts
+        private const float KEY_REPEAT_INTERVAL = 0.05f; // Interval between repeats
+
         public Console(GraphicsDevice graphicsDevice, SpriteFont consoleFont, int windowWidth)
         {
             _graphicsDevice = graphicsDevice;
@@ -202,7 +208,7 @@ namespace MarySGameEngine.Modules.Console_essential
 
             // Initialize console bounds with default values
             _consoleBounds = new Rectangle(0, 0, 400, 300); // Default bounds
-            _inputBounds = new Rectangle(0, 0, 400, 25);
+            _inputBounds = new Rectangle(0, 0, 400, 25); // Will be updated in UpdateBounds
 
             // Initialize PowerShell directory tracking
             _currentPowerShellDirectory = GetDesktopDirectory();
@@ -605,14 +611,16 @@ namespace MarySGameEngine.Modules.Console_essential
             if (!_windowManagement?.IsVisible() == true)
                 return;
 
-            // Check if console window is focused for input
-            if (_windowManagement != null && _windowManagement.IsVisible())
+            // Focus is now managed by click events in OnMouseClick method
+            // Check if we should lose focus if another window is clicked
+            if (_isFocused && _windowManagement != null && _windowManagement.IsVisible())
             {
-                // Check if this window is the topmost window under the mouse
                 var mousePos = _currentMouseState.Position;
-                if (_windowManagement.GetWindowBounds().Contains(mousePos))
+                if (!_windowManagement.GetWindowBounds().Contains(mousePos) || 
+                    !IsTopmostWindowUnderMouse(_windowManagement, mousePos))
                 {
-                    _isFocused = true;
+                    // Don't immediately lose focus - only lose it when another window is clicked
+                    // This will be handled by the click events in other windows
                 }
             }
 
@@ -721,7 +729,7 @@ namespace MarySGameEngine.Modules.Console_essential
 
         private void HandleMouseWheelScrolling()
         {
-            if (!_needsScrollbar || !_scrollingEnabled) return;
+            if (!_needsScrollbar || !_scrollingEnabled || !_isFocused) return;
             
             int scrollDelta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
             if (scrollDelta != 0)
@@ -761,6 +769,9 @@ namespace MarySGameEngine.Modules.Console_essential
             {
                 HandleKeyPress(key);
             }
+
+            // Handle key repeat for keys that should repeat when held down
+            HandleKeyRepeat();
         }
 
         private List<Keys> GetPressedKeys()
@@ -781,6 +792,10 @@ namespace MarySGameEngine.Modules.Console_essential
 
         private void HandleKeyPress(Keys key)
         {
+            // Reset key repeat timer for any key press
+            _keyRepeatTimer = 0f;
+            _lastRepeatedKey = Keys.None;
+
             // Handle Ctrl+C for copying
             if (key == Keys.C && (_currentKeyboardState.IsKeyDown(Keys.LeftControl) || _currentKeyboardState.IsKeyDown(Keys.RightControl)))
             {
@@ -836,6 +851,8 @@ namespace MarySGameEngine.Modules.Console_essential
                         _currentInput.Remove(_cursorPosition - 1, 1);
                         _cursorPosition--;
                     }
+                    // Set up key repeat for backspace
+                    _lastRepeatedKey = Keys.Back;
                     break;
 
                 case Keys.Delete:
@@ -843,6 +860,8 @@ namespace MarySGameEngine.Modules.Console_essential
                     {
                         _currentInput.Remove(_cursorPosition, 1);
                     }
+                    // Set up key repeat for delete
+                    _lastRepeatedKey = Keys.Delete;
                     break;
 
                 case Keys.Left:
@@ -856,6 +875,8 @@ namespace MarySGameEngine.Modules.Console_essential
                     if (_cursorPosition > 0)
                         _cursorPosition--;
                     }
+                    // Set up key repeat for left arrow
+                    _lastRepeatedKey = Keys.Left;
                     break;
 
                 case Keys.Right:
@@ -869,6 +890,8 @@ namespace MarySGameEngine.Modules.Console_essential
                     if (_cursorPosition < _currentInput.Length)
                         _cursorPosition++;
                     }
+                    // Set up key repeat for right arrow
+                    _lastRepeatedKey = Keys.Right;
                     break;
 
                 case Keys.Home:
@@ -921,8 +944,97 @@ namespace MarySGameEngine.Modules.Console_essential
                             _currentInput.Insert(_cursorPosition, character);
                             _cursorPosition++;
                         }
+                        // Set up key repeat for printable characters
+                        _lastRepeatedKey = key;
                     }
                     break;
+            }
+        }
+
+        private void HandleKeyRepeat()
+        {
+            if (_lastRepeatedKey == Keys.None)
+                return;
+
+            // Check if the key is still being held down
+            if (!_currentKeyboardState.IsKeyDown(_lastRepeatedKey))
+            {
+                _lastRepeatedKey = Keys.None;
+                _keyRepeatTimer = 0f;
+                return;
+            }
+
+            // Update timer
+            _keyRepeatTimer += (float)GameEngine.Instance.TargetElapsedTime.TotalSeconds;
+
+            // Check if we should repeat the key
+            if (_keyRepeatTimer >= KEY_REPEAT_DELAY)
+            {
+                // Check if enough time has passed for the next repeat
+                float timeSinceLastRepeat = _keyRepeatTimer - KEY_REPEAT_DELAY;
+                if (timeSinceLastRepeat >= KEY_REPEAT_INTERVAL)
+                {
+                    // Reset timer for next repeat
+                    _keyRepeatTimer = KEY_REPEAT_DELAY;
+                    
+                    // Repeat the key action
+                    switch (_lastRepeatedKey)
+                    {
+                        case Keys.Back:
+                            if (_currentInput.Length > 0 && _cursorPosition > 0)
+                            {
+                                _currentInput.Remove(_cursorPosition - 1, 1);
+                                _cursorPosition--;
+                            }
+                            break;
+
+                        case Keys.Delete:
+                            if (_currentInput.Length > 0 && _cursorPosition < _currentInput.Length)
+                            {
+                                _currentInput.Remove(_cursorPosition, 1);
+                            }
+                            break;
+
+                        case Keys.Left:
+                            if (_currentKeyboardState.IsKeyDown(Keys.LeftShift) || _currentKeyboardState.IsKeyDown(Keys.RightShift))
+                            {
+                                ExtendSelection(-1);
+                            }
+                            else
+                            {
+                                ClearSelection();
+                                if (_cursorPosition > 0)
+                                    _cursorPosition--;
+                            }
+                            break;
+
+                        case Keys.Right:
+                            if (_currentKeyboardState.IsKeyDown(Keys.LeftShift) || _currentKeyboardState.IsKeyDown(Keys.RightShift))
+                            {
+                                ExtendSelection(1);
+                            }
+                            else
+                            {
+                                ClearSelection();
+                                if (_cursorPosition < _currentInput.Length)
+                                    _cursorPosition++;
+                            }
+                            break;
+
+                        default:
+                            // Handle printable characters
+                            if (IsPrintableKey(_lastRepeatedKey))
+                            {
+                                var character = GetCharacterFromKey(_lastRepeatedKey);
+                                if (character != '\0')
+                                {
+                                    _currentInput.Insert(_cursorPosition, character);
+                                    _cursorPosition++;
+                                }
+                            }
+                            break;
+                    }
+                }
             }
         }
 
@@ -1487,11 +1599,14 @@ namespace MarySGameEngine.Modules.Console_essential
                 
                 _consoleBounds = newConsoleBounds;
 
+                // Calculate input height based on font size with some padding
+                int inputHeight = Math.Max(25, (int)(_consoleFont?.LineSpacing ?? 16) + 8); // Add 8 pixels padding
+                
                 _inputBounds = new Rectangle(
                     _consoleBounds.X,
                     _consoleBounds.Bottom + 15, // Increased padding from 5 to 15
                     _consoleBounds.Width,
-                    25
+                    inputHeight
                 );
 
                 _maxVisibleLines = _consoleBounds.Height / _lineHeight;
@@ -1775,7 +1890,9 @@ namespace MarySGameEngine.Modules.Console_essential
 
             // Draw prompt - show only Desktop/ instead of full path
             var promptText = "PS Desktop> ";
-            var promptPosition = new Vector2(_inputBounds.X + 5, _inputBounds.Y + 5);
+            // Center text vertically in the input field
+            var textY = _inputBounds.Y + (_inputBounds.Height - _consoleFont.LineSpacing) / 2;
+            var promptPosition = new Vector2(_inputBounds.X + 5, textY);
             spriteBatch.DrawString(_consoleFont, promptText, promptPosition, CONSOLE_SUCCESS);
 
             // Draw input text
@@ -1795,10 +1912,10 @@ namespace MarySGameEngine.Modules.Console_essential
                     
                     var selectionX = inputPosition.X + _consoleFont.MeasureString(beforeSelection).X;
                     var selectionWidth = _consoleFont.MeasureString(selectionText).X;
-                    var selectionHeight = _consoleFont.MeasureString("A").Y;
+                    var selectionHeight = _consoleFont.LineSpacing;
                     
                     // Draw selection background
-                    spriteBatch.Draw(_pixel, new Rectangle((int)selectionX, (int)inputPosition.Y, (int)selectionWidth, (int)selectionHeight), Color.Blue);
+                    spriteBatch.Draw(_pixel, new Rectangle((int)selectionX, (int)textY, (int)selectionWidth, (int)selectionHeight), Color.Blue);
                 }
             }
             
@@ -1808,8 +1925,8 @@ namespace MarySGameEngine.Modules.Console_essential
             if (_showCursor && _isFocused)
             {
                 var cursorX = inputPosition.X + _consoleFont.MeasureString(inputText.Substring(0, _cursorPosition)).X;
-                var cursorY = inputPosition.Y;
-                var cursorHeight = _consoleFont.MeasureString("A").Y;
+                var cursorY = textY; // Use the same Y position as the text
+                var cursorHeight = _consoleFont.LineSpacing;
                 spriteBatch.Draw(_pixel, new Rectangle((int)cursorX, (int)cursorY, 1, (int)cursorHeight), CONSOLE_CURSOR);
             }
         }
@@ -1857,9 +1974,51 @@ namespace MarySGameEngine.Modules.Console_essential
             _windowManagement?.ResetCursor();
         }
 
+        public void ClearFocus()
+        {
+            _isFocused = false;
+        }
+
+        private void ClearFocusFromOtherModules()
+        {
+            // Get all active modules and clear focus from non-Console modules
+            var engine = GameEngine.Instance;
+            if (engine != null)
+            {
+                var activeModulesField = engine.GetType().GetField("_activeModules", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                
+                if (activeModulesField != null)
+                {
+                    var activeModules = activeModulesField.GetValue(engine) as List<IModule>;
+                    if (activeModules != null)
+                    {
+                        foreach (var module in activeModules)
+                        {
+                            // Clear focus from Chat module
+                            if (module is MarySGameEngine.Modules.Chat.Chat chatModule)
+                            {
+                                chatModule.ClearFocus();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Handle mouse clicks for focus
         public void OnMouseClick(Point mousePosition)
         {
+            // Only handle clicks if this window is the topmost window
+            if (_windowManagement == null || !IsTopmostWindowUnderMouse(_windowManagement, mousePosition))
+            {
+                _isFocused = false;
+                return;
+            }
+
+            // Clear focus from other modules when this window is clicked
+            ClearFocusFromOtherModules();
+
             bool isDoubleClick = false;
             
             // Check for double-click
@@ -1936,7 +2095,7 @@ namespace MarySGameEngine.Modules.Console_essential
         // Handle mouse wheel for scrolling
         public void OnMouseWheel(int delta)
         {
-            if (_consoleBounds.Contains(_currentMouseState.Position))
+            if (_isFocused && _consoleBounds.Contains(_currentMouseState.Position))
             {
                 _autoScroll = false;
                 int scrollStep = -delta / 120 * 20; // Standard wheel delta is 120, scroll by 20 pixels
@@ -2546,6 +2705,50 @@ namespace MarySGameEngine.Modules.Console_essential
                 _showCopyAnimation = false;
                 AddConsoleLine($"Animation error: {ex.Message}", CONSOLE_WARNING);
             }
+        }
+
+        // Helper method to check if a window is the topmost window under the mouse
+        private bool IsTopmostWindowUnderMouse(WindowManagement window, Point mousePosition)
+        {
+            if (!window.IsVisible())
+                return false;
+
+            // Get the window bounds
+            Rectangle windowBounds = window.GetWindowBounds();
+            
+            // Check if mouse is over this window
+            if (!windowBounds.Contains(mousePosition))
+                return false;
+
+            // Get all active windows from WindowManagement using reflection
+            var activeWindowsField = typeof(WindowManagement).GetField("_activeWindows", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            
+            if (activeWindowsField == null)
+                return true; // If we can't access the list, assume this window is topmost
+
+            var activeWindows = activeWindowsField.GetValue(null) as List<WindowManagement>;
+            if (activeWindows == null)
+                return true;
+
+            // Check if this window has the highest z-order among all windows under the mouse
+            int highestZOrder = -1;
+            WindowManagement topmostWindow = null;
+
+            foreach (var activeWindow in activeWindows)
+            {
+                if (activeWindow.IsVisible() && activeWindow.GetWindowBounds().Contains(mousePosition))
+                {
+                    int zOrder = activeWindow.GetZOrder();
+                    if (zOrder > highestZOrder)
+                    {
+                        highestZOrder = zOrder;
+                        topmostWindow = activeWindow;
+                    }
+                }
+            }
+
+            return topmostWindow == window;
         }
     }
 }

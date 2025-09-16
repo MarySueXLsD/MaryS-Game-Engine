@@ -129,6 +129,11 @@ namespace MarySGameEngine.Modules.UIElements_essential
 
         public void Update()
         {
+            Update(true); // Default to focused
+        }
+
+        public void Update(bool isFocused)
+        {
             if (_pixel == null) return; // Don't update if pixel texture failed to create
             
             System.Diagnostics.Debug.WriteLine($"UIElements: Updating {_components.Count} components");
@@ -136,8 +141,11 @@ namespace MarySGameEngine.Modules.UIElements_essential
             _previousMouseState = _currentMouseState;
             _currentMouseState = Mouse.GetState();
 
-            // Update scrolling
-            UpdateScrolling();
+            // Update scrolling - only if focused
+            if (isFocused)
+            {
+                UpdateScrolling();
+            }
 
             // Create a copy of the component list to prevent modification during iteration
             var componentsCopy = _components.ToList();
@@ -1359,7 +1367,7 @@ namespace MarySGameEngine.Modules.UIElements_essential
         private string _text;
         private SpriteFont _font;
         private int _maxWidth;
-        private bool _isFocused;
+        private new bool _isFocused;
         private float _cursorBlinkTimer;
         private bool _showCursor;
         private Action<string> _onTextChanged;

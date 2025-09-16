@@ -456,7 +456,7 @@
 /processorParam:TextureFormat=Color
 /build:Modules/Chat/logo.png
 
-#begin Modules/Chat/Mary Sue.png
+#begin Modules/Chat/Characters/Mary Sue.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyColor=255,0,255,255
@@ -466,7 +466,31 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:Modules/Chat/Mary Sue.png
+/build:Modules/Chat/Characters/Mary Sue.png
+
+#begin Modules/Chat/Characters/Colonel Rowell.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Modules/Chat/Characters/Colonel Rowell.png
+
+#begin Modules/Chat/Characters/Sayuri Murasaki.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Modules/Chat/Characters/Sayuri Murasaki.png
 
 ############ SpriteFont Files ############
 # Generated automatically from TTF fonts #
