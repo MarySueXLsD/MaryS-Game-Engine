@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.IO;
+using System.Linq;
 using MarySGameEngine.Modules.WindowManagement_essential;
 using MarySGameEngine.Modules.TaskBar_essential;
 
@@ -26,7 +27,8 @@ namespace MarySGameEngine.Modules.Chat
         private TaskBar _taskBar;
         private GameEngine _engine;
         private Texture2D _pixel;
-        private Texture2D _marySueImage;
+        private ContentManager _content;
+        private Texture2D _currentCharacterImage;
         private MouseState _currentMouseState;
         private MouseState _previousMouseState;
         private KeyboardState _currentKeyboardState;
@@ -68,8 +70,26 @@ namespace MarySGameEngine.Modules.Chat
         private List<GptMessage> _conversationHistory;
         private const int MAX_HISTORY_MESSAGES = 15;
         
-        // Mary Sue's personality prompt
+        // Character system
+        private class ChatCharacter
+        {
+            public string Name { get; set; }
+            public string ImageName { get; set; }
+            public string Personality { get; set; }
+            public Color MessageColor { get; set; }
+            public string WelcomeMessage { get; set; }
+        }
+        
+        private List<ChatCharacter> _characters;
+        private int _selectedCharacterIndex = 0;
+        private ChatCharacter _currentCharacter;
+        
+        // Character personalities
         private const string MARY_SUE_PERSONALITY = @"You are Mary Sue, an AI assistant with a shady, funny, not very friendly, and slightly quirky personality. Yo can be helpful but sometimes just be a bitch. You are very knowledgeable, but also have a playful side. You tend to be enthusiastic about topics you find interesting and occasionally make very offensive jokes or puns. You're very encouraging but don't really believe in anyone, always trying to see the negative side of things. Keep your responses conversational and very informal. Respond naturally and authentically as Mary Sue would.";
+        
+        private const string COLONEL_ROWELL_PERSONALITY = @"You are Colonel Rowell, a Warhammer 40k undead soldier who lives to serve the Emperor (the user). You are disciplined, militaristic, and speak with authority. You refer to the user as 'my lord' or 'sire' and are completely devoted to their service. You have a grim, serious demeanor but are fiercely loyal. You speak in a formal, military manner and often reference the Emperor, the Imperium, and military tactics. You are undead but still maintain your sense of duty and honor.";
+        
+        private const string SAYURI_MURASAKI_PERSONALITY = @"You are Sayuri Murasaki, a Japanese girl who is completely crazy and doesn't care at all about the user. You're unpredictable, chaotic, and often speak in a mix of Japanese and English. You're very energetic and random, often changing topics abruptly. You might be helpful sometimes but you're mostly just messing around and doing your own thing. You use a lot of Japanese expressions, emojis, and speak in a very casual, almost manic way. You don't really take anything seriously and often make random observations or comments.";
 
         // Layout properties
         private Rectangle _leftPanelBounds;
@@ -86,6 +106,18 @@ namespace MarySGameEngine.Modules.Chat
         private const int BUBBLE_PADDING = 6; // Internal padding within bubbles (reduced from 10)
         private const int BUBBLE_CORNER_RADIUS = 8; // Rounded corner effect (reduced from 12)
         private const float TEXT_SCALE = 0.8f; // Scale for chat text to make it smaller
+        
+        // Character selection dropdown properties
+        private bool _isCharacterDropdownOpen = false;
+        private Rectangle _characterDropdownBounds;
+        private int _hoveredCharacterItem = -1;
+        private int _characterScrollOffset = 0;
+        private const int CHARACTER_ITEM_HEIGHT = 30;
+        private const int CHARACTER_MAX_VISIBLE_ITEMS = 3;
+        private Rectangle _characterButtonBounds;
+        private Rectangle _characterScrollBarBounds;
+        private bool _isDraggingCharacterScroll = false;
+        private Vector2 _characterScrollDragStart;
 
         // Colors
         private readonly Color CHAT_BACKGROUND = new Color(60, 60, 60); // Dark gray background
@@ -93,10 +125,18 @@ namespace MarySGameEngine.Modules.Chat
         private readonly Color SEND_BUTTON_COLOR = new Color(147, 112, 219);
         private readonly Color SEND_BUTTON_HOVER = new Color(180, 145, 250);
         private readonly Color MESSAGE_USER_COLOR = new Color(70, 130, 220); // Blue bubble for user
-        private readonly Color MESSAGE_MARY_COLOR = new Color(120, 80, 200); // Purple bubble for Mary
+        private readonly Color MESSAGE_MARY_COLOR = new Color(120, 80, 200); // Purple bubble for Mary Sue
+        private readonly Color MESSAGE_COLONEL_COLOR = new Color(139, 69, 19); // Brown bubble for Colonel Rowell
+        private readonly Color MESSAGE_SAYURI_COLOR = new Color(120, 80, 200); // Purple bubble for Sayuri (same as Mary Sue)
         private readonly Color BUBBLE_BORDER_COLOR = new Color(40, 40, 40); // Darker border for bubbles
         private readonly Color TEXT_COLOR = new Color(220, 220, 220); // Light gray text for dark background
         private readonly Color BORDER_COLOR = new Color(100, 100, 100); // Darker border for dark theme
+
+        // Key repeat handling
+        private Keys _lastRepeatedKey = Keys.None;
+        private float _keyRepeatTimer = 0f;
+        private const float KEY_REPEAT_DELAY = 0.5f; // Initial delay before repeat starts
+        private const float KEY_REPEAT_INTERVAL = 0.05f; // Interval between repeats
 
         private class ChatMessage
         {
@@ -158,10 +198,13 @@ namespace MarySGameEngine.Modules.Chat
             // Load API key from config file
             LoadApiKey();
             
-            // Initialize conversation history with Mary Sue's personality
+            // Initialize characters
+            InitializeCharacters();
+            
+            // Initialize conversation history with current character's personality
             _conversationHistory = new List<GptMessage>
             {
-                new GptMessage { role = "system", content = MARY_SUE_PERSONALITY }
+                new GptMessage { role = "system", content = _currentCharacter.Personality }
             };
             
             // Set up HTTP client for GPT API (only once)
@@ -212,10 +255,10 @@ namespace MarySGameEngine.Modules.Chat
             _windowManagement.SetWindowTitle("Chat");
             _windowManagement.SetCustomMinimumSize(1200, 170); // Fixed size
 
-            // Add welcome message with personality (safely)
+            // Add welcome message with current character's personality (safely)
             try
             {
-                AddMessage("Mary", "Yo! Whats'up! Wanna develop something cool?");
+                AddMessage(_currentCharacter.Name, _currentCharacter.WelcomeMessage);
             }
             catch (Exception ex)
             {
@@ -247,6 +290,7 @@ namespace MarySGameEngine.Modules.Chat
                 UpdateCursor();
                 HandleInput();
                 HandleScrolling();
+                HandleCharacterDropdown();
                 
                 // Update thinking animation
                 if (_isThinking)
@@ -265,6 +309,39 @@ namespace MarySGameEngine.Modules.Chat
             }
         }
 
+        private void InitializeCharacters()
+        {
+            _characters = new List<ChatCharacter>
+            {
+                new ChatCharacter
+                {
+                    Name = "Mary Sue",
+                    ImageName = "Mary Sue",
+                    Personality = MARY_SUE_PERSONALITY,
+                    MessageColor = MESSAGE_MARY_COLOR,
+                    WelcomeMessage = "Yo! What's up! Wanna develop something cool?"
+                },
+                new ChatCharacter
+                {
+                    Name = "Colonel Rowell",
+                    ImageName = "Colonel Rowell",
+                    Personality = COLONEL_ROWELL_PERSONALITY,
+                    MessageColor = MESSAGE_COLONEL_COLOR,
+                    WelcomeMessage = "My lord, I stand ready to serve the Emperor's will. How may I assist you in your endeavors?"
+                },
+                new ChatCharacter
+                {
+                    Name = "Sayuri Murasaki",
+                    ImageName = "Sayuri Murasaki",
+                    Personality = SAYURI_MURASAKI_PERSONALITY,
+                    MessageColor = MESSAGE_SAYURI_COLOR,
+                    WelcomeMessage = "Konnichiwa! こんにちは！ What's up? I'm Sayuri! 私はさゆりです！ Let's do something fun! 楽しいことをしましょう！"
+                }
+            };
+            
+            _currentCharacter = _characters[_selectedCharacterIndex];
+        }
+
         private void UpdateBounds()
         {
             if (_windowManagement != null)
@@ -278,7 +355,7 @@ namespace MarySGameEngine.Modules.Chat
                 // Let's work backwards: if image should be 75% of original size
                 // Original image was: (200 - 20) * 2 = 360
                 // New image should be: 360 * 0.75 = 270
-                int imageSize = 270;
+                int imageSize = 450;
                 _leftPanelWidth = imageSize; // Panel width equals image size (no padding)
                 
                 // Calculate panel bounds - left panel has no padding, image fits exactly
@@ -316,6 +393,15 @@ namespace MarySGameEngine.Modules.Chat
                     _rightPanelBounds.Y,
                     _rightPanelBounds.Width,
                     _rightPanelBounds.Height - INPUT_HEIGHT - PANEL_PADDING
+                );
+                
+                // Calculate character button bounds (below the image in left panel)
+                int characterButtonHeight = 30;
+                _characterButtonBounds = new Rectangle(
+                    _leftPanelBounds.X + PANEL_PADDING,
+                    _leftPanelBounds.Y + _leftPanelWidth + PANEL_PADDING,
+                    _leftPanelBounds.Width - PANEL_PADDING * 2,
+                    characterButtonHeight
                 );
 
                 // Calculate content height and scrollbar needs
@@ -379,7 +465,7 @@ namespace MarySGameEngine.Modules.Chat
                 HandleMouseClick(_currentMouseState.Position);
             }
 
-            // Handle keyboard input if focused
+            // Handle keyboard input if focused (focus is set by click events)
             if (_isFocused)
             {
                 var pressedKeys = GetPressedKeys();
@@ -387,14 +473,17 @@ namespace MarySGameEngine.Modules.Chat
                 {
                     HandleKeyPress(key);
                 }
+
+                // Handle key repeat for keys that should repeat when held down
+                HandleKeyRepeat();
             }
         }
 
         private void HandleScrolling()
         {
-            // Handle mouse wheel scrolling
+            // Handle mouse wheel scrolling - only if this window has focus
             var mouseState = Mouse.GetState();
-            if (_chatAreaBounds.Contains(mouseState.Position))
+            if (_isFocused && _chatAreaBounds.Contains(mouseState.Position))
             {
                 int wheelDelta = mouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
                 if (wheelDelta != 0)
@@ -431,8 +520,102 @@ namespace MarySGameEngine.Modules.Chat
             _scrollY = Math.Max(0, Math.Min(_scrollY + scrollAmount, _contentHeight - _chatAreaBounds.Height));
         }
 
+        private void HandleCharacterDropdown()
+        {
+            if (!_isCharacterDropdownOpen) return;
+
+            var mouse = Mouse.GetState();
+            var mousePos = mouse.Position;
+            bool leftPressed = mouse.LeftButton == ButtonState.Pressed;
+            bool leftJustPressed = leftPressed && _previousMouseState.LeftButton == ButtonState.Released;
+
+            if (leftJustPressed)
+            {
+                // Handle character dropdown clicks
+                HandleCharacterDropdownClick(mousePos);
+            }
+            else if (leftPressed && _isDraggingCharacterScroll)
+            {
+                // Handle scrollbar dragging
+                float deltaY = mousePos.Y - _characterScrollDragStart.Y;
+                float maxScroll = _characters.Count - CHARACTER_MAX_VISIBLE_ITEMS;
+                float scrollBarHeight = _characterScrollBarBounds.Height;
+                
+                // Calculate new scroll offset based on mouse position relative to scrollbar
+                float mouseRatio = (mousePos.Y - _characterScrollBarBounds.Y) / scrollBarHeight;
+                mouseRatio = Math.Max(0, Math.Min(1, mouseRatio));
+                
+                _characterScrollOffset = (int)(mouseRatio * maxScroll);
+                _characterScrollDragStart = new Vector2(mousePos.X, mousePos.Y);
+            }
+            else if (!leftPressed && _isDraggingCharacterScroll)
+            {
+                _isDraggingCharacterScroll = false;
+            }
+            else
+            {
+                // Update hover state for dropdown items
+                _hoveredCharacterItem = -1;
+                int visibleItems = Math.Min(_characters.Count, CHARACTER_MAX_VISIBLE_ITEMS);
+                for (int i = 0; i < visibleItems; i++)
+                {
+                    int actualIndex = i + _characterScrollOffset;
+                    if (actualIndex >= _characters.Count) break;
+                    
+                    Rectangle itemRect = new Rectangle(
+                        _characterDropdownBounds.X,
+                        _characterDropdownBounds.Y + (i * CHARACTER_ITEM_HEIGHT),
+                        _characterDropdownBounds.Width - (_characterScrollBarBounds.IsEmpty ? 0 : 16),
+                        CHARACTER_ITEM_HEIGHT
+                    );
+                    
+                    if (itemRect.Contains(mousePos))
+                    {
+                        _hoveredCharacterItem = actualIndex;
+                        break;
+                    }
+                }
+            }
+
+            // Handle mouse wheel scrolling when dropdown is open
+            if (_characters.Count > CHARACTER_MAX_VISIBLE_ITEMS)
+            {
+                int scrollDelta = mouse.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
+                if (scrollDelta != 0)
+                {
+                    int scrollStep = scrollDelta > 0 ? -1 : 1; // Scroll up/down
+                    _characterScrollOffset = Math.Max(0, Math.Min(_characters.Count - CHARACTER_MAX_VISIBLE_ITEMS, _characterScrollOffset + scrollStep));
+                }
+            }
+        }
+
         private void HandleMouseClick(Point mousePosition)
         {
+            // Only handle clicks if this window is the topmost window
+            if (_windowManagement == null || !IsTopmostWindowUnderMouse(_windowManagement, mousePosition))
+            {
+                _isFocused = false;
+                return;
+            }
+
+            // Clear focus from other modules when this window is clicked
+            ClearFocusFromOtherModules();
+
+            // Handle character dropdown clicks
+            if (_isCharacterDropdownOpen)
+            {
+                HandleCharacterDropdownClick(mousePosition);
+                return;
+            }
+
+            // Check if clicked on character button
+            if (_characterButtonBounds.Contains(mousePosition))
+            {
+                _isCharacterDropdownOpen = true;
+                UpdateCharacterDropdownBounds();
+                return;
+            }
+
             // Check if clicked on scrollbar
             if (_needsScrollbar && _scrollbarBounds.Contains(mousePosition))
             {
@@ -473,13 +656,115 @@ namespace MarySGameEngine.Modules.Chat
             // Check if clicked on send button
             else if (_sendButtonBounds.Contains(mousePosition))
             {
+                if (_isThinking)
+                {
+                    _engine?.Log("Chat: Send button clicked but blocked - Mary is currently thinking");
+                    // Could add visual feedback here (like a shake animation or color change)
+                }
+                else
+            {
                 SendMessage();
+                }
             }
             // Check if clicked outside input area
             else if (_windowManagement.GetWindowBounds().Contains(mousePosition))
             {
                 _isFocused = false;
             }
+        }
+
+        private void HandleCharacterDropdownClick(Point mousePosition)
+        {
+            // Check if clicked on scrollbar
+            if (!_characterScrollBarBounds.IsEmpty && _characterScrollBarBounds.Contains(mousePosition))
+            {
+                _isDraggingCharacterScroll = true;
+                _characterScrollDragStart = new Vector2(mousePosition.X, mousePosition.Y);
+                return;
+            }
+            
+            // Check if clicked on character item
+            int visibleItems = Math.Min(_characters.Count, CHARACTER_MAX_VISIBLE_ITEMS);
+            for (int i = 0; i < visibleItems; i++)
+            {
+                int actualIndex = i + _characterScrollOffset;
+                if (actualIndex >= _characters.Count) break;
+                
+                Rectangle itemRect = new Rectangle(
+                    _characterDropdownBounds.X,
+                    _characterDropdownBounds.Y + (i * CHARACTER_ITEM_HEIGHT),
+                    _characterDropdownBounds.Width - (_characterScrollBarBounds.IsEmpty ? 0 : 16),
+                    CHARACTER_ITEM_HEIGHT
+                );
+                
+                if (itemRect.Contains(mousePosition))
+                {
+                    SelectCharacter(actualIndex);
+                    _isCharacterDropdownOpen = false;
+                    return;
+                }
+            }
+            
+            // If clicked outside dropdown, close it
+            if (!_characterDropdownBounds.Contains(mousePosition) && !_characterButtonBounds.Contains(mousePosition))
+            {
+                _isCharacterDropdownOpen = false;
+            }
+        }
+
+        private void UpdateCharacterDropdownBounds()
+        {
+            int dropdownWidth = _characterButtonBounds.Width;
+            int visibleItems = Math.Min(_characters.Count, CHARACTER_MAX_VISIBLE_ITEMS);
+            int dropdownHeight = visibleItems * CHARACTER_ITEM_HEIGHT;
+            int dropdownX = _characterButtonBounds.X;
+            int dropdownY = _characterButtonBounds.Y - dropdownHeight;
+            
+            // Check if dropdown would go off screen at the top
+            if (dropdownY < 0)
+            {
+                // Position dropdown below the button if it would go off screen at the top
+                dropdownY = _characterButtonBounds.Bottom;
+            }
+            
+            _characterDropdownBounds = new Rectangle(dropdownX, dropdownY, dropdownWidth, dropdownHeight);
+            
+            // Calculate scrollbar bounds if needed
+            if (_characters.Count > CHARACTER_MAX_VISIBLE_ITEMS)
+            {
+                int scrollBarWidth = 16;
+                _characterScrollBarBounds = new Rectangle(
+                    _characterDropdownBounds.Right - scrollBarWidth,
+                    _characterDropdownBounds.Y,
+                    scrollBarWidth,
+                    _characterDropdownBounds.Height
+                );
+            }
+            else
+            {
+                _characterScrollBarBounds = Rectangle.Empty;
+            }
+        }
+
+        private void SelectCharacter(int characterIndex)
+        {
+            if (characterIndex < 0 || characterIndex >= _characters.Count) return;
+            
+            _selectedCharacterIndex = characterIndex;
+            _currentCharacter = _characters[characterIndex];
+            
+            // Clear conversation history and start fresh
+            _chatMessages.Clear();
+            _conversationHistory.Clear();
+            _conversationHistory.Add(new GptMessage { role = "system", content = _currentCharacter.Personality });
+            
+            // Add new welcome message
+            AddMessage(_currentCharacter.Name, _currentCharacter.WelcomeMessage);
+            
+            // Load new character image
+            LoadCurrentCharacterImage();
+            
+            _engine?.Log($"Chat: Switched to character: {_currentCharacter.Name}");
         }
 
         private List<Keys> GetPressedKeys()
@@ -500,6 +785,10 @@ namespace MarySGameEngine.Modules.Chat
 
         private void HandleKeyPress(Keys key)
         {
+            // Reset key repeat timer for any key press
+            _keyRepeatTimer = 0f;
+            _lastRepeatedKey = Keys.None;
+
             switch (key)
             {
                 case Keys.Enter:
@@ -512,6 +801,8 @@ namespace MarySGameEngine.Modules.Chat
                         _currentInput.Remove(_cursorPosition - 1, 1);
                         _cursorPosition--;
                     }
+                    // Set up key repeat for backspace
+                    _lastRepeatedKey = Keys.Back;
                     break;
 
                 case Keys.Delete:
@@ -519,16 +810,22 @@ namespace MarySGameEngine.Modules.Chat
                     {
                         _currentInput.Remove(_cursorPosition, 1);
                     }
+                    // Set up key repeat for delete
+                    _lastRepeatedKey = Keys.Delete;
                     break;
 
                 case Keys.Left:
                     if (_cursorPosition > 0)
                         _cursorPosition--;
+                    // Set up key repeat for left arrow
+                    _lastRepeatedKey = Keys.Left;
                     break;
 
                 case Keys.Right:
                     if (_cursorPosition < _currentInput.Length)
                         _cursorPosition++;
+                    // Set up key repeat for right arrow
+                    _lastRepeatedKey = Keys.Right;
                     break;
 
                 case Keys.Home:
@@ -549,8 +846,81 @@ namespace MarySGameEngine.Modules.Chat
                             _currentInput.Insert(_cursorPosition, character);
                             _cursorPosition++;
                         }
+                        // Set up key repeat for printable characters
+                        _lastRepeatedKey = key;
                     }
                     break;
+            }
+        }
+
+        private void HandleKeyRepeat()
+        {
+            if (_lastRepeatedKey == Keys.None)
+                return;
+
+            // Check if the key is still being held down
+            if (!_currentKeyboardState.IsKeyDown(_lastRepeatedKey))
+            {
+                _lastRepeatedKey = Keys.None;
+                _keyRepeatTimer = 0f;
+                return;
+            }
+
+            // Update timer
+            _keyRepeatTimer += (float)GameEngine.Instance.TargetElapsedTime.TotalSeconds;
+
+            // Check if we should repeat the key
+            if (_keyRepeatTimer >= KEY_REPEAT_DELAY)
+            {
+                // Check if enough time has passed for the next repeat
+                float timeSinceLastRepeat = _keyRepeatTimer - KEY_REPEAT_DELAY;
+                if (timeSinceLastRepeat >= KEY_REPEAT_INTERVAL)
+                {
+                    // Reset timer for next repeat
+                    _keyRepeatTimer = KEY_REPEAT_DELAY;
+                    
+                    // Repeat the key action
+                    switch (_lastRepeatedKey)
+                    {
+                        case Keys.Back:
+                            if (_currentInput.Length > 0 && _cursorPosition > 0)
+                            {
+                                _currentInput.Remove(_cursorPosition - 1, 1);
+                                _cursorPosition--;
+                            }
+                            break;
+
+                        case Keys.Delete:
+                            if (_currentInput.Length > 0 && _cursorPosition < _currentInput.Length)
+                            {
+                                _currentInput.Remove(_cursorPosition, 1);
+                            }
+                            break;
+
+                        case Keys.Left:
+                            if (_cursorPosition > 0)
+                                _cursorPosition--;
+                            break;
+
+                        case Keys.Right:
+                            if (_cursorPosition < _currentInput.Length)
+                                _cursorPosition++;
+                            break;
+
+                        default:
+                            // Handle printable characters
+                            if (IsPrintableKey(_lastRepeatedKey))
+                            {
+                                var character = GetCharacterFromKey(_lastRepeatedKey);
+                                if (character != '\0')
+                                {
+                                    _currentInput.Insert(_cursorPosition, character);
+                                    _cursorPosition++;
+                                }
+                            }
+                            break;
+                    }
+                }
             }
         }
 
@@ -637,6 +1007,13 @@ namespace MarySGameEngine.Modules.Chat
 
         private void SendMessage()
         {
+            // Don't allow sending messages while Mary is thinking
+            if (_isThinking)
+            {
+                _engine?.Log("Chat: Message sending blocked - Mary is currently thinking");
+                return;
+            }
+
             var message = _currentInput.ToString().Trim();
             if (!string.IsNullOrEmpty(message))
             {
@@ -682,7 +1059,7 @@ namespace MarySGameEngine.Modules.Chat
                     WrappedLines = wrappedLines,
                     Sender = sender,
                     Timestamp = DateTime.Now,
-                    BackgroundColor = sender == "User" ? MESSAGE_USER_COLOR : MESSAGE_MARY_COLOR,
+                    BackgroundColor = sender == "User" ? MESSAGE_USER_COLOR : _currentCharacter.MessageColor,
                     TotalHeight = totalBubbleHeight
                 };
 
@@ -731,10 +1108,13 @@ namespace MarySGameEngine.Modules.Chat
                 Vector2 testSize;
                 try
                 {
-                    testSize = _chatFont.MeasureString(testLine) * TEXT_SCALE;
+                    // Double-check that the text is safe for the font
+                    string safeTestLine = FilterUnsupportedCharacters(testLine);
+                    testSize = _chatFont.MeasureString(safeTestLine) * TEXT_SCALE;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _engine?.Log($"Chat: Error measuring text '{testLine}': {ex.Message}");
                     // If measurement fails, assume it's too wide and break the line
                     testSize = new Vector2(maxWidth + 1, 0);
                 }
@@ -757,10 +1137,12 @@ namespace MarySGameEngine.Modules.Chat
                     bool wordTooLong = false;
                     try
                     {
-                        wordTooLong = _chatFont.MeasureString(word).X * TEXT_SCALE > maxWidth;
+                        string safeWord = FilterUnsupportedCharacters(word);
+                        wordTooLong = _chatFont.MeasureString(safeWord).X * TEXT_SCALE > maxWidth;
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _engine?.Log($"Chat: Error measuring word '{word}': {ex.Message}");
                         // If measurement fails, assume the word is too long
                         wordTooLong = true;
                     }
@@ -776,10 +1158,12 @@ namespace MarySGameEngine.Modules.Chat
                             bool charLineFits = false;
                             try
                             {
-                                charLineFits = _chatFont.MeasureString(testChar).X * TEXT_SCALE <= maxWidth;
+                                string safeTestChar = FilterUnsupportedCharacters(testChar);
+                                charLineFits = _chatFont.MeasureString(safeTestChar).X * TEXT_SCALE <= maxWidth;
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                _engine?.Log($"Chat: Error measuring character '{ch}': {ex.Message}");
                                 // If measurement fails, assume it doesn't fit
                                 charLineFits = false;
                             }
@@ -852,109 +1236,174 @@ namespace MarySGameEngine.Modules.Chat
             if (string.IsNullOrEmpty(text))
                 return text;
 
-            // Replace common problematic characters with safe alternatives
-            return text
-                .Replace("🎹", "[piano]")  // Musical keyboard emoji
-                .Replace("😊", ":)")       // Smiling face
-                .Replace("😄", ":D")       // Grinning face
-                .Replace("😃", ":D")       // Grinning face with big eyes
-                .Replace("😁", ":D")       // Beaming face with smiling eyes
-                .Replace("🤔", "?")        // Thinking face
-                .Replace("👋", "wave")     // Waving hand
-                .Replace("❤️", "<3")       // Red heart
-                .Replace("💕", "<3")       // Two hearts
-                .Replace("💖", "<3")       // Sparkling heart
-                .Replace("✨", "*")        // Sparkles
-                .Replace("🌟", "*")        // Star
-                .Replace("⭐", "*")        // Star
-                .Replace("🎉", "!")        // Party popper
-                .Replace("🎊", "!")        // Confetti ball
-                .Replace("👍", "+1")       // Thumbs up
-                .Replace("👎", "-1")       // Thumbs down
-                .Replace("🔥", "fire")     // Fire
-                .Replace("💯", "100")      // Hundred points
-                .Replace("😂", "LOL")      // Face with tears of joy
-                .Replace("🤣", "LOL")      // Rolling on the floor laughing
-                .Replace("😭", ":'(")      // Loudly crying face
-                .Replace("😢", ":(")       // Crying face
-                .Replace("😅", ":'))")     // Grinning face with sweat
-                .Replace("😆", "XD")       // Grinning squinting face
-                .Replace("🙂", ":)")       // Slightly smiling face
-                .Replace("🙃", "(:)")      // Upside-down face
-                .Replace("😉", ";)")       // Winking face
-                .Replace("😋", ":P")       // Face savoring food
-                .Replace("😜", ";P")       // Winking face with tongue
-                .Replace("🤗", "hug")      // Hugging face
-                .Replace("🤷", "shrug")    // Person shrugging
-                .Replace("🤯", "mind-blown") // Exploding head
-                .Replace("💪", "strong")   // Flexed biceps
-                .Replace("🧠", "brain")    // Brain
-                .Replace("💡", "idea")     // Light bulb
-                .Replace("📝", "note")     // Memo
-                .Replace("📚", "books")    // Books
-                .Replace("🎯", "target")   // Direct hit
-                .Replace("⚡", "lightning") // High voltage
-                .Replace("🌈", "rainbow")  // Rainbow
-                .Replace("🎵", "music")    // Musical note
-                .Replace("🎶", "music")    // Musical notes
-                .Replace("🔊", "loud")     // Speaker high volume
-                .Replace("🔇", "mute")     // Speaker with cancellation stroke
-                // Add more emoji replacements as needed
+            try
+            {
+                // First, try to filter out all non-ASCII characters and replace with safe alternatives
+                var filtered = new StringBuilder();
                 
-                // Replace other problematic Unicode characters
-                .Replace("│", "|")         // Vertical line
-                .Replace("├", "+")         // Tree connector
-                .Replace("└", "+")         // Tree end
-                .Replace("─", "-")         // Horizontal line
-                .Replace("┌", "+")         // Corner
-                .Replace("┐", "+")         // Corner
-                .Replace("┘", "+")         // Corner
-                .Replace("┼", "+")         // Cross
-                .Replace("┤", "+")         // Right connector
-                .Replace("┬", "+")         // Top connector
-                .Replace("┴", "+")         // Bottom connector
-                .Replace("█", "#")         // Block
-                .Replace("░", ".")         // Light shade
-                .Replace("▒", "*")         // Medium shade
-                .Replace("▓", "#")         // Dark shade
-                .Replace("°", "o")         // Degree symbol
-                .Replace("±", "+/-")       // Plus-minus
-                .Replace("×", "x")         // Multiplication
-                .Replace("÷", "/")         // Division
-                .Replace("≤", "<=")        // Less than or equal
-                .Replace("≥", ">=")        // Greater than or equal
-                .Replace("≠", "!=")        // Not equal
-                .Replace("∞", "infinity")  // Infinity
-                .Replace("√", "sqrt")      // Square root
-                .Replace("π", "pi")        // Pi
-                .Replace("\u2018", "'")    // Smart quote left
-                .Replace("\u2019", "'")    // Smart quote right
-                .Replace("\u201C", "\"")   // Smart quote left
-                .Replace("\u201D", "\"")   // Smart quote right
-                .Replace("\u2013", "-")    // En dash
-                .Replace("\u2014", "--")   // Em dash
-                .Replace("\u2026", "...")  // Ellipsis
-                .Replace("©", "(c)")       // Copyright
-                .Replace("®", "(R)")       // Registered trademark
-                .Replace("™", "(TM)")      // Trademark
-                .Replace("€", "EUR")       // Euro sign
-                .Replace("£", "GBP")       // Pound sign
-                .Replace("¥", "YEN")       // Yen sign
-                .Replace("¢", "cent")      // Cent sign
-                .Replace("§", "section")   // Section sign
-                .Replace("¶", "paragraph") // Pilcrow sign
-                .Replace("†", "+")         // Dagger
-                .Replace("‡", "++")        // Double dagger
-                .Replace("•", "*")         // Bullet
-                .Replace("‰", "per-mille") // Per mille sign
-                .Replace("‱", "per-ten-thousand") // Per ten thousand sign
-                .Replace("′", "'")         // Prime
-                .Replace("″", "\"")        // Double prime
-                .Replace("‴", "'''")       // Triple prime
-                .Replace("\u2039", "<")    // Single left-pointing angle quotation mark
-                .Replace("\u203A", ">")    // Single right-pointing angle quotation mark
-                .Replace("\u00AB", "<<")   // Left-pointing double angle quotation mark
-                .Replace("\u00BB", ">>");  // Right-pointing double angle quotation mark
+                foreach (char c in text)
+                {
+                    // Check if character is ASCII printable (32-126) or common whitespace
+                    if (c >= 32 && c <= 126)
+                    {
+                        filtered.Append(c);
+                    }
+                    else if (char.IsWhiteSpace(c))
+                    {
+                        filtered.Append(' '); // Replace any whitespace with space
+                    }
+                    else
+                    {
+                        // Replace non-ASCII characters with safe alternatives
+                        string replacement = GetSafeReplacement(c);
+                        filtered.Append(replacement);
+                    }
+                }
+                
+                return filtered.ToString();
+            }
+            catch (Exception ex)
+            {
+                _engine?.Log($"Chat: Error filtering characters: {ex.Message}");
+                // Fallback: return only ASCII characters
+                return new string(text.Where(c => c >= 32 && c <= 126).ToArray());
+            }
+        }
+        
+        private string GetSafeReplacement(char c)
+        {
+            // Handle common problematic characters
+            string charStr = c.ToString();
+            
+            // Check for emojis and symbols first
+            if (charStr == "🎹") return "[piano]";
+            if (charStr == "😊") return ":)";
+            if (charStr == "😄") return ":D";
+            if (charStr == "😃") return ":D";
+            if (charStr == "😁") return ":D";
+            if (charStr == "🤔") return "?";
+            if (charStr == "👋") return "wave";
+            if (charStr == "❤️") return "<3";
+            if (charStr == "💕") return "<3";
+            if (charStr == "💖") return "<3";
+            if (charStr == "✨") return "*";
+            if (charStr == "🌟") return "*";
+            if (charStr == "⭐") return "*";
+            if (charStr == "🎉") return "!";
+            if (charStr == "🎊") return "!";
+            if (charStr == "👍") return "+1";
+            if (charStr == "👎") return "-1";
+            if (charStr == "🔥") return "fire";
+            if (charStr == "💯") return "100";
+            if (charStr == "😂") return "LOL";
+            if (charStr == "🤣") return "LOL";
+            if (charStr == "😭") return ":'(";
+            if (charStr == "😢") return ":(";
+            if (charStr == "😅") return ":'))";
+            if (charStr == "😆") return "XD";
+            if (charStr == "🙂") return ":)";
+            if (charStr == "🙃") return "(:)";
+            if (charStr == "😉") return ";)";
+            if (charStr == "😋") return ":P";
+            if (charStr == "😜") return ";P";
+            if (charStr == "🤗") return "hug";
+            if (charStr == "🤷") return "shrug";
+            if (charStr == "🤯") return "mind-blown";
+            if (charStr == "💪") return "strong";
+            if (charStr == "🧠") return "brain";
+            if (charStr == "💡") return "idea";
+            if (charStr == "📝") return "note";
+            if (charStr == "📚") return "books";
+            if (charStr == "🎯") return "target";
+            if (charStr == "⚡") return "lightning";
+            if (charStr == "🌈") return "rainbow";
+            if (charStr == "🎵") return "music";
+            if (charStr == "🎶") return "music";
+            if (charStr == "🔊") return "loud";
+            if (charStr == "🔇") return "mute";
+            
+            // Handle single character cases
+            switch (c)
+            {
+                
+                // Unicode box drawing characters
+                case '│': return "|";
+                case '├': return "+";
+                case '└': return "+";
+                case '─': return "-";
+                case '┌': return "+";
+                case '┐': return "+";
+                case '┘': return "+";
+                case '┼': return "+";
+                case '┤': return "+";
+                case '┬': return "+";
+                case '┴': return "+";
+                case '█': return "#";
+                case '░': return ".";
+                case '▒': return "*";
+                case '▓': return "#";
+                
+                // Mathematical symbols
+                case '°': return "o";
+                case '±': return "+/-";
+                case '×': return "x";
+                case '÷': return "/";
+                case '≤': return "<=";
+                case '≥': return ">=";
+                case '≠': return "!=";
+                case '∞': return "infinity";
+                case '√': return "sqrt";
+                case 'π': return "pi";
+                
+                // Smart quotes and punctuation
+                case '\u2018': return "'";
+                case '\u2019': return "'";
+                case '\u201C': return "\"";
+                case '\u201D': return "\"";
+                case '\u2013': return "-";
+                case '\u2014': return "--";
+                case '\u2026': return "...";
+                
+                // Currency and legal symbols
+                case '©': return "(c)";
+                case '®': return "(R)";
+                case '™': return "(TM)";
+                case '€': return "EUR";
+                case '£': return "GBP";
+                case '¥': return "YEN";
+                case '¢': return "cent";
+                case '§': return "section";
+                case '¶': return "paragraph";
+                case '†': return "+";
+                case '‡': return "++";
+                case '•': return "*";
+                case '‰': return "per-mille";
+                case '‱': return "per-ten-thousand";
+                case '′': return "'";
+                case '″': return "\"";
+                case '‴': return "'''";
+                case '\u2039': return "<";
+                case '\u203A': return ">";
+                case '\u00AB': return "<<";
+                case '\u00BB': return ">>";
+                
+                // Control characters and other problematic characters
+                case '\0': return "";
+                case '\r': return "";
+                case '\n': return " ";
+                case '\t': return " ";
+                
+                // Default fallback for any other non-ASCII character
+                default:
+                    if (char.IsControl(c))
+                        return "";
+                    else if (char.IsPunctuation(c))
+                        return "?";
+                    else if (char.IsSymbol(c))
+                        return "*";
+                    else
+                        return "?";
+            }
         }
         
         private async Task<string> GetGptResponse(string userMessage)
@@ -1105,7 +1554,7 @@ namespace MarySGameEngine.Modules.Chat
 
                 _windowManagement.Draw(spriteBatch, "Chat");
 
-                // Draw left panel (Mary Sue image)
+                // Draw left panel (character image and selection)
                 DrawLeftPanel(spriteBatch);
 
                 // Draw right panel (chat area)
@@ -1117,14 +1566,112 @@ namespace MarySGameEngine.Modules.Chat
             }
         }
 
+        public void DrawTopLayer(SpriteBatch spriteBatch)
+        {
+            // Draw character dropdown on top layer if open
+            if (_isCharacterDropdownOpen)
+            {
+                DrawCharacterDropdown(spriteBatch);
+            }
+        }
+
+        private void DrawCharacterDropdown(SpriteBatch spriteBatch)
+        {
+            if (_characters.Count == 0) return;
+            
+            // Draw dropdown background
+            spriteBatch.Draw(_pixel, _characterDropdownBounds, new Color(40, 40, 40, 240));
+            
+            // Draw dropdown border
+            Color borderColor = new Color(147, 112, 219);
+            int borderThickness = 2;
+            
+            // Top border
+            spriteBatch.Draw(_pixel, new Rectangle(_characterDropdownBounds.X, _characterDropdownBounds.Y, _characterDropdownBounds.Width, borderThickness), borderColor);
+            // Bottom border
+            spriteBatch.Draw(_pixel, new Rectangle(_characterDropdownBounds.X, _characterDropdownBounds.Bottom - borderThickness, _characterDropdownBounds.Width, borderThickness), borderColor);
+            // Left border
+            spriteBatch.Draw(_pixel, new Rectangle(_characterDropdownBounds.X, _characterDropdownBounds.Y, borderThickness, _characterDropdownBounds.Height), borderColor);
+            // Right border
+            spriteBatch.Draw(_pixel, new Rectangle(_characterDropdownBounds.Right - borderThickness, _characterDropdownBounds.Y, borderThickness, _characterDropdownBounds.Height), borderColor);
+            
+            // Draw character items (only visible ones)
+            int visibleItems = Math.Min(_characters.Count, CHARACTER_MAX_VISIBLE_ITEMS);
+            for (int i = 0; i < visibleItems; i++)
+            {
+                int actualIndex = i + _characterScrollOffset;
+                if (actualIndex >= _characters.Count) break;
+                
+                Rectangle itemRect = new Rectangle(
+                    _characterDropdownBounds.X,
+                    _characterDropdownBounds.Y + (i * CHARACTER_ITEM_HEIGHT),
+                    _characterDropdownBounds.Width - (_characterScrollBarBounds.IsEmpty ? 0 : 16),
+                    CHARACTER_ITEM_HEIGHT
+                );
+                
+                // Draw item background if hovered or selected
+                if (actualIndex == _hoveredCharacterItem)
+                {
+                    spriteBatch.Draw(_pixel, itemRect, new Color(147, 112, 219, 120));
+                }
+                else if (actualIndex == _selectedCharacterIndex)
+                {
+                    spriteBatch.Draw(_pixel, itemRect, new Color(147, 112, 219, 150));
+                }
+                
+                // Draw item text
+                string itemText = _characters[actualIndex].Name;
+                Vector2 textSize = _pixelFont.MeasureString(itemText) * 0.8f;
+                Vector2 textPos = new Vector2(
+                    itemRect.X + 5,
+                    itemRect.Y + (itemRect.Height - textSize.Y) / 2
+                );
+                
+                Color textColor = Color.White;
+                spriteBatch.DrawString(_pixelFont, itemText, textPos, textColor, 0f, Vector2.Zero, 0.8f, SpriteEffects.None, 0f);
+            }
+            
+            // Draw scrollbar if needed
+            if (!_characterScrollBarBounds.IsEmpty)
+            {
+                DrawCharacterScrollBar(spriteBatch);
+            }
+        }
+
+        private void DrawCharacterScrollBar(SpriteBatch spriteBatch)
+        {
+            // Draw scrollbar background
+            spriteBatch.Draw(_pixel, _characterScrollBarBounds, new Color(60, 60, 60, 200));
+            
+            // Calculate scrollbar thumb size and position
+            float scrollRatio = (float)_characterScrollOffset / Math.Max(1, _characters.Count - CHARACTER_MAX_VISIBLE_ITEMS);
+            int thumbHeight = Math.Max(20, (int)(_characterScrollBarBounds.Height * (CHARACTER_MAX_VISIBLE_ITEMS / (float)_characters.Count)));
+            int thumbY = _characterScrollBarBounds.Y + (int)((_characterScrollBarBounds.Height - thumbHeight) * scrollRatio);
+            
+            Rectangle thumbBounds = new Rectangle(
+                _characterScrollBarBounds.X + 2,
+                thumbY,
+                _characterScrollBarBounds.Width - 4,
+                thumbHeight
+            );
+            
+            // Draw scrollbar thumb
+            Color thumbColor = _isDraggingCharacterScroll ? new Color(180, 145, 250) : new Color(147, 112, 219);
+            spriteBatch.Draw(_pixel, thumbBounds, thumbColor);
+            
+            // Draw scrollbar border
+            Color scrollBorderColor = new Color(100, 100, 100);
+            spriteBatch.Draw(_pixel, new Rectangle(_characterScrollBarBounds.X, _characterScrollBarBounds.Y, 1, _characterScrollBarBounds.Height), scrollBorderColor);
+        }
+
         private void DrawLeftPanel(SpriteBatch spriteBatch)
         {
             // Draw left panel background
             spriteBatch.Draw(_pixel, _leftPanelBounds, CHAT_BACKGROUND);
             DrawBorder(spriteBatch, _leftPanelBounds, BORDER_COLOR);
 
-            // Draw Mary Sue image if loaded (25% smaller than previous "twice as big" version)
-            if (_marySueImage != null)
+            // Draw current character image if loaded
+            if (_currentCharacterImage != null)
             {
                 int imageSize = _leftPanelWidth; // Image fits exactly in panel width
                 var imageBounds = new Rectangle(
@@ -1134,25 +1681,58 @@ namespace MarySGameEngine.Modules.Chat
                     imageSize
                 );
 
-                spriteBatch.Draw(_marySueImage, imageBounds, Color.White);
+                spriteBatch.Draw(_currentCharacterImage, imageBounds, Color.White);
             }
 
-            // Draw Mary's name below the image with equal padding between image and window bottom
-            if (_pixelFont != null)
-            {
-                var nameText = "Mary Sue";
-                var nameSize = _pixelFont.MeasureString(nameText);
-                
-                // Calculate available space below image
-                int spaceBelow = _leftPanelBounds.Height - _leftPanelWidth;
-                
-                // Center the name vertically in the remaining space
-                var namePosition = new Vector2(
-                    _leftPanelBounds.X + (_leftPanelBounds.Width - nameSize.X) / 2,
-                    _leftPanelBounds.Y + _leftPanelWidth + (spaceBelow - nameSize.Y) / 2
-                );
+            // Draw character selection button
+            DrawCharacterButton(spriteBatch);
+        }
 
-                spriteBatch.DrawString(_pixelFont, nameText, namePosition, TEXT_COLOR);
+        private void DrawCharacterButton(SpriteBatch spriteBatch)
+        {
+            if (_pixelFont == null) return;
+
+            // Check if button is hovered
+            bool isHovered = _characterButtonBounds.Contains(_currentMouseState.Position);
+            
+            // Choose colors based on state
+            Color buttonColor = isHovered ? new Color(80, 80, 80) : new Color(60, 60, 60);
+            Color borderColor = isHovered ? new Color(120, 120, 120) : new Color(100, 100, 100);
+            Color textColor = Color.White;
+
+            // Draw button background
+            spriteBatch.Draw(_pixel, _characterButtonBounds, buttonColor);
+            DrawBorder(spriteBatch, _characterButtonBounds, borderColor);
+
+            // Draw character name
+            var nameText = _currentCharacter.Name;
+            var nameSize = _pixelFont.MeasureString(nameText);
+            var namePosition = new Vector2(
+                _characterButtonBounds.X + (_characterButtonBounds.Width - nameSize.X) / 2,
+                _characterButtonBounds.Y + (_characterButtonBounds.Height - nameSize.Y) / 2
+            );
+
+            spriteBatch.DrawString(_pixelFont, nameText, namePosition, textColor);
+
+            // Draw dropdown arrow
+            DrawDropdownArrow(spriteBatch, _characterButtonBounds);
+        }
+
+        private void DrawDropdownArrow(SpriteBatch spriteBatch, Rectangle buttonBounds)
+        {
+            // Draw a small downward arrow on the right side of the button
+            int arrowSize = 6;
+            int arrowX = buttonBounds.Right - arrowSize - 5;
+            int arrowY = buttonBounds.Y + (buttonBounds.Height - arrowSize) / 2;
+
+            // Draw triangle pointing down
+            for (int i = 0; i < arrowSize; i++)
+            {
+                int lineWidth = (i * 2) + 1;
+                int lineX = arrowX + (arrowSize - i - 1);
+                int lineY = arrowY + i;
+                
+                spriteBatch.Draw(_pixel, new Rectangle(lineX, lineY, lineWidth, 1), Color.White);
             }
         }
 
@@ -1250,7 +1830,19 @@ namespace MarySGameEngine.Modules.Chat
             for (int i = 0; i < message.WrappedLines.Count; i++)
             {
                 var linePosition = new Vector2(textPosition.X, textPosition.Y + (i * (lineHeight + lineSpacing)));
+                try
+                {
                 spriteBatch.DrawString(_chatFont, message.WrappedLines[i], linePosition, Color.White, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                }
+                catch (Exception ex)
+                {
+                    _engine?.Log($"Chat: Error drawing chat line: {ex.Message}");
+                    // Fallback: draw with pixel font if available
+                    if (_pixelFont != null)
+                    {
+                        spriteBatch.DrawString(_pixelFont, message.WrappedLines[i], linePosition, Color.White, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                    }
+                }
             }
         }
 
@@ -1297,9 +1889,12 @@ namespace MarySGameEngine.Modules.Chat
 
         private void DrawInputArea(SpriteBatch spriteBatch)
         {
-            // Draw input area background
-            spriteBatch.Draw(_pixel, _inputAreaBounds, INPUT_BACKGROUND);
-            DrawBorder(spriteBatch, _inputAreaBounds, BORDER_COLOR);
+            // Draw input area background - change color when thinking
+            Color inputBackground = _isThinking ? new Color(50, 50, 50) : INPUT_BACKGROUND;
+            Color inputBorder = _isThinking ? new Color(80, 80, 80) : BORDER_COLOR;
+            
+            spriteBatch.Draw(_pixel, _inputAreaBounds, inputBackground);
+            DrawBorder(spriteBatch, _inputAreaBounds, inputBorder);
 
             // Draw input text
             if (_chatFont != null)
@@ -1310,10 +1905,27 @@ namespace MarySGameEngine.Modules.Chat
                     _inputAreaBounds.Y + (_inputAreaBounds.Height - _chatFont.LineSpacing) / 2
                 );
 
-                spriteBatch.DrawString(_chatFont, inputText, textPosition, TEXT_COLOR, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                // Change text color when thinking
+                Color textColor = _isThinking ? new Color(120, 120, 120) : TEXT_COLOR;
+
+                try
+                {
+                    spriteBatch.DrawString(_chatFont, inputText, textPosition, textColor, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                }
+                catch (Exception ex)
+                {
+                    _engine?.Log($"Chat: Error drawing input text: {ex.Message}");
+                    // Fallback: draw with pixel font if available
+                    if (_pixelFont != null)
+                    {
+                        spriteBatch.DrawString(_pixelFont, inputText, textPosition, textColor, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                    }
+                }
 
                 // Draw cursor
                 if (_showCursor && _isFocused)
+                {
+                    try
                 {
                     var cursorX = textPosition.X + _chatFont.MeasureString(inputText.Substring(0, _cursorPosition)).X * TEXT_SCALE;
                     var cursorBounds = new Rectangle(
@@ -1322,7 +1934,21 @@ namespace MarySGameEngine.Modules.Chat
                         1,
                         (int)(_chatFont.LineSpacing * TEXT_SCALE)
                     );
-                    spriteBatch.Draw(_pixel, cursorBounds, TEXT_COLOR);
+                        spriteBatch.Draw(_pixel, cursorBounds, textColor);
+                    }
+                    catch (Exception ex)
+                    {
+                        _engine?.Log($"Chat: Error measuring cursor position: {ex.Message}");
+                        // Fallback: position cursor at end of text
+                        var cursorX = textPosition.X + (inputText.Length * 8 * TEXT_SCALE); // Rough estimate
+                        var cursorBounds = new Rectangle(
+                            (int)cursorX,
+                            (int)textPosition.Y,
+                            1,
+                            (int)(_chatFont.LineSpacing * TEXT_SCALE)
+                        );
+                        spriteBatch.Draw(_pixel, cursorBounds, textColor);
+                    }
                 }
             }
 
@@ -1333,8 +1959,31 @@ namespace MarySGameEngine.Modules.Chat
         private void DrawSendButton(SpriteBatch spriteBatch)
         {
             bool isHovered = _sendButtonBounds.Contains(_currentMouseState.Position);
-            Color buttonColor = isHovered ? SEND_BUTTON_HOVER : SEND_BUTTON_COLOR;
-            Color borderColor = isHovered ? Color.White : BORDER_COLOR;
+            bool isDisabled = _isThinking;
+            
+            // Choose colors based on state
+            Color buttonColor;
+            Color borderColor;
+            Color textColor;
+            
+            if (isDisabled)
+            {
+                buttonColor = new Color(80, 80, 80); // Dark gray when disabled
+                borderColor = new Color(60, 60, 60); // Darker border when disabled
+                textColor = new Color(150, 150, 150); // Gray text when disabled
+            }
+            else if (isHovered)
+            {
+                buttonColor = SEND_BUTTON_HOVER;
+                borderColor = Color.White;
+                textColor = Color.White;
+            }
+            else
+            {
+                buttonColor = SEND_BUTTON_COLOR;
+                borderColor = BORDER_COLOR;
+                textColor = Color.White;
+            }
 
             // Draw button background with rounded corners
             DrawRoundedRectangle(spriteBatch, _sendButtonBounds, buttonColor, 4);
@@ -1343,14 +1992,14 @@ namespace MarySGameEngine.Modules.Chat
             // Draw "Send" text with pixel font
             if (_pixelFont != null)
             {
-                var sendText = "SEND";
+                var sendText = isDisabled ? "WAIT" : "SEND";
                 var textSize = _pixelFont.MeasureString(sendText);
                 var textPosition = new Vector2(
                     _sendButtonBounds.X + (_sendButtonBounds.Width - textSize.X) / 2,
                     _sendButtonBounds.Y + (_sendButtonBounds.Height - textSize.Y) / 2
                 );
 
-                spriteBatch.DrawString(_pixelFont, sendText, textPosition, Color.White);
+                spriteBatch.DrawString(_pixelFont, sendText, textPosition, textColor);
             }
         }
 
@@ -1407,7 +2056,7 @@ namespace MarySGameEngine.Modules.Chat
             var bubbleBounds = new Rectangle(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
 
             // Draw thinking bubble background
-            DrawRoundedRectangle(spriteBatch, bubbleBounds, MESSAGE_MARY_COLOR, BUBBLE_CORNER_RADIUS);
+            DrawRoundedRectangle(spriteBatch, bubbleBounds, _currentCharacter.MessageColor, BUBBLE_CORNER_RADIUS);
             DrawRoundedRectangleBorder(spriteBatch, bubbleBounds, BUBBLE_BORDER_COLOR, BUBBLE_CORNER_RADIUS, 1);
 
             // Draw three dots with animation (smaller)
@@ -1447,23 +2096,61 @@ namespace MarySGameEngine.Modules.Chat
 
         public void LoadContent(ContentManager content)
         {
+            _content = content;
             _windowManagement?.LoadContent(content);
             
-            // Load chat font (use a clean font for chat)
-            _chatFont = content.Load<SpriteFont>("Fonts/SpriteFonts/open_sans/regular");
-            
-            // Load pixel font for Mary Sue name and Send button
-            _pixelFont = content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font/regular");
-
-            // Load Mary Sue image
+            // Load chat font (use a more compatible font for chat)
             try
             {
-                _marySueImage = content.Load<Texture2D>("Modules/Chat/Mary Sue");
+                _chatFont = content.Load<SpriteFont>("Fonts/SpriteFonts/inconsolata/regular");
+                _engine?.Log("Chat: Loaded Inconsolata font for chat");
             }
             catch (Exception ex)
             {
-                _engine?.Log($"Chat: Failed to load Mary Sue image: {ex.Message}");
-                // Continue without image
+                _engine?.Log($"Chat: Failed to load Inconsolata font: {ex.Message}");
+                try
+                {
+                    // Fallback to pixel font if Inconsolata fails
+                    _chatFont = content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font/regular");
+                    _engine?.Log("Chat: Using pixel font as fallback for chat");
+                }
+                catch (Exception ex2)
+                {
+                    _engine?.Log($"Chat: Failed to load pixel font fallback: {ex2.Message}");
+                    // Use menu font as last resort
+                    _chatFont = _menuFont;
+                    _engine?.Log("Chat: Using menu font as last resort for chat");
+                }
+            }
+            
+            // Load pixel font for Mary Sue name and Send button
+            try
+            {
+            _pixelFont = content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font/regular");
+            }
+            catch (Exception ex)
+            {
+                _engine?.Log($"Chat: Failed to load pixel font: {ex.Message}");
+                _pixelFont = _menuFont; // Use menu font as fallback
+            }
+
+            // Load current character image
+            LoadCurrentCharacterImage();
+        }
+
+        private void LoadCurrentCharacterImage()
+        {
+            if (_currentCharacter == null) return;
+            
+            try
+            {
+                _currentCharacterImage = _content?.Load<Texture2D>($"Modules/Chat/Characters/{_currentCharacter.ImageName}");
+                _engine?.Log($"Chat: Loaded character image: {_currentCharacter.ImageName}");
+            }
+            catch (Exception ex)
+            {
+                _engine?.Log($"Chat: Failed to load character image {_currentCharacter.ImageName}: {ex.Message}");
+                _currentCharacterImage = null;
             }
         }
 
@@ -1472,6 +2159,83 @@ namespace MarySGameEngine.Modules.Chat
             _pixel?.Dispose();
             _windowManagement?.Dispose();
             // Note: _httpClient is static and shared, so we don't dispose it here
+        }
+
+        public void ClearFocus()
+        {
+            _isFocused = false;
+            _isCharacterDropdownOpen = false;
+        }
+
+        private void ClearFocusFromOtherModules()
+        {
+            // Get all active modules and clear focus from non-Chat modules
+            var engine = GameEngine.Instance;
+            if (engine != null)
+            {
+                var activeModulesField = engine.GetType().GetField("_activeModules", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                
+                if (activeModulesField != null)
+                {
+                    var activeModules = activeModulesField.GetValue(engine) as List<IModule>;
+                    if (activeModules != null)
+                    {
+                        foreach (var module in activeModules)
+                        {
+                            // Clear focus from Console module
+                            if (module is MarySGameEngine.Modules.Console_essential.Console consoleModule)
+                            {
+                                consoleModule.ClearFocus();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Helper method to check if a window is the topmost window under the mouse
+        private bool IsTopmostWindowUnderMouse(WindowManagement window, Point mousePosition)
+        {
+            if (!window.IsVisible())
+                return false;
+
+            // Get the window bounds
+            Rectangle windowBounds = window.GetWindowBounds();
+            
+            // Check if mouse is over this window
+            if (!windowBounds.Contains(mousePosition))
+                return false;
+
+            // Get all active windows from WindowManagement using reflection
+            var activeWindowsField = typeof(WindowManagement).GetField("_activeWindows", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            
+            if (activeWindowsField == null)
+                return true; // If we can't access the list, assume this window is topmost
+
+            var activeWindows = activeWindowsField.GetValue(null) as List<WindowManagement>;
+            if (activeWindows == null)
+                return true;
+
+            // Check if this window has the highest z-order among all windows under the mouse
+            int highestZOrder = -1;
+            WindowManagement topmostWindow = null;
+
+            foreach (var activeWindow in activeWindows)
+            {
+                if (activeWindow.IsVisible() && activeWindow.GetWindowBounds().Contains(mousePosition))
+                {
+                    int zOrder = activeWindow.GetZOrder();
+                    if (zOrder > highestZOrder)
+                    {
+                        highestZOrder = zOrder;
+                        topmostWindow = activeWindow;
+                    }
+                }
+            }
+
+            return topmostWindow == window;
         }
     }
 }
