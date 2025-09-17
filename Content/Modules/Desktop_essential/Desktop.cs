@@ -21,6 +21,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
         private int _windowHeight;
         private Texture2D _pixel;
         private Texture2D _arrowTexture;
+        private Texture2D _wallpaper;
         private MouseState _currentMouseState;
         private MouseState _previousMouseState;
         private bool _isDragging;
@@ -1023,8 +1024,17 @@ namespace MarySGameEngine.Modules.Desktop_essential
 
         public void DrawBackground(SpriteBatch spriteBatch)
         {
-            // Draw background
-            spriteBatch.Draw(_pixel, new Rectangle(0, 0, _windowWidth, _windowHeight), _backgroundColor);
+            // Draw background - wallpaper if available, otherwise solid color
+            if (_wallpaper != null)
+            {
+                // Draw wallpaper stretched to fill the entire window
+                spriteBatch.Draw(_wallpaper, new Rectangle(0, 0, _windowWidth, _windowHeight), Color.White);
+            }
+            else
+            {
+                // Fallback to solid color background
+                spriteBatch.Draw(_pixel, new Rectangle(0, 0, _windowWidth, _windowHeight), _backgroundColor);
+            }
 
             // Draw files
             DrawFiles(spriteBatch);
@@ -1421,6 +1431,18 @@ namespace MarySGameEngine.Modules.Desktop_essential
         {
             _arrowTexture = content.Load<Texture2D>("Modules/Desktop_essential/arrow_down");
             _filenameFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");
+            
+            // Load wallpaper if it exists, otherwise it will remain null
+            try
+            {
+                _wallpaper = content.Load<Texture2D>("Modules/Desktop_essential/wallpaper");
+                _engine.Log("Desktop: Wallpaper loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                _wallpaper = null;
+                _engine.Log($"Desktop: Wallpaper not found or failed to load: {ex.Message}");
+            }
 
             // Load all file icons
             _fileIcons["txt"] = content.Load<Texture2D>("Logos/text_file_icon");
@@ -1476,6 +1498,7 @@ namespace MarySGameEngine.Modules.Desktop_essential
         {
             _pixel?.Dispose();
             _arrowTexture?.Dispose();
+            _wallpaper?.Dispose();
             _fileWatcher?.Dispose();
         }
 
