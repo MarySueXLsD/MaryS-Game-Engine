@@ -1,0 +1,13 @@
+{
+    "name": "Turn Manager",
+    "version": "0.1.0",
+    "author": "MaryS Game Engine Team",
+    "description": "Manages turn order and turn-based logic for games.",
+    "shortcut": "Ctrl Shift U",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": true,
+    "is_movable": true,
+    "is_resizable": true,
+    "lastUpdated": "2024-06-07"
+} 

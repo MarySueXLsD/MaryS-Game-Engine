@@ -1,0 +1,13 @@
+{
+    "name": "Visual Scripting",
+    "version": "0.1.0",
+    "author": "MaryS Game Engine Team",
+    "description": "Node-based visual scripting and logic editor.",
+    "shortcut": "Ctrl Shift V",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": true,
+    "is_movable": true,
+    "is_resizable": true,
+    "lastUpdated": "2024-06-07"
+} 

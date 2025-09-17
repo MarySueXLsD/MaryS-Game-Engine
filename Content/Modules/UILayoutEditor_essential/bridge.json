@@ -1,0 +1,13 @@
+{
+    "name": "UI Layout Editor",
+    "version": "0.1.0",
+    "author": "MaryS Game Engine Team",
+    "description": "WYSIWYG editor for in-game UI screens.",
+    "shortcut": "Ctrl Shift L",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": true,
+    "is_movable": true,
+    "is_resizable": true,
+    "lastUpdated": "2024-06-07"
+} 
