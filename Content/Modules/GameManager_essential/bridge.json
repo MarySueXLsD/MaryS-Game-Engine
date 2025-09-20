@@ -1,0 +1,12 @@
+{
+  "Name": "Game Manager",
+  "Version": "1.0.0",
+  "Author": "MaryS Game Engine",
+  "Description": "Game project management hub with project creation and management capabilities",
+  "Shortcut": "Ctrl+Shift+G",
+  "Dependencies": [],
+  "Category": "Essential",
+  "is_essential": true,
+  "MinEngineVersion": "1.0.0",
+  "LastUpdated": "2024-01-01"
+}

@@ -1490,6 +1490,13 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _customMinHeight = minHeight;
         }
 
+        public void SetDefaultSize(int width, int height)
+        {
+            _defaultWidth = width;
+            _defaultHeight = height;
+            UpdateWindowBounds();
+        }
+
         public void SetPosition(Vector2 newPosition)
         {
             _position = newPosition;

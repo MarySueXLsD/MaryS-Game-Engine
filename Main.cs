@@ -13,6 +13,7 @@ using MarySGameEngine.Modules.WindowManagement_essential;
 using MarySGameEngine.Modules.TopBar_essential;
 using MarySGameEngine.Modules.Desktop_essential;
 using MarySGameEngine.Modules.ModuleSettings_essential;
+using MarySGameEngine.Modules.GameManager_essential;
 
 namespace MarySGameEngine;
 
@@ -199,8 +200,8 @@ public class GameEngine : Game
                     Log($"Module info - Name: {moduleInfo.Name}, IsVisible: {moduleInfo.IsVisible}");
 
                     // Special case for Desktop module - always load it regardless of visibility
-                    // Also always load ModuleSettings and Console as they're essential for the engine
-                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential";
+                    // Also always load ModuleSettings, Console, and GameManager as they're essential for the engine
+                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential" || moduleName == "GameManager_essential";
 
                     if (!shouldLoad)
                     {
