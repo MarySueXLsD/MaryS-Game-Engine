@@ -581,6 +581,12 @@ namespace MarySGameEngine.Modules.TopBar_essential
                         System.Diagnostics.Debug.WriteLine($"TopBar: Opening Console from HandleModuleAction");
                         OpenConsole(moduleName);
                         return;
+                        
+                    case "Game Manager":
+                        // Open the Game Manager window
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Opening Game Manager from HandleModuleAction");
+                        OpenGameManager(moduleName);
+                        return;
                 }
                 
                 // For regular modules, find their WindowManagement and handle accordingly
@@ -869,6 +875,67 @@ namespace MarySGameEngine.Modules.TopBar_essential
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"TopBar: Error opening Console for {moduleName}: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"TopBar: Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        private void OpenGameManager(string moduleName)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Opening Game Manager for module: {moduleName}");
+                
+                // Find the Game Manager module
+                var modules = GameEngine.Instance.GetActiveModules();
+                System.Diagnostics.Debug.WriteLine($"TopBar: Found {modules.Count} active modules");
+                
+                foreach (var module in modules)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TopBar: Checking module type: {module.GetType().FullName}");
+                    if (module is MarySGameEngine.Modules.GameManager_essential.GameManager gameManager)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Found Game Manager module, opening window");
+                        
+                        // Get the window management and open the window
+                        var windowManagementField = gameManager.GetType().GetField("_windowManagement", 
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        
+                        if (windowManagementField != null)
+                        {
+                            var windowManagement = windowManagementField.GetValue(gameManager) as WindowManagement;
+                            if (windowManagement != null)
+                            {
+                                // Set the window to visible
+                                windowManagement.SetVisible(true);
+                                
+                                // Bring to front
+                                windowManagement.BringToFront();
+                                
+                                // Highlight the window
+                                windowManagement.HandleTaskBarClick();
+                                
+                                // Ensure TaskBar has an icon for this module
+                                foreach (var taskBarModule in modules)
+                                {
+                                    if (taskBarModule is MarySGameEngine.Modules.TaskBar_essential.TaskBar taskBar)
+                                    {
+                                        taskBar.EnsureModuleIconExists(moduleName, GameEngine.Instance.Content);
+                                        break;
+                                    }
+                                }
+                                
+                                System.Diagnostics.Debug.WriteLine($"TopBar: Successfully opened Game Manager for {moduleName}");
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"TopBar: Game Manager module not found among {modules.Count} modules");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error opening Game Manager for {moduleName}: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"TopBar: Stack trace: {ex.StackTrace}");
             }
         }
