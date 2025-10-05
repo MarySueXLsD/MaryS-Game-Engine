@@ -1,0 +1,13 @@
+{
+    "name": "MarySue AI Assistant",
+    "version": "0.1.0",
+    "author": "MaryS Game Engine Team",
+    "description": "LLM-powered AI assistant and chat console for the engine.",
+    "shortcut": "Ctrl Shift M",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": true,
+    "is_movable": true,
+    "is_resizable": true,
+    "lastUpdated": "2024-06-07"
+} 
