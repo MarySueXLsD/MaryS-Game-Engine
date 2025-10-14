@@ -20,7 +20,7 @@ The goal of this project is to build a **user-friendly, turn-based focused 2D ga
 This structure ensures a clear separation between the engine’s editor features (modules), the user’s desktop environment, and the actual game projects.
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/fb599633-4a7c-4d73-abbf-d2d64f247435" alt="MaryS Engine Architecture Diagram" width="350">
+  <img src="https://github.com/user-attachments/assets/fb599633-4a7c-4d73-abbf-d2d64f247435" alt="MaryS Engine Architecture Diagram">
 </p>
 
 ## Core Architecture and Module System
