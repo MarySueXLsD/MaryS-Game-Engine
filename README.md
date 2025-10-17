@@ -13,11 +13,15 @@ The goal of this project is to build a **user-friendly, turn-based focused 2D ga
     
     -   **Desktop/** – Contains files that appear on the engine’s “desktop” UI (like a virtual OS desktop). This is the start screen with icons/files that can be opened in the engine.
         
-    -   **Modules/** – Contains installable **editor modules** that extend engine functionality (e.g. Scene Editor, Top Bar, Side Bar, Asset Browser, Code Editor, etc.). The engine’s core loads these plugins at runtime[community.monogame.net](https://community.monogame.net/t/monogame-editor/8658#:~:text=source%2C%20community,MonoGame). Removing a module from this folder will disable its features in the editor.
+    -   **Modules/** – Contains installable **editor modules** that extend engine functionality (e.g. Scene Editor, Top Bar, Side Bar, Asset Browser, Code Editor, etc.). The engine’s core loads these plugins at runtime. Removing a module from this folder will disable its features in the editor.
         
     -   **Games/** – Contains game project folders. Each game project has its own folder with all its code, assets, and data. The engine can run these games within itself for testing, and games can be exported as standalone MonoGame projects.
 
 This structure ensures a clear separation between the engine’s editor features (modules), the user’s desktop environment, and the actual game projects.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/fb599633-4a7c-4d73-abbf-d2d64f247435" alt="MaryS Engine Architecture Diagram">
+</p>
 
 ## Core Architecture and Module System
 
