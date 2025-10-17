@@ -21,3 +21,4 @@ Scale: (right, 75%) [min=0, max=100, step=5, value=75] Brightness
 Scale: (right, 75%) [min=0, max=100, step=5, value=50] Contrast
 
 Button: (centered, 50%) Apply Display Settings
+- [x] 

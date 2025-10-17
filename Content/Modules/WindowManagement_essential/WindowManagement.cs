@@ -1712,6 +1712,11 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             return _isPinned;
         }
 
+        public bool IsMinimized()
+        {
+            return _isMinimized;
+        }
+
         public void LoadContent(ContentManager content)
         {
             _closeIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/close");

@@ -2,22 +2,22 @@
   {
     "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\234324324324.ttf",
     "Cell": {
-      "Row": 0,
-      "Column": 0
+      "Row": 4,
+      "Column": 1
     }
   },
   {
     "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\asdsd.png",
     "Cell": {
-      "Row": 2,
-      "Column": 5
+      "Row": 1,
+      "Column": 8
     }
   },
   {
     "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\bridge.json",
     "Cell": {
       "Row": 1,
-      "Column": 11
+      "Column": 14
     }
   },
   {
@@ -44,8 +44,8 @@
   {
     "Path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Content\\Desktop\\test210498.cs",
     "Cell": {
-      "Row": 1,
-      "Column": 2
+      "Row": 0,
+      "Column": 10
     }
   }
 ]
