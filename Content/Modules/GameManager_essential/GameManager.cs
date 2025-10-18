@@ -81,7 +81,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private Rectangle _leftSidebarBounds;
         private Rectangle _rightContentBounds;
         // Wizard step data
-        private string[] _genreOptions = { "Isometric", "Final Fantasy", "Top Down", "Balatro Like" };
+        private string[] _genreOptions = { "Isometric", "JRPG", "Top Down", "Card Based" };
         private string[] _genreDescriptions = {
             "Classic isometric view with 2.5D perspective, perfect for strategy and RPG games",
             "Traditional JRPG style with turn-based combat and character progression",
@@ -127,8 +127,8 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private Vector2 _contextMenuPosition;
         private Rectangle _contextMenuBounds;
         private List<ContextMenuItem> _contextMenuItems;
-        private const int CONTEXT_MENU_ITEM_HEIGHT = 30;
-        private const int CONTEXT_MENU_PADDING = 5;
+        private const int CONTEXT_MENU_ITEM_HEIGHT = 40;
+        private const int CONTEXT_MENU_PADDING = 10;
         private const int MENU_BORDER_THICKNESS = 2;
         private const int MENU_SHADOW_OFFSET = 2;
         private readonly Color MENU_BACKGROUND_COLOR = new Color(40, 40, 40);
@@ -143,6 +143,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private string _renameText = "";
         private Rectangle _renameInputBounds;
         private const int MAX_PROJECT_NAME_LENGTH = 20; // Constant for name limit
+        private float _cursorBlinkTime = 0f;
+        private const float CURSOR_BLINK_RATE = 0.5f; // Blink every 0.5 seconds
+        private int _cursorPosition = 0; // Current cursor position in the text
 
         // Animation variables
         private float _nextButtonAnimationTime = 0f;
@@ -327,6 +330,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
             System.Diagnostics.Debug.WriteLine($"GameManager: Setting up context menu for project: {project.Name} at position: {position}");
             
             _contextMenuItems.Clear();
+            _contextMenuItems.Add(new ContextMenuItem("Open"));
             _contextMenuItems.Add(new ContextMenuItem("Rename"));
             _contextMenuItems.Add(new ContextMenuItem("Delete"));
             
@@ -389,6 +393,10 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             switch (action)
             {
+                case "Open":
+                    System.Diagnostics.Debug.WriteLine("GameManager: Starting open for project: " + targetProject.Name);
+                    StartRenameProject(targetProject);
+                    break;
                 case "Rename":
                     System.Diagnostics.Debug.WriteLine("GameManager: Starting rename for project: " + targetProject.Name);
                     StartRenameProject(targetProject);
@@ -408,6 +416,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
             System.Diagnostics.Debug.WriteLine($"GameManager: Starting rename for project: {project.Name}");
             _isRenaming = true;
             _renameText = project.Name;
+            _cursorPosition = _renameText.Length; // Set cursor to end of text
             _contextMenuTargetProject = project; // Keep reference to the project being renamed
             
             // Calculate input field bounds based on the project's position in the list
@@ -455,6 +464,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
             // Clear rename state
             _isRenaming = false;
             _renameText = "";
+            _cursorPosition = 0;
             _contextMenuTargetProject = null;
         }
 
@@ -571,6 +581,16 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
                 // Update animation
                 UpdateAnimations();
+                
+                // Update cursor blink for rename input
+                if (_isRenaming)
+                {
+                    _cursorBlinkTime += 0.016f; // Assuming 60fps
+                    if (_cursorBlinkTime >= CURSOR_BLINK_RATE * 2)
+                    {
+                        _cursorBlinkTime = 0f;
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -747,6 +767,42 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
         private void HandleRenameInput()
         {
+            // Handle mouse clicks in rename input field
+            if (_currentMouseState.LeftButton == ButtonState.Pressed && 
+                _previousMouseState.LeftButton == ButtonState.Released)
+            {
+                if (_renameInputBounds.Contains(_currentMouseState.Position))
+                {
+                    // Calculate cursor position based on mouse click
+                    var clickX = _currentMouseState.Position.X - _renameInputBounds.X - 8; // Account for padding
+                    
+                    // Find the closest character position
+                    var bestPosition = 0;
+                    var bestDistance = float.MaxValue;
+                    
+                    for (int i = 0; i <= _renameText.Length; i++)
+                    {
+                        var testText = _renameText.Substring(0, i);
+                        var textWidth = _uiFont.MeasureString(testText).X;
+                        var distance = Math.Abs(clickX - textWidth);
+                        
+                        if (distance < bestDistance)
+                        {
+                            bestDistance = distance;
+                            bestPosition = i;
+                        }
+                    }
+                    
+                    _cursorPosition = bestPosition;
+                    System.Diagnostics.Debug.WriteLine($"GameManager: Clicked in rename input, cursor position: {_cursorPosition}");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("GameManager: Clicked outside rename input, finishing rename");
+                    FinishRenameProject();
+                }
+            }
+
             // Handle keyboard input for rename
             var keyboardState = Keyboard.GetState();
             var pressedKeys = keyboardState.GetPressedKeys();
@@ -766,34 +822,51 @@ namespace MarySGameEngine.Modules.GameManager_essential
                         System.Diagnostics.Debug.WriteLine("GameManager: Escape pressed, cancelling rename");
                         _isRenaming = false;
                         _renameText = "";
+                        _cursorPosition = 0;
                         _contextMenuTargetProject = null;
                         return;
                     }
-                    else if (key == Keys.Back && _renameText.Length > 0)
+                    else if (key == Keys.Back && _cursorPosition > 0)
                     {
-                        _renameText = _renameText.Substring(0, _renameText.Length - 1);
-                        System.Diagnostics.Debug.WriteLine($"GameManager: Backspace pressed, rename text: '{_renameText}'");
+                        _renameText = _renameText.Remove(_cursorPosition - 1, 1);
+                        _cursorPosition--;
+                        System.Diagnostics.Debug.WriteLine($"GameManager: Backspace pressed, rename text: '{_renameText}', cursor: {_cursorPosition}");
+                    }
+                    else if (key == Keys.Delete && _cursorPosition < _renameText.Length)
+                    {
+                        _renameText = _renameText.Remove(_cursorPosition, 1);
+                        System.Diagnostics.Debug.WriteLine($"GameManager: Delete pressed, rename text: '{_renameText}', cursor: {_cursorPosition}");
+                    }
+                    else if (key == Keys.Left && _cursorPosition > 0)
+                    {
+                        _cursorPosition--;
+                        System.Diagnostics.Debug.WriteLine($"GameManager: Left arrow pressed, cursor: {_cursorPosition}");
+                    }
+                    else if (key == Keys.Right && _cursorPosition < _renameText.Length)
+                    {
+                        _cursorPosition++;
+                        System.Diagnostics.Debug.WriteLine($"GameManager: Right arrow pressed, cursor: {_cursorPosition}");
+                    }
+                    else if (key == Keys.Home)
+                    {
+                        _cursorPosition = 0;
+                        System.Diagnostics.Debug.WriteLine("GameManager: Home pressed, cursor at start");
+                    }
+                    else if (key == Keys.End)
+                    {
+                        _cursorPosition = _renameText.Length;
+                        System.Diagnostics.Debug.WriteLine($"GameManager: End pressed, cursor at end: {_cursorPosition}");
                     }
                     else if (IsPrintableKey(key) && _renameText.Length < MAX_PROJECT_NAME_LENGTH)
                     {
                         char character = GetCharacterFromKey(key);
-                        if (character != '\0' && IsValidProjectName(_renameText + character))
+                        if (character != '\0' && IsValidProjectName(_renameText.Insert(_cursorPosition, character.ToString())))
                         {
-                            _renameText += character;
-                            System.Diagnostics.Debug.WriteLine($"GameManager: Character added, rename text: '{_renameText}'");
+                            _renameText = _renameText.Insert(_cursorPosition, character.ToString());
+                            _cursorPosition++;
+                            System.Diagnostics.Debug.WriteLine($"GameManager: Character added, rename text: '{_renameText}', cursor: {_cursorPosition}");
                         }
                     }
-                }
-            }
-
-            // Handle mouse clicks outside rename input
-            if (_currentMouseState.LeftButton == ButtonState.Pressed && 
-                _previousMouseState.LeftButton == ButtonState.Released)
-            {
-                if (!_renameInputBounds.Contains(_currentMouseState.Position))
-                {
-                    System.Diagnostics.Debug.WriteLine("GameManager: Clicked outside rename input, finishing rename");
-                    FinishRenameProject();
                 }
             }
         }
@@ -1860,15 +1933,45 @@ namespace MarySGameEngine.Modules.GameManager_essential
             // Draw thinner border (1 pixel instead of the default border thickness)
             DrawThinBorder(spriteBatch, inputBounds, inputBorderColor);
             
-            // Draw rename text
+            // Draw rename text - center vertically
+            float textHeight = _uiFont.MeasureString("A").Y * FONT_SCALE;
+            float textY = inputBounds.Y + (inputBounds.Height - textHeight) / 2;
+            
             if (!string.IsNullOrEmpty(_renameText))
             {
-                spriteBatch.DrawString(_uiFont, _renameText, new Vector2(inputBounds.X + 8, inputBounds.Y + 6), TEXT_PRIMARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(_uiFont, _renameText, new Vector2(inputBounds.X + 8, textY), TEXT_PRIMARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                
+                // Draw blinking cursor at the correct position
+                bool showCursor = (_cursorBlinkTime % (CURSOR_BLINK_RATE * 2)) < CURSOR_BLINK_RATE;
+                if (showCursor)
+                {
+                    // Calculate cursor position based on text before cursor
+                    string textBeforeCursor = _renameText.Substring(0, _cursorPosition);
+                    Vector2 textBeforeSize = _uiFont.MeasureString(textBeforeCursor) * FONT_SCALE;
+                    float cursorX = inputBounds.X + 8 + textBeforeSize.X;
+                    float cursorY = textY;
+                    float cursorHeight = textHeight;
+                    
+                    // Draw cursor as a vertical line
+                    spriteBatch.Draw(_pixel, new Rectangle((int)cursorX, (int)cursorY, 1, (int)cursorHeight), TEXT_PRIMARY);
+                }
             }
             else
             {
                 // Draw placeholder text
-                spriteBatch.DrawString(_uiFont, "Enter new name", new Vector2(inputBounds.X + 8, inputBounds.Y + 6), TEXT_TERTIARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(_uiFont, "Enter new name", new Vector2(inputBounds.X + 8, textY), TEXT_TERTIARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                
+                // Draw blinking cursor at the beginning when no text
+                bool showCursor = (_cursorBlinkTime % (CURSOR_BLINK_RATE * 2)) < CURSOR_BLINK_RATE;
+                if (showCursor)
+                {
+                    float cursorX = inputBounds.X + 8;
+                    float cursorY = textY;
+                    float cursorHeight = textHeight;
+                    
+                    // Draw cursor as a vertical line
+                    spriteBatch.Draw(_pixel, new Rectangle((int)cursorX, (int)cursorY, 1, (int)cursorHeight), TEXT_TERTIARY);
+                }
             }
         }
 
