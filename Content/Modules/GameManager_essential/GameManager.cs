@@ -142,7 +142,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private bool _isRenaming = false;
         private string _renameText = "";
         private Rectangle _renameInputBounds;
-        private const int MAX_PROJECT_NAME_LENGTH = 20; // Constant for name limit
+        private const int MAX_PROJECT_NAME_LENGTH = 10; // Constant for name limit
         private float _cursorBlinkTime = 0f;
         private const float CURSOR_BLINK_RATE = 0.5f; // Blink every 0.5 seconds
         private int _cursorPosition = 0; // Current cursor position in the text
@@ -896,7 +896,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private void UpdateAnimations()
         {
             // Update next button animation
-            bool canProceed = !string.IsNullOrWhiteSpace(_projectName) && _projectName.Length <= 20 && IsValidProjectName(_projectName);
+            bool canProceed = !string.IsNullOrWhiteSpace(_projectName) && _projectName.Length <= 10 && IsValidProjectName(_projectName);
             if (canProceed)
             {
                 _nextButtonAnimationTime = Math.Min(_nextButtonAnimationTime + 0.016f, ANIMATION_DURATION); // 60fps
@@ -1003,7 +1003,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
             // Handle Next button
             var nextButtonBounds = GetWizardNextButtonBounds();
             System.Diagnostics.Debug.WriteLine($"GameManager: Next button bounds: {nextButtonBounds}");
-            bool canProceed = !string.IsNullOrWhiteSpace(_projectName) && _projectName.Length <= 20 && IsValidProjectName(_projectName);
+            bool canProceed = !string.IsNullOrWhiteSpace(_projectName) && _projectName.Length <= 10 && IsValidProjectName(_projectName);
             if (nextButtonBounds.Contains(mousePosition) && canProceed)
             {
                 _currentWizardStep = 1;
@@ -1848,7 +1848,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             // Draw header text with normal font
             string[] headers = { "Name", "Genre", "Created", "Modified" };
-            int[] columnWidths = { width / 3, width / 4, width / 4, width / 4 };
+            int[] columnWidths = { width / 4, width / 4, width / 4, width / 4 };
 
             int currentX = x + _cardPadding;
             int textY = y + (headerBounds.Height - (int)(_uiFont.MeasureString("A").Y * FONT_SCALE)) / 2; // Center vertically
@@ -1864,7 +1864,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
             int x = bounds.X + _cardPadding;
             int y = bounds.Y + _cardPadding;
             int width = bounds.Width - (_cardPadding * 2);
-            int[] columnWidths = { width / 3, width / 4, width / 4, width / 4 };
+            int[] columnWidths = { width / 4, width / 4, width / 4, width / 4 };
 
             // Check if this project is being renamed
             bool isBeingRenamed = _isRenaming && _contextMenuTargetProject == project;
@@ -2222,6 +2222,13 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 System.Diagnostics.Debug.WriteLine($"[GameManager] UI Font loaded: {_uiFont != null}");
                 System.Diagnostics.Debug.WriteLine($"[GameManager] Sidebar Font loaded: {_sidebarFont != null}");
                 System.Diagnostics.Debug.WriteLine($"[GameManager] Pixel Font loaded: {_pixelFont != null}");
+                
+                // Ensure TaskBar has an icon for this module with logo loading
+                if (_taskBar != null)
+                {
+                    _taskBar.EnsureModuleIconExists("Game Manager", _content);
+                    System.Diagnostics.Debug.WriteLine("[GameManager] Ensured module icon exists in TaskBar");
+                }
             }
             catch (Exception ex)
             {
@@ -2244,7 +2251,14 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
         public void OnWindowVisibilityChanged(bool isVisible)
         {
-            // Handle visibility changes if needed
+            if (isVisible && _taskBar != null)
+            {
+                // Ensure the module icon exists and is properly registered
+                _taskBar.EnsureModuleIconExists("Game Manager", _content);
+                // Ensure the module is not marked as minimized in TaskBar
+                _taskBar.SetModuleMinimized("Game Manager", false);
+                System.Diagnostics.Debug.WriteLine("GameManager: Ensured module icon exists and is not minimized in TaskBar");
+            }
         }
 
         public void ClearFocus()

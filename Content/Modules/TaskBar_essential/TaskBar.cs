@@ -49,6 +49,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
         private Color ACTIVE_INDICATOR_COLOR = new Color(147, 112, 219); // Purple color for active indicator
         private GameEngine _engine;
         private Dictionary<string, Texture2D> _moduleLogos; // Store module logos
+        private ContentManager _content; // Store ContentManager for loading logos
         private const float TOOLTIP_DELAY = 1.0f; // Show tooltip after 1 second
         private float _hoverTime;
         private string _currentHoveredModule;
@@ -64,6 +65,22 @@ namespace MarySGameEngine.Modules.TaskBar_essential
         private const float ICON_SHRINK_SPEED = 0.12f; // Speed of icon shrink animation
         private float _highlightTimer = 0f;
         private bool _isHighlighted = false;
+
+        // Context menu related fields
+        private bool _isContextMenuVisible = false;
+        private Vector2 _contextMenuPosition;
+        private Rectangle _contextMenuBounds;
+        private List<ContextMenuItem> _contextMenuItems;
+        private const int CONTEXT_MENU_ITEM_HEIGHT = 40;
+        private const int CONTEXT_MENU_PADDING = 10;
+        private const int MENU_BORDER_THICKNESS = 2;
+        private const int MENU_SHADOW_OFFSET = 2;
+        private readonly Color MENU_BACKGROUND_COLOR = new Color(40, 40, 40);
+        private readonly Color MENU_HOVER_COLOR = new Color(147, 112, 219, 180); // Semi-transparent purple
+        private readonly Color MENU_BORDER_COLOR = new Color(147, 112, 219); // Solid purple
+        private readonly Color MENU_SHADOW_COLOR = new Color(0, 0, 0, 100);
+        private readonly Color MENU_TEXT_COLOR = new Color(220, 220, 220);
+        private ModuleIcon _contextMenuTargetIcon; // The icon that was right-clicked
 
         private class ModuleIcon
         {
@@ -83,6 +100,18 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             public Vector2? PreMinimizeSize { get; set; }
         }
 
+        private class ContextMenuItem
+        {
+            public string Text { get; set; }
+            public bool IsHovered { get; set; }
+
+            public ContextMenuItem(string text)
+            {
+                Text = text;
+                IsHovered = false;
+            }
+        }
+
         public TaskBar(GraphicsDevice graphicsDevice, SpriteFont menuFont, int windowWidth)
         {
             try
@@ -97,6 +126,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 _currentPosition = TaskBarPosition.Left;
                 _moduleIcons = new List<ModuleIcon>();
                 _moduleLogos = new Dictionary<string, Texture2D>(); // Initialize logo dictionary
+                _contextMenuItems = new List<ContextMenuItem>(); // Initialize context menu items
 
                 _engine.Log($"TaskBar: Initialized with window width: {windowWidth}, height: {_windowHeight}");
 
@@ -153,7 +183,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             {
                 // Store manually added icons before clearing
                 var manuallyAddedIcons = _moduleIcons.Where(icon => 
-                    icon.Name == "Console" || icon.Name == "Module Settings").ToList();
+                    icon.Name == "Console" || icon.Name == "Module Settings" || icon.Name == "Chat").ToList();
                 
                 _moduleIcons.Clear();
                 int currentX = _taskBarBounds.X;
@@ -272,6 +302,18 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             continue;
                         }
 
+                        // Skip GameManager module - it will be added when opened
+                        if (moduleInfo.Name == "Game Manager")
+                        {
+                            continue;
+                        }
+
+                        // Skip Chat module - it will be added when opened
+                        if (moduleInfo.Name == "Chat")
+                        {
+                            continue;
+                        }
+
                         Rectangle bounds;
                         switch (_currentPosition)
                         {
@@ -358,6 +400,42 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 }
             }
 
+            // Handle context menu clicks first (highest priority)
+            if (_isContextMenuVisible)
+            {
+                if (_currentMouseState.LeftButton == ButtonState.Pressed && 
+                    _previousMouseState.LeftButton == ButtonState.Released)
+                {
+                    // Check if clicked on context menu item
+                    bool clickedOnMenuItem = false;
+                    for (int i = 0; i < _contextMenuItems.Count; i++)
+                    {
+                        Rectangle itemBounds = new Rectangle(
+                            _contextMenuBounds.X,
+                            _contextMenuBounds.Y + (i * CONTEXT_MENU_ITEM_HEIGHT),
+                            _contextMenuBounds.Width,
+                            CONTEXT_MENU_ITEM_HEIGHT
+                        );
+                        
+                        if (itemBounds.Contains(currentMousePosition))
+                        {
+                            _engine.Log($"TaskBar: Clicked on context menu item: {_contextMenuItems[i].Text}");
+                            HandleContextMenuAction(i);
+                            clickedOnMenuItem = true;
+                            break;
+                        }
+                    }
+                    
+                    // Only close context menu if clicked outside of it
+                    if (!clickedOnMenuItem)
+                    {
+                        _engine.Log("TaskBar: Clicked outside context menu, closing it");
+                        CloseContextMenu();
+                    }
+                }
+                return; // Don't handle other input when context menu is visible
+            }
+
             // Handle mouse down
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
@@ -421,6 +499,36 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                     _isDragging = true;
                     _dragStartPosition = new Vector2(currentMousePosition.X, currentMousePosition.Y);
                     _engine.Log("TaskBar: Started dragging TaskBar");
+                }
+            }
+
+            // Handle right-click on icons
+            if (_currentMouseState.RightButton == ButtonState.Pressed && 
+                _previousMouseState.RightButton == ButtonState.Released)
+            {
+                // Close any existing context menu first
+                if (_isContextMenuVisible)
+                {
+                    _engine.Log("TaskBar: Right-click detected, closing existing context menu");
+                    CloseContextMenu();
+                }
+
+                // Check if we right-clicked on any icon
+                foreach (var icon in _moduleIcons)
+                {
+                    // Skip icons that are closed (not active, not visible) or shrunk to nothing
+                    // But allow minimized icons (not active but still visible)
+                    if ((!icon.IsActive && !icon.IsVisible && !icon.IsGrowing) || (icon.Scale <= 0f && !icon.IsGrowing))
+                    {
+                        continue;
+                    }
+                    
+                    if (icon.Bounds.Contains(currentMousePosition))
+                    {
+                        _engine.Log($"TaskBar: Right-click detected on icon: {icon.Name}");
+                        SetupIconContextMenu(icon, new Vector2(currentMousePosition.X, currentMousePosition.Y));
+                        break;
+                    }
                 }
             }
 
@@ -708,6 +816,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                         DrawModuleName(spriteBatch, icon, drawBounds);
                     }
                 }
+
             }
             catch (Exception ex)
             {
@@ -761,6 +870,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
         {
             try
             {
+                _content = content; // Store ContentManager for later use
                 _engine.Log("TaskBar: Starting LoadContent");
                 
                 // First ensure we have all module icons created
@@ -1200,6 +1310,72 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             }
         }
 
+        public void DrawContextMenu(SpriteBatch spriteBatch)
+        {
+            if (!_isContextMenuVisible) 
+            {
+                return;
+            }
+
+            _engine.Log($"TaskBar: Drawing context menu at bounds: {_contextMenuBounds} with {_contextMenuItems.Count} items");
+
+            // Draw menu shadow
+            Rectangle shadowBounds = new Rectangle(
+                _contextMenuBounds.X + MENU_SHADOW_OFFSET,
+                _contextMenuBounds.Y + MENU_SHADOW_OFFSET,
+                _contextMenuBounds.Width,
+                _contextMenuBounds.Height
+            );
+            spriteBatch.Draw(_pixel, shadowBounds, MENU_SHADOW_COLOR);
+
+            // Draw main menu background
+            spriteBatch.Draw(_pixel, _contextMenuBounds, MENU_BACKGROUND_COLOR);
+
+            // Draw main menu border
+            DrawMenuBorder(spriteBatch, _contextMenuBounds, MENU_BORDER_COLOR);
+
+            // Draw menu items
+            for (int i = 0; i < _contextMenuItems.Count; i++)
+            {
+                var item = _contextMenuItems[i];
+                Rectangle itemBounds = new Rectangle(
+                    _contextMenuBounds.X,
+                    _contextMenuBounds.Y + (i * CONTEXT_MENU_ITEM_HEIGHT),
+                    _contextMenuBounds.Width,
+                    CONTEXT_MENU_ITEM_HEIGHT
+                );
+
+                // Check if item is hovered
+                bool isHovered = itemBounds.Contains(_currentMouseState.Position);
+                item.IsHovered = isHovered;
+
+                // Draw item background if hovered
+                if (isHovered)
+                {
+                    spriteBatch.Draw(_pixel, itemBounds, MENU_HOVER_COLOR);
+                }
+
+                // Draw item text
+                Vector2 textPos = new Vector2(
+                    itemBounds.X + CONTEXT_MENU_PADDING,
+                    itemBounds.Y + (CONTEXT_MENU_ITEM_HEIGHT - _menuFont.LineSpacing) / 2
+                );
+                spriteBatch.DrawString(_menuFont, item.Text, textPos, MENU_TEXT_COLOR);
+            }
+        }
+
+        private void DrawMenuBorder(SpriteBatch spriteBatch, Rectangle bounds, Color color)
+        {
+            // Top
+            spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Y, bounds.Width, 1), color);
+            // Bottom
+            spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Bottom - 1, bounds.Width, 1), color);
+            // Left
+            spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Y, 1, bounds.Height), color);
+            // Right
+            spriteBatch.Draw(_pixel, new Rectangle(bounds.Right - 1, bounds.Y, 1, bounds.Height), color);
+        }
+
         public void AddModuleIcon(string moduleName, Texture2D logo = null)
         {
             try
@@ -1329,7 +1505,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 {
                     logo = _moduleLogos[moduleName];
                 }
-                else if (content != null)
+                else if (content != null || _content != null)
                 {
                     // Try to load the logo if it's not already loaded
                     try
@@ -1347,7 +1523,8 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             logoPath = $"Modules/{moduleNameForPath}_essential/logo";
                         }
                         
-                        logo = content.Load<Texture2D>(logoPath);
+                        var contentToUse = content ?? _content;
+                        logo = contentToUse.Load<Texture2D>(logoPath);
                         _moduleLogos[moduleName] = logo;
                         _engine.Log($"TaskBar: Loaded logo for {moduleName} at path: {logoPath}");
                     }
@@ -1359,7 +1536,8 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                         {
                             try
                             {
-                                logo = content.Load<Texture2D>("Logos/shell_script_file_icon");
+                                var contentToUse = content ?? _content;
+                                logo = contentToUse.Load<Texture2D>("Logos/shell_script_file_icon");
                                 _moduleLogos[moduleName] = logo;
                                 _engine.Log($"TaskBar: Loaded fallback logo for {moduleName}");
                             }
@@ -1425,6 +1603,125 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             catch (Exception ex)
             {
                 _engine.Log($"TaskBar: Error in NotifyModulesOfPositionChange: {ex.Message}");
+            }
+        }
+
+        private void SetupIconContextMenu(ModuleIcon icon, Vector2 position)
+        {
+            try
+            {
+                _engine.Log($"TaskBar: Setting up context menu for icon: {icon.Name} at position: {position}");
+                
+                _contextMenuItems.Clear();
+                
+                // Check if the window is minimized by getting the window management
+                var windowManagement = GetWindowManagementForModule(icon.Name);
+                bool isMinimized = windowManagement != null && windowManagement.IsMinimized();
+                
+                if (isMinimized)
+                {
+                    _contextMenuItems.Add(new ContextMenuItem("Open"));
+                }
+                else
+                {
+                    _contextMenuItems.Add(new ContextMenuItem("Show"));
+                }
+                _contextMenuItems.Add(new ContextMenuItem("Close"));
+                
+                _contextMenuTargetIcon = icon;
+                _contextMenuPosition = position;
+                _isContextMenuVisible = true;
+                
+                // Calculate context menu bounds
+                int maxWidth = 0;
+                foreach (var item in _contextMenuItems)
+                {
+                    Vector2 textSize = _menuFont.MeasureString(item.Text);
+                    maxWidth = Math.Max(maxWidth, (int)textSize.X);
+                }
+                
+                int menuWidth = maxWidth + (CONTEXT_MENU_PADDING * 2);
+                int menuHeight = _contextMenuItems.Count * CONTEXT_MENU_ITEM_HEIGHT;
+                
+                _contextMenuBounds = new Rectangle(
+                    (int)position.X,
+                    (int)position.Y,
+                    menuWidth,
+                    menuHeight
+                );
+                
+                // Adjust position if menu would go off screen
+                if (_contextMenuBounds.Right > _windowWidth)
+                {
+                    _contextMenuBounds.X = _windowWidth - _contextMenuBounds.Width - 10;
+                }
+                if (_contextMenuBounds.Bottom > _graphicsDevice.Viewport.Height)
+                {
+                    _contextMenuBounds.Y = _graphicsDevice.Viewport.Height - _contextMenuBounds.Height - 10;
+                }
+                
+                _engine.Log($"TaskBar: Context menu bounds: {_contextMenuBounds}, items count: {_contextMenuItems.Count}, minimized: {isMinimized}");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"TaskBar: Error setting up context menu: {ex.Message}");
+            }
+        }
+
+        private void CloseContextMenu()
+        {
+            _isContextMenuVisible = false;
+            _contextMenuTargetIcon = null;
+            _contextMenuItems.Clear();
+        }
+
+        private void HandleContextMenuAction(int itemIndex)
+        {
+            if (_contextMenuTargetIcon == null || itemIndex < 0 || itemIndex >= _contextMenuItems.Count)
+            {
+                _engine.Log("TaskBar: Invalid context menu action");
+                return;
+            }
+
+            string action = _contextMenuItems[itemIndex].Text;
+            _engine.Log($"TaskBar: Processing context menu action: {action} for icon: {_contextMenuTargetIcon.Name}");
+
+            // Store the target icon before closing the menu
+            var targetIcon = _contextMenuTargetIcon;
+            CloseContextMenu();
+
+            var windowManagement = GetWindowManagementForModule(targetIcon.Name);
+            if (windowManagement == null)
+            {
+                _engine.Log($"TaskBar: No window management found for {targetIcon.Name}");
+                return;
+            }
+
+            switch (action)
+            {
+                case "Open":
+                case "Show":
+                    _engine.Log($"TaskBar: Opening/showing window for {targetIcon.Name}");
+                    windowManagement.HandleTaskBarClick();
+                    windowManagement.BringToFront();
+                    break;
+                case "Close":
+                    _engine.Log($"TaskBar: Closing window for {targetIcon.Name}");
+                    // Use reflection to call StartCloseAnimation method
+                    var closeMethod = windowManagement.GetType().GetMethod("StartCloseAnimation", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (closeMethod != null)
+                    {
+                        closeMethod.Invoke(windowManagement, null);
+                    }
+                    else
+                    {
+                        _engine.Log($"TaskBar: Could not find StartCloseAnimation method for {targetIcon.Name}");
+                    }
+                    break;
+                default:
+                    _engine.Log($"TaskBar: Unknown context menu action: {action}");
+                    break;
             }
         }
     }

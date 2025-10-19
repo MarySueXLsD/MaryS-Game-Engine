@@ -8,5 +8,6 @@
   "Category": "Essential",
   "is_essential": true,
   "MinEngineVersion": "1.0.0",
+  "is_visible": true,
   "LastUpdated": "2024-01-01"
 }
