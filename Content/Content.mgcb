@@ -468,6 +468,18 @@
 /processorParam:TextureFormat=Color
 /build:Modules/Chat/logo.png
 
+#begin Modules/GameManager_essential/logo.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Modules/GameManager_essential/logo.png
+
 #begin Modules/Chat/Characters/Mary Sue.png
 /importer:TextureImporter
 /processor:TextureProcessor

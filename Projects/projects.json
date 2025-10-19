@@ -1,14 +1,38 @@
 [
   {
-    "name": "Hell nah",
+    "name": "hello",
     "path": "",
     "createdDate": "2025-10-17T23:40:43.018778+02:00",
-    "lastModified": "2025-10-18T22:26:39.6841462+02:00",
+    "lastModified": "2025-10-20T00:46:00.2020227+02:00",
     "description": "",
     "version": "1.0.0",
     "engineVersion": "1.0.0",
     "tags": [],
     "isFavorite": false,
     "genre": "Top Down"
+  },
+  {
+    "name": "hello thek",
+    "path": "",
+    "createdDate": "2025-10-19T09:56:09.4420339+02:00",
+    "lastModified": "2025-10-20T00:45:52.2570943+02:00",
+    "description": "",
+    "version": "1.0.0",
+    "engineVersion": "1.0.0",
+    "tags": [],
+    "isFavorite": false,
+    "genre": "JRPG"
+  },
+  {
+    "name": "hell nah",
+    "path": "",
+    "createdDate": "2025-10-20T00:46:12.8142857+02:00",
+    "lastModified": "2025-10-20T00:46:12.814286+02:00",
+    "description": "",
+    "version": "1.0.0",
+    "engineVersion": "1.0.0",
+    "tags": [],
+    "isFavorite": false,
+    "genre": "Card Based"
   }
 ]

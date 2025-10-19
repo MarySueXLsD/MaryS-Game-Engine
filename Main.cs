@@ -721,6 +721,12 @@ public class GameEngine : Game
                 _taskBar.DrawTooltips(_spriteBatch);
             }
 
+            // Draw TaskBar context menu absolutely last to ensure it's always on top
+            if (_taskBar != null)
+            {
+                _taskBar.DrawContextMenu(_spriteBatch);
+            }
+
             // Draw top layer elements for all modules (like dropdowns)
             foreach (var module in _activeModules)
             {
