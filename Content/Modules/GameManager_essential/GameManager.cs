@@ -689,6 +689,12 @@ namespace MarySGameEngine.Modules.GameManager_essential
             if (_currentMouseState.RightButton == ButtonState.Pressed && 
                 _previousMouseState.RightButton == ButtonState.Released)
             {
+                // Close TaskBar context menu if it's visible
+                if (_taskBar != null)
+                {
+                    _taskBar.CloseContextMenuIfVisible();
+                }
+                
                 if (_currentSection == "Projects" && !_isCreatingProject)
                 {
                     HandleProjectRightClick(mousePosition);

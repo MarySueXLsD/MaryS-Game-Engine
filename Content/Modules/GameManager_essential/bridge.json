@@ -3,7 +3,7 @@
   "Version": "1.0.0",
   "Author": "MaryS Game Engine",
   "Description": "Game project management hub with project creation and management capabilities",
-  "Shortcut": "Ctrl+Shift+G",
+  "Shortcut": "Ctrl Shift G",
   "Dependencies": [],
   "Category": "Essential",
   "is_essential": true,

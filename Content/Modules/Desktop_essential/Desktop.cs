@@ -578,6 +578,12 @@ namespace MarySGameEngine.Modules.Desktop_essential
             if (_currentMouseState.RightButton == ButtonState.Pressed && 
                 _previousMouseState.RightButton == ButtonState.Released)
             {
+                // Close TaskBar context menu if it's visible
+                if (_taskBar != null)
+                {
+                    _taskBar.CloseContextMenuIfVisible();
+                }
+                
                 if (IsMouseOverDesktop())
                 {
                     // Check if right-click is on a file
