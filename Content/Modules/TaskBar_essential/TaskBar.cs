@@ -433,6 +433,15 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                         CloseContextMenu();
                     }
                 }
+                
+                // Handle right-click to close context menu even when it's visible
+                if (_currentMouseState.RightButton == ButtonState.Pressed && 
+                    _previousMouseState.RightButton == ButtonState.Released)
+                {
+                    _engine.Log("TaskBar: Right-click detected while context menu visible, closing it");
+                    CloseContextMenu();
+                }
+                
                 return; // Don't handle other input when context menu is visible
             }
 
@@ -1673,6 +1682,15 @@ namespace MarySGameEngine.Modules.TaskBar_essential
             _isContextMenuVisible = false;
             _contextMenuTargetIcon = null;
             _contextMenuItems.Clear();
+        }
+
+        public void CloseContextMenuIfVisible()
+        {
+            if (_isContextMenuVisible)
+            {
+                _engine.Log("TaskBar: Closing context menu due to external request");
+                CloseContextMenu();
+            }
         }
 
         private void HandleContextMenuAction(int itemIndex)
