@@ -124,24 +124,56 @@ namespace MarySGameEngine.Modules.Chat
         private readonly Color INPUT_BACKGROUND = new Color(80, 80, 80); // Slightly lighter gray for input
         private readonly Color SEND_BUTTON_COLOR = new Color(147, 112, 219);
         private readonly Color SEND_BUTTON_HOVER = new Color(180, 145, 250);
-        private readonly Color MESSAGE_USER_COLOR = new Color(70, 130, 220); // Blue bubble for user
+        private readonly Color MESSAGE_USER_COLOR = new Color(255, 255, 255); // White bubble for user
         private readonly Color MESSAGE_MARY_COLOR = new Color(120, 80, 200); // Purple bubble for Mary Sue
         private readonly Color MESSAGE_COLONEL_COLOR = new Color(139, 69, 19); // Brown bubble for Colonel Rowell
-        private readonly Color MESSAGE_SAYURI_COLOR = new Color(120, 80, 200); // Purple bubble for Sayuri (same as Mary Sue)
+        private readonly Color MESSAGE_SAYURI_COLOR = new Color(0, 255, 255); // Cyan bubble for Sayuri
         private readonly Color BUBBLE_BORDER_COLOR = new Color(40, 40, 40); // Darker border for bubbles
         private readonly Color TEXT_COLOR = new Color(220, 220, 220); // Light gray text for dark background
         private readonly Color BORDER_COLOR = new Color(100, 100, 100); // Darker border for dark theme
+        
+        // Code block colors
+        private readonly Color CODE_BLOCK_BACKGROUND = new Color(30, 30, 30); // Very dark background for code
+        private readonly Color CODE_BLOCK_BORDER = new Color(80, 80, 80); // Border for code blocks
+        private readonly Color CODE_KEYWORD_COLOR = new Color(86, 156, 214); // Blue for keywords
+        private readonly Color CODE_STRING_COLOR = new Color(206, 145, 120); // Orange for strings
+        private readonly Color CODE_COMMENT_COLOR = new Color(106, 153, 85); // Green for comments
+        private readonly Color CODE_NUMBER_COLOR = new Color(181, 206, 168); // Light green for numbers
+        private readonly Color CODE_DEFAULT_COLOR = new Color(220, 220, 220); // Default text color
 
+        // Python keywords for syntax highlighting
+        private readonly HashSet<string> PYTHON_KEYWORDS = new HashSet<string>
+        {
+            "and", "as", "assert", "break", "class", "continue", "def", "del", "elif", "else", "except",
+            "exec", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "not",
+            "or", "pass", "print", "raise", "return", "try", "while", "with", "yield", "True", "False", "None"
+        };
+        
         // Key repeat handling
         private Keys _lastRepeatedKey = Keys.None;
         private float _keyRepeatTimer = 0f;
         private const float KEY_REPEAT_DELAY = 0.5f; // Initial delay before repeat starts
         private const float KEY_REPEAT_INTERVAL = 0.05f; // Interval between repeats
 
+        private class CodeBlock
+        {
+            public string Language { get; set; }
+            public List<string> Lines { get; set; }
+            public List<List<SyntaxToken>> SyntaxTokens { get; set; } // Syntax highlighting for each line
+        }
+        
+        private class SyntaxToken
+        {
+            public string Text { get; set; }
+            public Color Color { get; set; }
+            public string Type { get; set; } // "keyword", "string", "comment", "number", "default"
+        }
+        
         private class ChatMessage
         {
             public string Text { get; set; }
             public List<string> WrappedLines { get; set; }
+            public List<CodeBlock> CodeBlocks { get; set; } // Code blocks within the message
             public string Sender { get; set; } // "User" or "Mary"
             public DateTime Timestamp { get; set; }
             public Color BackgroundColor { get; set; }
@@ -335,7 +367,7 @@ namespace MarySGameEngine.Modules.Chat
                     ImageName = "Sayuri Murasaki",
                     Personality = SAYURI_MURASAKI_PERSONALITY,
                     MessageColor = MESSAGE_SAYURI_COLOR,
-                    WelcomeMessage = "Konnichiwa! こんにちは！ What's up? I'm Sayuri! 私はさゆりです！ Let's do something fun! 楽しいことをしましょう！"
+                    WelcomeMessage = "Konnichiwa, I'm Sayuri. What's up? Not that I care but still..."
                 }
             };
             
@@ -1038,25 +1070,37 @@ namespace MarySGameEngine.Modules.Chat
                 // Filter unsupported characters first
                 string filteredText = FilterUnsupportedCharacters(text);
                 
+                // Parse code blocks from the text
+                var codeBlocks = ParseCodeBlocks(filteredText);
+                var textWithoutCodeBlocks = RemoveCodeBlocks(filteredText);
+                
                 // Calculate maximum width for text wrapping (bubble width minus padding)
                 int maxBubbleWidth = (_chatAreaBounds.Width > 0 ? _chatAreaBounds.Width : 800) - BUBBLE_MARGIN * 2;
                 int maxTextWidth = maxBubbleWidth - BUBBLE_PADDING * 2;
                 
-                // Wrap the filtered text
-                var wrappedLines = WrapText(filteredText, maxTextWidth);
+                // Wrap the text without code blocks
+                var wrappedLines = WrapText(textWithoutCodeBlocks, maxTextWidth);
                 
-                _engine?.Log($"Chat: Text wrapped into {wrappedLines.Count} lines");
+                _engine?.Log($"Chat: Text wrapped into {wrappedLines.Count} lines, found {codeBlocks.Count} code blocks");
                 
                 // Calculate total height for this message with proper line spacing
                 int lineHeight = (int)(_chatFont?.LineSpacing * TEXT_SCALE ?? 16);
                 int lineSpacing = 2; // Add small spacing between lines
                 int totalTextHeight = (wrappedLines.Count * lineHeight) + ((wrappedLines.Count - 1) * lineSpacing);
+                
+                // Add height for code blocks
+                foreach (var codeBlock in codeBlocks)
+                {
+                    totalTextHeight += (codeBlock.Lines.Count * lineHeight) + ((codeBlock.Lines.Count - 1) * lineSpacing) + 20; // Extra padding for code blocks
+                }
+                
                 int totalBubbleHeight = totalTextHeight + BUBBLE_PADDING * 2; // Consistent top and bottom padding
                 
                 var message = new ChatMessage
                 {
                     Text = filteredText, // Use filtered text instead of original
                     WrappedLines = wrappedLines,
+                    CodeBlocks = codeBlocks,
                     Sender = sender,
                     Timestamp = DateTime.Now,
                     BackgroundColor = sender == "User" ? MESSAGE_USER_COLOR : _currentCharacter.MessageColor,
@@ -1090,6 +1134,195 @@ namespace MarySGameEngine.Modules.Chat
                 // Remove the oldest user/assistant message (keep system message at index 0)
                 _conversationHistory.RemoveAt(1);
             }
+        }
+        
+        private List<CodeBlock> ParseCodeBlocks(string text)
+        {
+            var codeBlocks = new List<CodeBlock>();
+            var lines = text.Split('\n');
+            bool inCodeBlock = false;
+            string currentLanguage = "";
+            var currentCodeLines = new List<string>();
+            
+            _engine?.Log($"Chat: Parsing code blocks from text with {lines.Length} lines");
+            
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                
+                if (line.Trim().StartsWith("```"))
+                {
+                    if (inCodeBlock)
+                    {
+                        // End of code block
+                        _engine?.Log($"Chat: Found end of code block at line {i}, language: {currentLanguage}, lines: {currentCodeLines.Count}");
+                        if (currentCodeLines.Count > 0)
+                        {
+                            var codeBlock = new CodeBlock
+                            {
+                                Language = currentLanguage,
+                                Lines = new List<string>(currentCodeLines),
+                                SyntaxTokens = new List<List<SyntaxToken>>()
+                            };
+                            
+                            // Apply syntax highlighting
+                            foreach (var codeLine in currentCodeLines)
+                            {
+                                codeBlock.SyntaxTokens.Add(HighlightPythonSyntax(codeLine));
+                            }
+                            
+                            codeBlocks.Add(codeBlock);
+                        }
+                        
+                        inCodeBlock = false;
+                        currentLanguage = "";
+                        currentCodeLines.Clear();
+                    }
+                    else
+                    {
+                        // Start of code block
+                        inCodeBlock = true;
+                        string languagePart = line.Trim().Substring(3).Trim();
+                        currentLanguage = string.IsNullOrEmpty(languagePart) ? "python" : languagePart.ToLower();
+                        _engine?.Log($"Chat: Found start of code block at line {i}, language: {currentLanguage}");
+                    }
+                }
+                else if (inCodeBlock)
+                {
+                    currentCodeLines.Add(line);
+                }
+            }
+            
+            // Handle case where code block is not closed (incomplete)
+            if (inCodeBlock && currentCodeLines.Count > 0)
+            {
+                _engine?.Log($"Chat: Found incomplete code block, language: {currentLanguage}, lines: {currentCodeLines.Count}");
+                var codeBlock = new CodeBlock
+                {
+                    Language = currentLanguage,
+                    Lines = new List<string>(currentCodeLines),
+                    SyntaxTokens = new List<List<SyntaxToken>>()
+                };
+                
+                // Apply syntax highlighting
+                foreach (var codeLine in currentCodeLines)
+                {
+                    codeBlock.SyntaxTokens.Add(HighlightPythonSyntax(codeLine));
+                }
+                
+                codeBlocks.Add(codeBlock);
+            }
+            
+            _engine?.Log($"Chat: Parsed {codeBlocks.Count} code blocks total");
+            return codeBlocks;
+        }
+        
+        private string RemoveCodeBlocks(string text)
+        {
+            var lines = text.Split('\n');
+            var result = new List<string>();
+            bool inCodeBlock = false;
+            
+            _engine?.Log($"Chat: Removing code blocks from text with {lines.Length} lines");
+            
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                
+                if (line.Trim().StartsWith("```"))
+                {
+                    inCodeBlock = !inCodeBlock;
+                    _engine?.Log($"Chat: Toggled code block state at line {i}, now inCodeBlock: {inCodeBlock}");
+                    // Don't add the ``` lines to the result
+                }
+                else if (!inCodeBlock)
+                {
+                    result.Add(line);
+                }
+                // Skip lines that are inside code blocks
+            }
+            
+            _engine?.Log($"Chat: Removed code blocks, remaining lines: {result.Count}");
+            return string.Join("\n", result);
+        }
+        
+        private List<SyntaxToken> HighlightPythonSyntax(string line)
+        {
+            var tokens = new List<SyntaxToken>();
+            
+            // Simple tokenization that preserves whitespace
+            var words = line.Split(new char[] { ' ', '\t' }, StringSplitOptions.None);
+            
+            foreach (var word in words)
+            {
+                if (string.IsNullOrWhiteSpace(word))
+                {
+                    tokens.Add(new SyntaxToken { Text = word, Color = CODE_DEFAULT_COLOR, Type = "default" });
+                    continue;
+                }
+                
+                // Check for comments (entire word is a comment)
+                if (word.Trim().StartsWith("#"))
+                {
+                    tokens.Add(new SyntaxToken { Text = word, Color = CODE_COMMENT_COLOR, Type = "comment" });
+                    continue;
+                }
+                
+                // Check for strings (simple detection)
+                if ((word.StartsWith("\"") && word.EndsWith("\"")) || 
+                    (word.StartsWith("'") && word.EndsWith("'")))
+                {
+                    tokens.Add(new SyntaxToken { Text = word, Color = CODE_STRING_COLOR, Type = "string" });
+                    continue;
+                }
+                
+                // Check for numbers
+                if (IsNumber(word))
+                {
+                    tokens.Add(new SyntaxToken { Text = word, Color = CODE_NUMBER_COLOR, Type = "number" });
+                    continue;
+                }
+                
+                // Check for keywords
+                string cleanWord = word.Trim().ToLower();
+                if (PYTHON_KEYWORDS.Contains(cleanWord))
+                {
+                    tokens.Add(new SyntaxToken { Text = word, Color = CODE_KEYWORD_COLOR, Type = "keyword" });
+                    continue;
+                }
+                
+                // Check for operators and punctuation
+                if (IsOperator(word))
+                {
+                    tokens.Add(new SyntaxToken { Text = word, Color = CODE_DEFAULT_COLOR, Type = "operator" });
+                    continue;
+                }
+                
+                // Default
+                tokens.Add(new SyntaxToken { Text = word, Color = CODE_DEFAULT_COLOR, Type = "default" });
+            }
+            
+            return tokens;
+        }
+        
+        private bool IsOperator(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            
+            // Common Python operators
+            string[] operators = { "+", "-", "*", "/", "//", "%", "**", "=", "==", "!=", "<", ">", "<=", ">=", 
+                                 "and", "or", "not", "in", "is", ":", ",", ".", "(", ")", "[", "]", "{", "}" };
+            
+            return operators.Contains(text.Trim());
+        }
+        
+        private bool IsNumber(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            
+            // Simple number detection
+            return double.TryParse(text, out _) || 
+                   (text.StartsWith("0x") && int.TryParse(text.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out _));
         }
         
         private List<string> WrapText(string text, int maxWidth)
@@ -1250,7 +1483,14 @@ namespace MarySGameEngine.Modules.Chat
                     }
                     else if (char.IsWhiteSpace(c))
                     {
-                        filtered.Append(' '); // Replace any whitespace with space
+                        if (c == '\n')
+                        {
+                            filtered.Append('\n'); // Preserve newlines for code blocks
+                        }
+                        else
+                        {
+                            filtered.Append(' '); // Replace other whitespace with space
+                        }
                     }
                     else
                     {
@@ -1429,7 +1669,7 @@ namespace MarySGameEngine.Modules.Chat
                 {
                     model = "gpt-4o",
                     messages = _conversationHistory,
-                    max_tokens = 150, // Keep responses concise for chat
+                    max_tokens = 2000, // Allow longer responses for code blocks and detailed explanations
                     temperature = 0.7 // Balanced creativity
                 };
                 
@@ -1531,7 +1771,7 @@ namespace MarySGameEngine.Modules.Chat
                     _isThinking = false;
                     
                     // Ensure we add the message
-                    AddMessage("Mary", response);
+                    AddMessage(_currentCharacter.Name, response);
                     
                     _engine?.Log($"Chat: Successfully added Mary's response to chat");
                 }
@@ -1540,7 +1780,7 @@ namespace MarySGameEngine.Modules.Chat
                     _engine?.Log($"Chat: Critical error in GenerateMarysResponse: {ex.Message}");
                     _engine?.Log($"Chat: Stack trace: {ex.StackTrace}");
                     _isThinking = false;
-                    AddMessage("Mary", "Sorry, I'm having trouble thinking right now. Could you try asking me again?");
+                    AddMessage(_currentCharacter.Name, "Sorry, I'm having trouble thinking right now. Could you try asking me again?");
                 }
             });
         }
@@ -1792,7 +2032,7 @@ namespace MarySGameEngine.Modules.Chat
             if (message.WrappedLines == null || message.WrappedLines.Count == 0)
                 return;
 
-            // Calculate bubble dimensions based on wrapped text
+            // Calculate bubble dimensions based on wrapped text and code blocks
             int lineHeight = (int)(_chatFont.LineSpacing * TEXT_SCALE);
             int lineSpacing = 2; // Same spacing as in AddMessage
             int maxLineWidth = 0;
@@ -1802,6 +2042,19 @@ namespace MarySGameEngine.Modules.Chat
             {
                 var lineSize = _chatFont.MeasureString(line) * TEXT_SCALE;
                 maxLineWidth = Math.Max(maxLineWidth, (int)lineSize.X);
+            }
+            
+            // Also check code blocks for width
+            if (message.CodeBlocks != null)
+            {
+                foreach (var codeBlock in message.CodeBlocks)
+                {
+                    foreach (var line in codeBlock.Lines)
+                    {
+                        var lineSize = _chatFont.MeasureString(line) * TEXT_SCALE;
+                        maxLineWidth = Math.Max(maxLineWidth, (int)lineSize.X);
+                    }
+                }
             }
             
             int bubbleWidth = Math.Min(maxLineWidth + BUBBLE_PADDING * 2, _chatAreaBounds.Width - BUBBLE_MARGIN * 2);
@@ -1821,26 +2074,142 @@ namespace MarySGameEngine.Modules.Chat
             // Draw bubble border
             DrawRoundedRectangleBorder(spriteBatch, bubbleBounds, BUBBLE_BORDER_COLOR, BUBBLE_CORNER_RADIUS, 1);
 
-            // Draw each line of wrapped text
-            var textPosition = new Vector2(
-                bubbleBounds.X + BUBBLE_PADDING,
-                bubbleBounds.Y + BUBBLE_PADDING
-            );
+            // Draw content (text and code blocks)
+            var currentY = bubbleBounds.Y + BUBBLE_PADDING;
+            
+            // Draw regular text lines
+            if (message.WrappedLines.Count > 0)
+            {
+                var textPosition = new Vector2(bubbleBounds.X + BUBBLE_PADDING, currentY);
 
-            for (int i = 0; i < message.WrappedLines.Count; i++)
+                // Determine text color based on sender and background color
+                Color textColor = Color.White; // Default white text
+                
+                // Use black text for light backgrounds (white, cyan) and white text for dark backgrounds
+                if (message.Sender == "User" || 
+                    (message.Sender == _currentCharacter?.Name && 
+                     (message.BackgroundColor == MESSAGE_USER_COLOR || message.BackgroundColor == MESSAGE_SAYURI_COLOR)))
+                {
+                    textColor = Color.Black; // Black text for light backgrounds
+                }
+
+                for (int i = 0; i < message.WrappedLines.Count; i++)
+                {
+                    var linePosition = new Vector2(textPosition.X, textPosition.Y + (i * (lineHeight + lineSpacing)));
+                    try
+                    {
+                        spriteBatch.DrawString(_chatFont, message.WrappedLines[i], linePosition, textColor, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                    }
+                    catch (Exception ex)
+                    {
+                        _engine?.Log($"Chat: Error drawing chat line: {ex.Message}");
+                        // Fallback: draw with pixel font if available
+                        if (_pixelFont != null)
+                        {
+                            spriteBatch.DrawString(_pixelFont, message.WrappedLines[i], linePosition, textColor, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                        }
+                    }
+                }
+                
+                currentY += message.WrappedLines.Count * (lineHeight + lineSpacing);
+            }
+            
+            // Draw code blocks
+            if (message.CodeBlocks != null)
+            {
+                foreach (var codeBlock in message.CodeBlocks)
+                {
+                    currentY += 10; // Extra spacing before code block
+                    DrawCodeBlock(spriteBatch, codeBlock, bubbleBounds.X + BUBBLE_PADDING, currentY, bubbleWidth - BUBBLE_PADDING * 2);
+                    currentY += (codeBlock.Lines.Count * (lineHeight + lineSpacing)) + 10; // Extra spacing after code block
+                }
+            }
+        }
+        
+        private void DrawCodeBlock(SpriteBatch spriteBatch, CodeBlock codeBlock, int x, int y, int maxWidth)
+        {
+            if (codeBlock.Lines == null || codeBlock.Lines.Count == 0) return;
+            
+            int lineHeight = (int)(_chatFont.LineSpacing * TEXT_SCALE);
+            int lineSpacing = 2;
+            int padding = 8;
+            
+            // Calculate code block dimensions
+            int maxLineWidth = 0;
+            foreach (var line in codeBlock.Lines)
+            {
+                var lineSize = _chatFont.MeasureString(line) * TEXT_SCALE;
+                maxLineWidth = Math.Max(maxLineWidth, (int)lineSize.X);
+            }
+            
+            int codeBlockWidth = Math.Min(maxLineWidth + padding * 2, maxWidth);
+            int codeBlockHeight = (codeBlock.Lines.Count * lineHeight) + ((codeBlock.Lines.Count - 1) * lineSpacing) + padding * 2;
+            
+            var codeBlockBounds = new Rectangle(x, y, codeBlockWidth, codeBlockHeight);
+            
+            // Draw code block background
+            DrawRoundedRectangle(spriteBatch, codeBlockBounds, CODE_BLOCK_BACKGROUND, 4);
+            DrawRoundedRectangleBorder(spriteBatch, codeBlockBounds, CODE_BLOCK_BORDER, 4, 1);
+            
+            // Draw language label if available
+            if (!string.IsNullOrEmpty(codeBlock.Language) && _pixelFont != null)
+            {
+                var languageText = codeBlock.Language.ToUpper();
+                var languageSize = _pixelFont.MeasureString(languageText) * 0.6f;
+                var languagePos = new Vector2(x + codeBlockWidth - languageSize.X - 5, y + 2);
+                spriteBatch.DrawString(_pixelFont, languageText, languagePos, new Color(150, 150, 150), 0f, Vector2.Zero, 0.6f, SpriteEffects.None, 0f);
+            }
+            
+            // Draw each line of code with syntax highlighting
+            var textPosition = new Vector2(x + padding, y + padding);
+            
+            for (int i = 0; i < codeBlock.Lines.Count; i++)
             {
                 var linePosition = new Vector2(textPosition.X, textPosition.Y + (i * (lineHeight + lineSpacing)));
+                
+                if (codeBlock.SyntaxTokens != null && i < codeBlock.SyntaxTokens.Count)
+                {
+                    // Draw with syntax highlighting
+                    DrawSyntaxHighlightedLine(spriteBatch, codeBlock.SyntaxTokens[i], linePosition);
+                }
+                else
+                {
+                    // Fallback: draw without highlighting
+                    try
+                    {
+                        spriteBatch.DrawString(_chatFont, codeBlock.Lines[i], linePosition, CODE_DEFAULT_COLOR, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                    }
+                    catch (Exception ex)
+                    {
+                        _engine?.Log($"Chat: Error drawing code line: {ex.Message}");
+                        if (_pixelFont != null)
+                        {
+                            spriteBatch.DrawString(_pixelFont, codeBlock.Lines[i], linePosition, CODE_DEFAULT_COLOR, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                        }
+                    }
+                }
+            }
+        }
+        
+        private void DrawSyntaxHighlightedLine(SpriteBatch spriteBatch, List<SyntaxToken> tokens, Vector2 position)
+        {
+            float currentX = position.X;
+            
+            foreach (var token in tokens)
+            {
                 try
                 {
-                spriteBatch.DrawString(_chatFont, message.WrappedLines[i], linePosition, Color.White, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                    spriteBatch.DrawString(_chatFont, token.Text, new Vector2(currentX, position.Y), token.Color, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                    currentX += _chatFont.MeasureString(token.Text).X * TEXT_SCALE;
                 }
                 catch (Exception ex)
                 {
-                    _engine?.Log($"Chat: Error drawing chat line: {ex.Message}");
-                    // Fallback: draw with pixel font if available
+                    _engine?.Log($"Chat: Error drawing syntax token: {ex.Message}");
+                    // Fallback: draw with pixel font
                     if (_pixelFont != null)
                     {
-                        spriteBatch.DrawString(_pixelFont, message.WrappedLines[i], linePosition, Color.White, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                        spriteBatch.DrawString(_pixelFont, token.Text, new Vector2(currentX, position.Y), token.Color, 0f, Vector2.Zero, TEXT_SCALE, SpriteEffects.None, 0f);
+                        currentX += _pixelFont.MeasureString(token.Text).X * TEXT_SCALE;
                     }
                 }
             }
@@ -2055,8 +2424,9 @@ namespace MarySGameEngine.Modules.Chat
 
             var bubbleBounds = new Rectangle(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
 
-            // Draw thinking bubble background
-            DrawRoundedRectangle(spriteBatch, bubbleBounds, _currentCharacter.MessageColor, BUBBLE_CORNER_RADIUS);
+            // Draw thinking bubble background - red for all characters
+            Color thinkingBubbleColor = Color.Red;
+            DrawRoundedRectangle(spriteBatch, bubbleBounds, thinkingBubbleColor, BUBBLE_CORNER_RADIUS);
             DrawRoundedRectangleBorder(spriteBatch, bubbleBounds, BUBBLE_BORDER_COLOR, BUBBLE_CORNER_RADIUS, 1);
 
             // Draw three dots with animation (smaller)
@@ -2084,7 +2454,10 @@ namespace MarySGameEngine.Modules.Chat
                 int scaledY = dotY - (scaledSize - dotSize) / 2;
 
                 var dotBounds = new Rectangle(scaledX, scaledY, scaledSize, scaledSize);
-                spriteBatch.Draw(_pixel, dotBounds, Color.White);
+                
+                // Use black dots for all characters in thinking animation
+                Color dotColor = Color.Black;
+                spriteBatch.Draw(_pixel, dotBounds, dotColor);
             }
         }
 
