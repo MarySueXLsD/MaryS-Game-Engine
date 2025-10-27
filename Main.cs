@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.Collections.Generic;
@@ -16,6 +16,9 @@ using MarySGameEngine.Modules.ModuleSettings_essential;
 using MarySGameEngine.Modules.GameManager_essential;
 
 namespace MarySGameEngine;
+
+// Delegate for cached window management field access
+public delegate WindowManagement WindowManagementAccessor(IModule module);
 
 public class ModuleInfo
 {
@@ -67,6 +70,21 @@ public class GameEngine : Game
     private Desktop _desktop;
     private MouseState _previousMouseState;
     public static GameEngine Instance { get; private set; }
+
+    // Performance optimization: Reflection caching
+    private readonly Dictionary<Type, FieldInfo> _windowManagementFieldCache = new Dictionary<Type, FieldInfo>();
+    private readonly Dictionary<Type, MethodInfo> _setTaskBarMethodCache = new Dictionary<Type, MethodInfo>();
+    private readonly Dictionary<Type, WindowManagementAccessor> _windowManagementAccessorCache = new Dictionary<Type, WindowManagementAccessor>();
+
+    // Performance optimization: Module caching
+    private readonly List<IModule> _windowModules = new List<IModule>();
+    private readonly List<IModule> _nonWindowModules = new List<IModule>();
+    private TopBar _topBar;
+    private bool _modulesCacheInvalid = true;
+    
+    // Performance optimization: Cached sorted window modules for drawing
+    private readonly List<(IModule Module, WindowManagement WindowManagement)> _sortedWindowModules = new List<(IModule, WindowManagement)>();
+    private bool _windowSortCacheInvalid = true;
 
     // Click handling prevention
     private bool _topBarHandledClick = false;
@@ -146,6 +164,104 @@ public class GameEngine : Game
         {
             // If logging fails, we'll just continue without it
         }
+    }
+
+    // Performance optimization: Cached reflection methods
+    private FieldInfo GetWindowManagementField(Type moduleType)
+    {
+        if (!_windowManagementFieldCache.TryGetValue(moduleType, out FieldInfo fieldInfo))
+        {
+            fieldInfo = moduleType.GetField("_windowManagement", 
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            _windowManagementFieldCache[moduleType] = fieldInfo;
+        }
+        return fieldInfo;
+    }
+
+    private MethodInfo GetSetTaskBarMethod(Type moduleType)
+    {
+        if (!_setTaskBarMethodCache.TryGetValue(moduleType, out MethodInfo methodInfo))
+        {
+            methodInfo = moduleType.GetMethod("SetTaskBar");
+            _setTaskBarMethodCache[moduleType] = methodInfo;
+        }
+        return methodInfo;
+    }
+
+    private WindowManagement GetWindowManagement(IModule module)
+    {
+        Type moduleType = module.GetType();
+        
+        if (!_windowManagementAccessorCache.TryGetValue(moduleType, out WindowManagementAccessor accessor))
+        {
+            FieldInfo fieldInfo = GetWindowManagementField(moduleType);
+            if (fieldInfo != null)
+            {
+                accessor = (m) => fieldInfo.GetValue(m) as WindowManagement;
+            }
+            else
+            {
+                accessor = (m) => null;
+            }
+            _windowManagementAccessorCache[moduleType] = accessor;
+        }
+        
+        return accessor(module);
+    }
+
+    // Performance optimization: Rebuild module cache
+    private void RebuildModuleCache()
+    {
+        if (!_modulesCacheInvalid) return;
+
+        _windowModules.Clear();
+        _nonWindowModules.Clear();
+        _topBar = null;
+
+        foreach (var module in _activeModules)
+        {
+            // Cache TopBar reference
+            if (module is TopBar topBar)
+            {
+                _topBar = topBar;
+            }
+
+            // Categorize modules by whether they have window management
+            var windowManagement = GetWindowManagement(module);
+            if (windowManagement != null)
+            {
+                _windowModules.Add(module);
+            }
+            else
+            {
+                _nonWindowModules.Add(module);
+            }
+        }
+
+        _modulesCacheInvalid = false;
+        _windowSortCacheInvalid = true; // Invalidate window sort cache when modules change
+    }
+
+    // Performance optimization: Rebuild sorted window modules cache for drawing
+    private void RebuildWindowSortCache()
+    {
+        if (!_windowSortCacheInvalid) return;
+
+        _sortedWindowModules.Clear();
+        
+        foreach (var module in _windowModules)
+        {
+            var windowManagement = GetWindowManagement(module);
+            if (windowManagement != null)
+            {
+                _sortedWindowModules.Add((module, windowManagement));
+            }
+        }
+
+        // Sort by z-order once and cache the result
+        _sortedWindowModules.Sort((a, b) => a.WindowManagement.GetZOrder().CompareTo(b.WindowManagement.GetZOrder()));
+        
+        _windowSortCacheInvalid = false;
     }
 
     private void LoadModules()
@@ -246,6 +362,7 @@ public class GameEngine : Game
                     }
                     
                     _activeModules.Add(module);
+                    _modulesCacheInvalid = true; // Invalidate cache when adding modules
                     Log($"Successfully loaded module: {moduleInfo.Name} v{moduleInfo.Version}");
 
                     // Store TaskBar reference
@@ -276,7 +393,7 @@ public class GameEngine : Game
                 {
                     if (module is IModule moduleWithTaskBar)
                     {
-                        var setTaskBarMethod = moduleWithTaskBar.GetType().GetMethod("SetTaskBar");
+                        var setTaskBarMethod = GetSetTaskBarMethod(moduleWithTaskBar.GetType());
                         if (setTaskBarMethod != null)
                         {
                             Log($"Connecting TaskBar to {moduleWithTaskBar.GetType().Name}");
@@ -443,25 +560,13 @@ public class GameEngine : Game
             // Update cursor state
             UpdateCursor();
 
-            // First find TaskBar and TopBar
-            TaskBar taskBar = null;
-            TopBar topBar = null;
-            foreach (var module in _activeModules)
-            {
-                if (module is TaskBar tb)
-                {
-                    taskBar = tb;
-                }
-                else if (module is TopBar tbar)
-                {
-                    topBar = tbar;
-                }
-            }
+            // Rebuild module cache if needed
+            RebuildModuleCache();
 
             // Update TopBar first
-            if (topBar != null)
+            if (_topBar != null)
             {
-                topBar.Update();
+                _topBar.Update();
             }
 
             // Update Desktop next
@@ -471,12 +576,12 @@ public class GameEngine : Game
             }
 
             // If we found TaskBar, update it next and check its state
-            if (taskBar != null)
+            if (_taskBar != null)
             {
-                taskBar.Update();
+                _taskBar.Update();
                 
                 // If TaskBar is being dragged or mouse is over it, skip all other updates
-                if (taskBar.IsDragging() || taskBar.IsMouseOver())
+                if (_taskBar.IsDragging() || _taskBar.IsMouseOver())
                 {
                     base.Update(gameTime);
                     return;
@@ -489,26 +594,17 @@ public class GameEngine : Game
             bool isAnyWindowDragging = false;
 
             // First pass: check for dragging windows or animating windows
-            foreach (var module in _activeModules)
+            foreach (var module in _windowModules)
             {
-                if (module is IModule moduleWithWindow)
+                var windowManagement = GetWindowManagement(module);
+                if (windowManagement != null && windowManagement.IsVisible())
                 {
-                    var windowManagementField = moduleWithWindow.GetType().GetField("_windowManagement", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    
-                    if (windowManagementField != null)
+                    // Check if window is dragging, resizing, or animating
+                    if (windowManagement.IsDragging() || windowManagement.IsResizing() || windowManagement.IsAnimating())
                     {
-                        var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
-                        if (windowManagement != null && windowManagement.IsVisible())
-                        {
-                            // Check if window is dragging, resizing, or animating
-                            if (windowManagement.IsDragging() || windowManagement.IsResizing() || windowManagement.IsAnimating())
-                            {
-                                isAnyWindowDragging = true;
-                                topMostWindow = windowManagement;
-                                break;
-                            }
-                        }
+                        isAnyWindowDragging = true;
+                        topMostWindow = windowManagement;
+                        break;
                     }
                 }
             }
@@ -516,28 +612,19 @@ public class GameEngine : Game
             // If no window is being dragged, find the top-most window under the mouse
             if (!isAnyWindowDragging)
             {
-                foreach (var module in _activeModules)
+                foreach (var module in _windowModules)
                 {
-                    if (module is IModule moduleWithWindow)
+                    var windowManagement = GetWindowManagement(module);
+                    if (windowManagement != null && windowManagement.IsVisible())
                     {
-                        var windowManagementField = moduleWithWindow.GetType().GetField("_windowManagement", 
-                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        
-                        if (windowManagementField != null)
+                        var windowBounds = windowManagement.GetWindowBounds();
+                        if (windowBounds.Contains(mousePosition))
                         {
-                            var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
-                            if (windowManagement != null && windowManagement.IsVisible())
+                            int zOrder = windowManagement.GetZOrder();
+                            if (zOrder > highestZOrder)
                             {
-                                var windowBounds = windowManagement.GetWindowBounds();
-                                if (windowBounds.Contains(mousePosition))
-                                {
-                                    int zOrder = windowManagement.GetZOrder();
-                                    if (zOrder > highestZOrder)
-                                    {
-                                        highestZOrder = zOrder;
-                                        topMostWindow = windowManagement;
-                                    }
-                                }
+                                highestZOrder = zOrder;
+                                topMostWindow = windowManagement;
                             }
                         }
                     }
@@ -621,29 +708,16 @@ public class GameEngine : Game
             }
             
             // Draw TopBar next
-            TopBar topBar = null;
-            foreach (var module in _activeModules)
+            if (_topBar != null)
             {
-                if (module is TopBar tb)
-                {
-                    topBar = tb;
-                    module.Draw(_spriteBatch);
-                    break;
-                }
+                _topBar.Draw(_spriteBatch);
             }
             
             // Draw non-window modules next (except TopBar and Desktop)
-            foreach (var module in _activeModules)
+            foreach (var module in _nonWindowModules)
             {
                 if (module is TopBar || module is Desktop) continue; // Skip TopBar and Desktop as they're already drawn
-                
-                var windowManagementField = module.GetType().GetField("_windowManagement", 
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                
-                if (windowManagementField == null)
-                {
-                    module.Draw(_spriteBatch);
-                }
+                module.Draw(_spriteBatch);
             }
 
             // Draw TaskBar after Desktop to ensure it's on top
@@ -659,37 +733,22 @@ public class GameEngine : Game
             }
 
             // Then draw windows in z-order
-            var windowModules = _activeModules
-                .Where(m => m.GetType().GetField("_windowManagement", 
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) != null)
-                .Select(m => new
-                {
-                    Module = m,
-                    WindowManagement = m.GetType().GetField("_windowManagement", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                        ?.GetValue(m) as WindowManagement
-                })
-                .Where(w => w.WindowManagement != null)
-                .OrderBy(w => w.WindowManagement.GetZOrder());
-
-            foreach (var windowModule in windowModules)
+            RebuildWindowSortCache(); // Rebuild cache if needed
+            foreach (var (module, windowManagement) in _sortedWindowModules)
             {
-                windowModule.Module.Draw(_spriteBatch);
+                module.Draw(_spriteBatch);
             }
 
             // Draw window highlights before TopBar dropdowns to ensure proper z-order
-            foreach (var windowModule in windowModules)
+            foreach (var (_, windowManagement) in _sortedWindowModules)
             {
-                if (windowModule.WindowManagement != null)
-                {
-                    windowModule.WindowManagement.DrawHighlight(_spriteBatch);
-                }
+                windowManagement.DrawHighlight(_spriteBatch);
             }
 
             // Draw TopBar dropdowns after window highlights
-            if (topBar != null)
+            if (_topBar != null)
             {
-                topBar.DrawDropdowns(_spriteBatch);
+                _topBar.DrawDropdowns(_spriteBatch);
             }
 
             // Draw Desktop context menu last to ensure it's on top
@@ -704,9 +763,9 @@ public class GameEngine : Game
                 _desktop.DrawHighlight(_spriteBatch);
             }
             
-            if (topBar != null)
+            if (_topBar != null)
             {
-                topBar.DrawHighlight(_spriteBatch);
+                _topBar.DrawHighlight(_spriteBatch);
             }
             
             // Draw TaskBar highlight absolutely last to ensure it's always on top
@@ -793,6 +852,12 @@ public class GameEngine : Game
     public void SetAnyWindowHandledClick(bool handled)
     {
         _anyWindowHandledClick = handled;
+    }
+
+    // Performance optimization: Allow modules to invalidate window sort cache when z-order changes
+    public void InvalidateWindowSortCache()
+    {
+        _windowSortCacheInvalid = true;
     }
 
     // Cursor management methods
