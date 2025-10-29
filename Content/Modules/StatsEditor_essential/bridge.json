@@ -1,0 +1,13 @@
+{
+    "name": "Stats Editor",
+    "version": "0.1.0",
+    "author": "MaryS Game Engine Team",
+    "description": "Editor for entity stats, attributes, and abilities.",
+    "shortcut": "Ctrl Shift A",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": true,
+    "is_movable": true,
+    "is_resizable": true,
+    "lastUpdated": "2024-06-07"
+} 
