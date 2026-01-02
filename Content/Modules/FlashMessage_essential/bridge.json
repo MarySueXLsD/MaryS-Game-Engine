@@ -1,0 +1,15 @@
+{
+  "Name": "Flash Message",
+  "Version": "1.0.0",
+  "Author": "MaryS Game Engine",
+  "Description": "Flash message notification system for displaying success, warning, and info messages",
+  "Shortcut": "",
+  "Dependencies": [],
+  "Category": "Essential",
+  "is_essential": true,
+  "MinEngineVersion": "1.0.0",
+  "is_visible": false,
+  "LastUpdated": "2024-01-01"
+}
+
+

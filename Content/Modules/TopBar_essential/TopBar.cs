@@ -97,6 +97,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
         // Resources
         private SpriteFont _menuFont;
         private SpriteFont _dropdownFont;
+        private SpriteFont _workspaceFont; // Different font for workspace display
         private List<MenuItem> _menuItems;
         private Texture2D _pixel;
         private Texture2D _settingsIcon;
@@ -110,6 +111,15 @@ namespace MarySGameEngine.Modules.TopBar_essential
         private const float HIGHLIGHT_BLINK_SPEED = 2.0f; // Match WindowManagement
         private const float HIGHLIGHT_MIN_ALPHA = 0.3f; // Match WindowManagement
         private const float HIGHLIGHT_MAX_ALPHA = 0.7f; // Match WindowManagement
+        
+        // Workspace display
+        private string _workspaceText = "Workspace: None";
+        private string _previousWorkspaceText = "";
+        private float _workspaceAnimationTimer = 0f;
+        private const float WORKSPACE_ANIMATION_DURATION = 0.5f; // 500ms fade-in animation
+        private bool _workspaceTextChanged = false;
+        private Vector2 _workspaceTextPosition;
+        private Rectangle _workspaceSeparatorBounds;
 
         public TopBar(GraphicsDevice graphicsDevice, SpriteFont menuFont, SpriteFont dropdownFont, int windowWidth)
         {
@@ -325,7 +335,15 @@ namespace MarySGameEngine.Modules.TopBar_essential
                 (int)buttonWidths[5], 
                 _buttonHeight);
             _menuItems.Add(helpMenuItem);
+            currentTextPosition.X += buttonWidths[5];
             System.Diagnostics.Debug.WriteLine($"Help menu: textPos={currentTextPosition}, bounds={helpMenuItem.ButtonBounds}");
+            
+            // Calculate workspace display position (after Help + separator)
+            const int SEPARATOR_WIDTH = 2;
+            const int SEPARATOR_PADDING = 10;
+            float separatorX = currentTextPosition.X + SEPARATOR_PADDING;
+            _workspaceSeparatorBounds = new Rectangle((int)separatorX, 5, SEPARATOR_WIDTH, _buttonHeight - 10);
+            _workspaceTextPosition = new Vector2(separatorX + SEPARATOR_WIDTH + SEPARATOR_PADDING, _menuStartPosition.Y);
         }
 
         private int CalculateDropdownWidth(MenuItem menuItem)
@@ -377,6 +395,9 @@ namespace MarySGameEngine.Modules.TopBar_essential
                     _highlightTimer = 0f;
                 }
             }
+            
+            // Update workspace display
+            UpdateWorkspaceDisplay();
 
             // Update menu items
             for (int menuIndex = 0; menuIndex < _menuItems.Count; menuIndex++)
@@ -974,6 +995,33 @@ namespace MarySGameEngine.Modules.TopBar_essential
                 System.Diagnostics.Debug.WriteLine($"Drawing text '{menuItem.Text}' at {textPosition} with size {textSize} in bounds {menuItem.ButtonBounds}");
                 spriteBatch.DrawString(_menuFont, menuItem.Text, textPosition, MIAMI_TEXT);
             }
+            
+            // Draw vertical separator after Help menu
+            spriteBatch.Draw(_pixel, _workspaceSeparatorBounds, MIAMI_BORDER);
+            
+            // Draw workspace text with animation
+            if (!string.IsNullOrEmpty(_workspaceText))
+            {
+                // Calculate animation alpha (fade in)
+                float animationProgress = _workspaceTextChanged 
+                    ? MathHelper.Clamp(_workspaceAnimationTimer / WORKSPACE_ANIMATION_DURATION, 0f, 1f)
+                    : 1f;
+                
+                // Apply ease-in-out animation
+                animationProgress = animationProgress * animationProgress * (3f - 2f * animationProgress);
+                
+                Color workspaceTextColor = new Color(MIAMI_TEXT.R, MIAMI_TEXT.G, MIAMI_TEXT.B, (byte)(MIAMI_TEXT.A * animationProgress));
+                
+                // Center vertically - use workspace font if available, otherwise menu font
+                SpriteFont fontToUse = _workspaceFont ?? _menuFont;
+                Vector2 workspaceTextSize = fontToUse.MeasureString(_workspaceText);
+                Vector2 workspaceTextDrawPosition = new Vector2(
+                    _workspaceTextPosition.X,
+                    (_buttonHeight - workspaceTextSize.Y) / 2
+                );
+                
+                spriteBatch.DrawString(fontToUse, _workspaceText, workspaceTextDrawPosition, workspaceTextColor);
+            }
         }
 
         public void DrawHighlight(SpriteBatch spriteBatch)
@@ -1131,6 +1179,40 @@ namespace MarySGameEngine.Modules.TopBar_essential
         {
             // Load settings icon from WindowManagement module
             _settingsIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/settings");
+            
+            // Load a different font for workspace display (try Roboto, then Inconsolata, fallback to menu font)
+            try
+            {
+                _workspaceFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");
+                System.Diagnostics.Debug.WriteLine("TopBar: Successfully loaded Roboto font for workspace");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Failed to load Roboto font: {ex.Message}");
+                try
+                {
+                    // Try Inconsolata as fallback
+                    _workspaceFont = content.Load<SpriteFont>("Fonts/SpriteFonts/inconsolata/regular");
+                    System.Diagnostics.Debug.WriteLine("TopBar: Using Inconsolata font as fallback for workspace");
+                }
+                catch (Exception ex2)
+                {
+                    System.Diagnostics.Debug.WriteLine($"TopBar: Failed to load Inconsolata font: {ex2.Message}");
+                    try
+                    {
+                        // Try Open Sans as another fallback
+                        _workspaceFont = content.Load<SpriteFont>("Fonts/SpriteFonts/open_sans/regular");
+                        System.Diagnostics.Debug.WriteLine("TopBar: Using Open Sans font as fallback for workspace");
+                    }
+                    catch (Exception ex3)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"TopBar: Failed to load Open Sans font: {ex3.Message}");
+                        // Use menu font as last resort
+                        _workspaceFont = _menuFont;
+                        System.Diagnostics.Debug.WriteLine("TopBar: Using menu font as last resort for workspace");
+                    }
+                }
+            }
         }
 
         public void Dispose()
@@ -1159,6 +1241,92 @@ namespace MarySGameEngine.Modules.TopBar_essential
         public List<MenuItem> GetMenuItems()
         {
             return _menuItems;
+        }
+        
+        private void UpdateWorkspaceDisplay()
+        {
+            // Get active workspace from GameManager
+            string newWorkspaceText = GetActiveWorkspaceText();
+            
+            // Check if workspace changed
+            if (newWorkspaceText != _previousWorkspaceText)
+            {
+                _workspaceTextChanged = true;
+                _workspaceAnimationTimer = 0f;
+                _previousWorkspaceText = _workspaceText;
+                _workspaceText = newWorkspaceText;
+            }
+            
+            // Update animation timer
+            if (_workspaceTextChanged)
+            {
+                _workspaceAnimationTimer += (float)GameEngine.Instance.TargetElapsedTime.TotalSeconds;
+                if (_workspaceAnimationTimer >= WORKSPACE_ANIMATION_DURATION)
+                {
+                    _workspaceTextChanged = false;
+                    _workspaceAnimationTimer = WORKSPACE_ANIMATION_DURATION;
+                }
+            }
+        }
+        
+        private string GetActiveWorkspaceText()
+        {
+            try
+            {
+                var modules = GameEngine.Instance.GetActiveModules();
+                foreach (var module in modules)
+                {
+                    if (module is MarySGameEngine.Modules.GameManager_essential.GameManager gameManager)
+                    {
+                        // Use reflection to get the active workspace path
+                        var activeWorkspacePathField = gameManager.GetType().GetField("_activeWorkspacePath",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        
+                        if (activeWorkspacePathField != null)
+                        {
+                            string activeWorkspacePath = activeWorkspacePathField.GetValue(gameManager) as string ?? "";
+                            
+                            if (!string.IsNullOrEmpty(activeWorkspacePath))
+                            {
+                                // Get projects list to find the workspace name and genre
+                                var projectsField = gameManager.GetType().GetField("_projects",
+                                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                
+                                if (projectsField != null)
+                                {
+                                    var projects = projectsField.GetValue(gameManager) as System.Collections.Generic.List<MarySGameEngine.Modules.GameManager_essential.GameProject>;
+                                    
+                                    if (projects != null)
+                                    {
+                                        foreach (var project in projects)
+                                        {
+                                            string projectPath = !string.IsNullOrEmpty(project.Path) 
+                                                ? project.Path 
+                                                : System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Projects", project.Name);
+                                            
+                                            string normalizedProjectPath = System.IO.Path.GetFullPath(projectPath);
+                                            string normalizedActivePath = System.IO.Path.GetFullPath(activeWorkspacePath);
+                                            
+                                            if (normalizedProjectPath == normalizedActivePath)
+                                            {
+                                                string gameType = !string.IsNullOrEmpty(project.Genre) ? project.Genre : "Unknown";
+                                                return $"Workspace: {project.Name} ({gameType})";
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TopBar: Error getting active workspace: {ex.Message}");
+            }
+            
+            return "Workspace: None";
         }
     }
 } 
