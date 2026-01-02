@@ -200,8 +200,8 @@ public class GameEngine : Game
                     Log($"Module info - Name: {moduleInfo.Name}, IsVisible: {moduleInfo.IsVisible}");
 
                     // Special case for Desktop module - always load it regardless of visibility
-                    // Also always load ModuleSettings, Console, and GameManager as they're essential for the engine
-                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential" || moduleName == "GameManager_essential";
+                    // Also always load ModuleSettings, Console, GameManager, and FlashMessage as they're essential for the engine
+                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential" || moduleName == "GameManager_essential" || moduleName == "FlashMessage_essential";
 
                     if (!shouldLoad)
                     {
@@ -715,6 +715,15 @@ public class GameEngine : Game
                 _taskBar.DrawHighlight(_spriteBatch);
             }
 
+            // Draw window tooltips after all windows are drawn to ensure they're on top
+            foreach (var windowModule in windowModules)
+            {
+                if (windowModule.WindowManagement != null)
+                {
+                    windowModule.WindowManagement.DrawTooltips(_spriteBatch);
+                }
+            }
+
             // Draw TaskBar tooltips absolutely last to ensure they're always on top
             if (_taskBar != null)
             {
@@ -734,6 +743,16 @@ public class GameEngine : Game
                 if (drawTopLayerMethod != null)
                 {
                     drawTopLayerMethod.Invoke(module, new object[] { _spriteBatch });
+                }
+            }
+
+            // Draw FlashMessage absolutely last to ensure it's always on top of everything
+            foreach (var module in _activeModules)
+            {
+                if (module is MarySGameEngine.Modules.FlashMessage_essential.FlashMessage flashMessage)
+                {
+                    flashMessage.Draw(_spriteBatch);
+                    break;
                 }
             }
 

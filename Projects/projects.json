@@ -1,9 +1,9 @@
 [
   {
-    "name": "hello",
-    "path": "",
+    "name": "Hotline",
+    "path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Projects\\Hotline",
     "createdDate": "2025-10-17T23:40:43.018778+02:00",
-    "lastModified": "2025-10-21T18:45:06.1685157+02:00",
+    "lastModified": "2026-01-02T00:07:44.2479102+01:00",
     "description": "",
     "version": "1.0.0",
     "engineVersion": "1.0.0",
@@ -12,10 +12,10 @@
     "genre": "Top Down"
   },
   {
-    "name": "hello thek",
-    "path": "",
+    "name": "Final F",
+    "path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Projects\\Final F",
     "createdDate": "2025-10-19T09:56:09.4420339+02:00",
-    "lastModified": "2025-10-20T00:45:52.2570943+02:00",
+    "lastModified": "2026-01-01T17:12:45.3366304+01:00",
     "description": "",
     "version": "1.0.0",
     "engineVersion": "1.0.0",
@@ -24,15 +24,27 @@
     "genre": "JRPG"
   },
   {
-    "name": "hell nah",
-    "path": "",
+    "name": "Balatro",
+    "path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Projects\\Balatro",
     "createdDate": "2025-10-20T00:46:12.8142857+02:00",
-    "lastModified": "2025-10-20T00:46:12.814286+02:00",
+    "lastModified": "2026-01-01T17:12:53.9541819+01:00",
     "description": "",
     "version": "1.0.0",
     "engineVersion": "1.0.0",
     "tags": [],
     "isFavorite": false,
     "genre": "Card Based"
+  },
+  {
+    "name": "Fallout",
+    "path": "C:\\Users\\abbig\\PycharmProjects\\Private\\MaryS Game Engine 3\\MarySGameEngine\\Projects\\Fallout",
+    "createdDate": "2026-01-01T17:15:55.3468706+01:00",
+    "lastModified": "2026-01-01T17:16:02.2455358+01:00",
+    "description": "",
+    "version": "1.0.0",
+    "engineVersion": "1.0.0",
+    "tags": [],
+    "isFavorite": false,
+    "genre": "Isometric"
   }
 ]

@@ -12,6 +12,8 @@ using MarySGameEngine;
 using MarySGameEngine.Modules.WindowManagement_essential;
 using MarySGameEngine.Modules.TaskBar_essential;
 using MarySGameEngine.Modules.UIElements_essential;
+using MarySGameEngine.Modules.TopBar_essential;
+using MarySGameEngine.Modules.FlashMessage_essential;
 
 namespace MarySGameEngine.Modules.GameManager_essential
 {
@@ -40,6 +42,11 @@ namespace MarySGameEngine.Modules.GameManager_essential
             Tags = new string[0];
             IsFavorite = false;
         }
+    }
+
+    public class ActiveWorkspaceData
+    {
+        public string Path { get; set; } = "";
     }
 
     public class ContextMenuItem
@@ -76,6 +83,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private List<GameProject> _projects;
         private GameProject _selectedProject;
         private int _selectedProjectIndex = -1;
+        private string _activeWorkspacePath = ""; // Path of the active workspace
 
         // Layout properties
         private Rectangle _leftSidebarBounds;
@@ -151,6 +159,14 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private float _nextButtonAnimationTime = 0f;
         private const float ANIMATION_DURATION = 0.3f; // 300ms animation
 
+        // Double-click detection
+        private float _lastProjectClickTime = 0f;
+        private Point _lastProjectClickPosition = Point.Zero;
+        private int _lastClickedProjectIndex = -1;
+        private const float DOUBLE_CLICK_TIME = 0.5f; // 500ms
+        private const int DOUBLE_CLICK_DISTANCE = 5; // 5 pixels
+        private float _currentTime = 0f;
+
         // Modern Color Palette
         private readonly Color SIDEBAR_BACKGROUND = new Color(30, 30, 35); // Dark charcoal
         private readonly Color CONTENT_BACKGROUND = new Color(40, 40, 45); // Slightly lighter charcoal
@@ -159,6 +175,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private readonly Color SECTION_ACTIVE_COLOR = new Color(99, 102, 241); // Indigo
         private readonly Color PROJECT_HOVER_COLOR = new Color(60, 60, 65); // Subtle hover
         private readonly Color PROJECT_SELECTED_COLOR = new Color(99, 102, 241, 120); // Indigo with transparency
+        private readonly Color PROJECT_ACTIVE_WORKSPACE_COLOR = new Color(147, 112, 219, 200); // Purple with more opacity for active workspace
         private readonly Color BORDER_COLOR = new Color(60, 60, 65); // Subtle border
         private readonly Color TEXT_PRIMARY = new Color(248, 250, 252); // Near white
         private readonly Color TEXT_SECONDARY = new Color(156, 163, 175); // Gray-400
@@ -511,16 +528,87 @@ namespace MarySGameEngine.Modules.GameManager_essential
                         ReadCommentHandling = JsonCommentHandling.Skip
                     };
                     _projects = JsonSerializer.Deserialize<List<GameProject>>(jsonContent, options) ?? new List<GameProject>();
+                
+                // Ensure all projects have paths set
+                foreach (var project in _projects)
+                {
+                    if (string.IsNullOrEmpty(project.Path))
+                    {
+                        project.Path = Path.Combine(Directory.GetCurrentDirectory(), "Projects", project.Name);
+                    }
+                }
                 }
                 else
                 {
                     _projects = new List<GameProject>();
                 }
+                
+                // Load active workspace after loading projects
+                LoadActiveWorkspace();
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error loading projects: {ex.Message}");
                 _projects = new List<GameProject>();
+            }
+        }
+        
+        private void LoadActiveWorkspace()
+        {
+            try
+            {
+                string workspacePath = Path.Combine(Directory.GetCurrentDirectory(), "Projects", "active_workspace.json");
+                if (File.Exists(workspacePath))
+                {
+                    string jsonContent = File.ReadAllText(workspacePath);
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        ReadCommentHandling = JsonCommentHandling.Skip
+                    };
+                    var workspaceData = JsonSerializer.Deserialize<ActiveWorkspaceData>(jsonContent, options);
+                    if (workspaceData != null && !string.IsNullOrEmpty(workspaceData.Path))
+                    {
+                        _activeWorkspacePath = workspaceData.Path;
+                        System.Diagnostics.Debug.WriteLine($"GameManager: Loaded active workspace: {_activeWorkspacePath}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading active workspace: {ex.Message}");
+                _activeWorkspacePath = "";
+            }
+        }
+        
+        private void SaveActiveWorkspace()
+        {
+            try
+            {
+                string projectsDir = Path.Combine(Directory.GetCurrentDirectory(), "Projects");
+                if (!Directory.Exists(projectsDir))
+                {
+                    Directory.CreateDirectory(projectsDir);
+                }
+
+                string workspacePath = Path.Combine(projectsDir, "active_workspace.json");
+                var workspaceData = new ActiveWorkspaceData
+                {
+                    Path = _activeWorkspacePath
+                };
+                
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                };
+                string jsonContent = JsonSerializer.Serialize(workspaceData, options);
+                File.WriteAllText(workspacePath, jsonContent);
+                System.Diagnostics.Debug.WriteLine($"GameManager: Saved active workspace: {_activeWorkspacePath}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error saving active workspace: {ex.Message}");
             }
         }
 
@@ -563,6 +651,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 _currentMouseState = Mouse.GetState();
                 _previousKeyboardState = _currentKeyboardState;
                 _currentKeyboardState = Keyboard.GetState();
+
+                // Update time for double-click detection
+                _currentTime += (float)GameEngine.Instance.TargetElapsedTime.TotalSeconds;
 
                 _windowManagement.Update();
 
@@ -705,6 +796,32 @@ namespace MarySGameEngine.Modules.GameManager_essential
             HandleScrollbarInteraction();
         }
 
+        private bool IsMouseOverTopBarDropdown(Point mousePosition)
+        {
+            var modules = GameEngine.Instance.GetActiveModules();
+            foreach (var module in modules)
+            {
+                if (module is TopBar topBar)
+                {
+                    // Check if mouse is over any TopBar dropdown
+                    foreach (var menuItem in topBar.GetMenuItems())
+                    {
+                        if (menuItem.IsDropdownVisible)
+                        {
+                            foreach (var dropdownBound in menuItem.DropdownBounds)
+                            {
+                                if (dropdownBound.Contains(mousePosition))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
         private void HandleProjectClicks(Point mousePosition)
         {
             // Account for create button and header - match drawing positions exactly
@@ -714,6 +831,8 @@ namespace MarySGameEngine.Modules.GameManager_essential
             System.Diagnostics.Debug.WriteLine($"HandleProjectClicks: Mouse at {mousePosition}, startY: {startY}, itemY: {itemY}, projects count: {_projects.Count}");
 
             bool clickedOnProject = false;
+            bool isDoubleClick = false;
+            int clickedProjectIndex = -1;
 
             for (int i = 0; i < _projects.Count; i++)
             {
@@ -726,22 +845,74 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
                 if (itemBounds.Contains(mousePosition))
                 {
+                    clickedProjectIndex = i;
+                    
+                    // Check for double-click
+                    if (_currentTime - _lastProjectClickTime < DOUBLE_CLICK_TIME &&
+                        _lastClickedProjectIndex == i &&
+                        Vector2.Distance(new Vector2(mousePosition.X, mousePosition.Y), new Vector2(_lastProjectClickPosition.X, _lastProjectClickPosition.Y)) < DOUBLE_CLICK_DISTANCE)
+                    {
+                        isDoubleClick = true;
+                        System.Diagnostics.Debug.WriteLine($"Double-click detected on project: {_projects[i].Name}");
+                    }
+
+                    // Only set selected for context menu/rename purposes, not for visual selection
                     _selectedProjectIndex = i;
                     _selectedProject = _projects[i];
                     clickedOnProject = true;
-                    System.Diagnostics.Debug.WriteLine($"Selected project: {_projects[i].Name} (bounds: {itemBounds}, mouse: {mousePosition})");
+                    System.Diagnostics.Debug.WriteLine($"Clicked on project: {_projects[i].Name} (bounds: {itemBounds}, mouse: {mousePosition})");
                     break;
                 }
 
                 itemY += _projectItemHeight + _projectItemPadding;
             }
 
-            // If clicked outside of any project item, deselect
+            // Handle double-click
+            if (isDoubleClick && clickedProjectIndex >= 0 && clickedProjectIndex < _projects.Count)
+            {
+                var project = _projects[clickedProjectIndex];
+                
+                // Ensure project has a path
+                if (string.IsNullOrEmpty(project.Path))
+                {
+                    project.Path = Path.Combine(Directory.GetCurrentDirectory(), "Projects", project.Name);
+                }
+                
+                // Normalize paths for comparison
+                string normalizedProjectPath = Path.GetFullPath(project.Path);
+                string normalizedActivePath = !string.IsNullOrEmpty(_activeWorkspacePath) ? Path.GetFullPath(_activeWorkspacePath) : "";
+                
+                // Only set and show message if it's a different workspace
+                if (normalizedProjectPath != normalizedActivePath)
+                {
+                    // Set as active workspace (only one can be active at a time)
+                    _activeWorkspacePath = project.Path;
+                    SaveActiveWorkspace();
+                    
+                    // Show flash message
+                    string gameType = !string.IsNullOrEmpty(project.Genre) ? project.Genre : "Unknown";
+                    FlashMessage.Show(
+                        $"Changed workspace to {project.Name} ({gameType})",
+                        FlashMessageType.Info,
+                        3.0f
+                    );
+                }
+            }
+
+            // Update double-click tracking
+            if (clickedOnProject)
+            {
+                _lastProjectClickTime = _currentTime;
+                _lastProjectClickPosition = mousePosition;
+                _lastClickedProjectIndex = clickedProjectIndex;
+            }
+
+            // If clicked outside of any project item, clear selection (for context menu/rename)
             if (!clickedOnProject)
             {
                 _selectedProjectIndex = -1;
                 _selectedProject = null;
-                System.Diagnostics.Debug.WriteLine("Clicked outside project items, deselected");
+                System.Diagnostics.Debug.WriteLine("Clicked outside project items");
             }
         }
 
@@ -963,13 +1134,16 @@ namespace MarySGameEngine.Modules.GameManager_essential
             if (_currentWizardStep == 1)
             {
                 _hoveredGenreIndex = -1;
-                for (int i = 0; i < _genreOptions.Length; i++)
+                if (!IsMouseOverTopBarDropdown(mousePosition))
                 {
-                    var genreButtonBounds = GetGenreButtonBounds(i);
-                    if (genreButtonBounds.Contains(mousePosition))
+                    for (int i = 0; i < _genreOptions.Length; i++)
                     {
-                        _hoveredGenreIndex = i;
-                        break;
+                        var genreButtonBounds = GetGenreButtonBounds(i);
+                        if (genreButtonBounds.Contains(mousePosition))
+                        {
+                            _hoveredGenreIndex = i;
+                            break;
+                        }
                     }
                 }
             }
@@ -1395,13 +1569,19 @@ namespace MarySGameEngine.Modules.GameManager_essential
                     LastModified = DateTime.Now
                 };
 
+                // Set default path if not provided
+                if (string.IsNullOrEmpty(project.Path))
+                {
+                    project.Path = Path.Combine(Directory.GetCurrentDirectory(), "Projects", project.Name);
+                }
+
                 _projects.Add(project);
                 SaveProjects();
                 CancelProjectWizard();
                 _selectedProjectIndex = _projects.Count - 1;
                 _selectedProject = project;
 
-                System.Diagnostics.Debug.WriteLine($"Created project: {project.Name} with genre: {project.Genre}");
+                System.Diagnostics.Debug.WriteLine($"Created project: {project.Name} with genre: {project.Genre}, path: {project.Path}");
             }
             catch (Exception ex)
             {
@@ -1492,7 +1672,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
                     
                     var buttonBounds = _sectionButtonBounds[i];
                     bool isActive = _sectionNames[i] == _currentSection;
-                    bool isHovered = buttonBounds.Contains(_currentMouseState.Position);
+                    bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && buttonBounds.Contains(_currentMouseState.Position);
 
                     // Draw modern button
                     if (isActive || isHovered)
@@ -1633,7 +1813,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             // Draw Next button with modern styling and pixel font
             var nextButtonBounds = GetWizardNextButtonBounds();
-            bool isNextHovered = nextButtonBounds.Contains(_currentMouseState.Position);
+            bool isNextHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && nextButtonBounds.Contains(_currentMouseState.Position);
             bool canProceed = !string.IsNullOrWhiteSpace(_projectName) && _projectName.Length <= 20 && IsValidProjectName(_projectName);
             
             // Calculate animated color
@@ -1645,7 +1825,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
             
             // Draw Cancel button at the bottom
             var cancelButtonBounds = GetWizardCancelButtonBounds();
-            bool isCancelHovered = cancelButtonBounds.Contains(_currentMouseState.Position);
+            bool isCancelHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && cancelButtonBounds.Contains(_currentMouseState.Position);
             DrawModernButton(spriteBatch, cancelButtonBounds, "Cancel", isCancelHovered, false, true, true);
         }
 
@@ -1653,7 +1833,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
         {
             // Draw Back button with modern styling and pixel font
             var backButtonBounds = GetWizardBackButtonBounds();
-            bool isBackHovered = backButtonBounds.Contains(_currentMouseState.Position);
+            bool isBackHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && backButtonBounds.Contains(_currentMouseState.Position);
             DrawModernButton(spriteBatch, backButtonBounds, "Back", isBackHovered, false, true, true);
 
             // Draw title with pixel font
@@ -1758,7 +1938,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             // Draw Create Project button with modern styling and pixel font
             var nextButtonBounds = GetWizardNextButtonBounds();
-            bool isNextHovered = nextButtonBounds.Contains(_currentMouseState.Position);
+            bool isNextHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && nextButtonBounds.Contains(_currentMouseState.Position);
             bool canProceed = !string.IsNullOrWhiteSpace(_selectedGenre);
             
             // Make the button wider for "Create Project" text but keep it within bounds
@@ -1775,7 +1955,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private void DrawCreateProjectButton(SpriteBatch spriteBatch)
         {
             var createButtonBounds = GetCreateProjectButtonBounds();
-            bool isHovered = createButtonBounds.Contains(_currentMouseState.Position);
+            bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && createButtonBounds.Contains(_currentMouseState.Position);
             
             // Use modern button styling with pixel font
             DrawModernButton(spriteBatch, createButtonBounds, "Create New Project", isHovered, false, false, true);
@@ -1826,17 +2006,40 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 // Only draw if visible
                 if (itemBounds.Bottom > _rightContentBounds.Y && itemBounds.Top < _rightContentBounds.Bottom)
                 {
-                    bool isSelected = i == _selectedProjectIndex;
-                    bool isHovered = itemBounds.Contains(_currentMouseState.Position);
+                    bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && itemBounds.Contains(_currentMouseState.Position);
+                    
+                    // Ensure project has a path for comparison
+                    string projectPath = !string.IsNullOrEmpty(project.Path) ? project.Path : Path.Combine(Directory.GetCurrentDirectory(), "Projects", project.Name);
+                    string normalizedProjectPath = Path.GetFullPath(projectPath);
+                    string normalizedActivePath = !string.IsNullOrEmpty(_activeWorkspacePath) ? Path.GetFullPath(_activeWorkspacePath) : "";
+                    bool isActiveWorkspace = !string.IsNullOrEmpty(_activeWorkspacePath) && 
+                                           normalizedProjectPath == normalizedActivePath;
 
-                    // Draw modern card
-                    Color cardColor = isSelected ? PROJECT_SELECTED_COLOR :
-                                    isHovered ? PROJECT_HOVER_COLOR : CARD_BACKGROUND;
+                    // Draw modern card - active workspace has highest priority, hover only if not active
+                    Color cardColor;
+                    if (isActiveWorkspace)
+                    {
+                        cardColor = PROJECT_ACTIVE_WORKSPACE_COLOR;
+                    }
+                    else if (isHovered)
+                    {
+                        cardColor = PROJECT_HOVER_COLOR;
+                    }
+                    else
+                    {
+                        cardColor = CARD_BACKGROUND;
+                    }
                     
                     DrawCard(spriteBatch, itemBounds, cardColor, true);
+                    
+                    // Draw subtle hover border if hovering and not active
+                    if (isHovered && !isActiveWorkspace)
+                    {
+                        DrawBorder(spriteBatch, itemBounds, new Color(147, 112, 219, 100)); // Subtle purple border
+                    }
 
                     // Draw project info
-                    DrawProjectItem(spriteBatch, project, itemBounds);
+                    DrawProjectItem(spriteBatch, project, itemBounds, isActiveWorkspace);
                 }
 
                 itemY += _projectItemHeight + _projectItemPadding;
@@ -1865,12 +2068,18 @@ namespace MarySGameEngine.Modules.GameManager_essential
             }
         }
 
-        private void DrawProjectItem(SpriteBatch spriteBatch, GameProject project, Rectangle bounds)
+        private void DrawProjectItem(SpriteBatch spriteBatch, GameProject project, Rectangle bounds, bool isActiveWorkspace)
         {
             int x = bounds.X + _cardPadding;
             int y = bounds.Y + _cardPadding;
             int width = bounds.Width - (_cardPadding * 2);
             int[] columnWidths = { width / 4, width / 4, width / 4, width / 4 };
+
+            // Text colors - black if active workspace, otherwise use normal colors
+            Color textPrimaryColor = isActiveWorkspace ? Color.Black : TEXT_PRIMARY;
+            Color textSecondaryColor = isActiveWorkspace ? Color.Black : TEXT_SECONDARY;
+            Color textTertiaryColor = isActiveWorkspace ? new Color(30, 30, 30) : TEXT_TERTIARY; // Dark gray instead of pure black for tertiary
+            Color genreColor = isActiveWorkspace ? Color.Black : (string.IsNullOrEmpty(project.Genre) ? TEXT_TERTIARY : ACCENT_COLOR);
 
             // Check if this project is being renamed
             bool isBeingRenamed = _isRenaming && _contextMenuTargetProject == project;
@@ -1883,34 +2092,32 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 
                 // Draw other columns normally
                 x += columnWidths[0];
-                Color genreColor = string.IsNullOrEmpty(project.Genre) ? TEXT_TERTIARY : ACCENT_COLOR;
                 spriteBatch.DrawString(_uiFont, project.Genre ?? "Unknown", new Vector2(x, y), genreColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
 
                 // Draw created date
                 x += columnWidths[1];
-                spriteBatch.DrawString(_uiFont, project.CreatedDate.ToString("MM/dd/yyyy"), new Vector2(x, y), TEXT_TERTIARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(_uiFont, project.CreatedDate.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
 
                 // Draw modified date
                 x += columnWidths[2];
-                spriteBatch.DrawString(_uiFont, project.LastModified.ToString("MM/dd/yyyy"), new Vector2(x, y), TEXT_TERTIARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(_uiFont, project.LastModified.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
             }
             else
             {
-                // Draw project name with better typography
-                spriteBatch.DrawString(_uiFont, project.Name, new Vector2(x, y), TEXT_PRIMARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                // Draw project name
+                spriteBatch.DrawString(_uiFont, project.Name, new Vector2(x, y), textPrimaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
 
-                // Draw genre with accent color
+                // Draw genre
                 x += columnWidths[0];
-                Color genreColor = string.IsNullOrEmpty(project.Genre) ? TEXT_TERTIARY : ACCENT_COLOR;
                 spriteBatch.DrawString(_uiFont, project.Genre ?? "Unknown", new Vector2(x, y), genreColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
 
                 // Draw created date
                 x += columnWidths[1];
-                spriteBatch.DrawString(_uiFont, project.CreatedDate.ToString("MM/dd/yyyy"), new Vector2(x, y), TEXT_TERTIARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(_uiFont, project.CreatedDate.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
 
                 // Draw modified date
                 x += columnWidths[2];
-                spriteBatch.DrawString(_uiFont, project.LastModified.ToString("MM/dd/yyyy"), new Vector2(x, y), TEXT_TERTIARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(_uiFont, project.LastModified.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
 
                 // Draw description on second line with better styling
                 if (!string.IsNullOrEmpty(project.Description))
@@ -1918,7 +2125,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
                     x = bounds.X + _cardPadding;
                     y += 24; // Better line spacing
                     string description = project.Description.Length > 60 ? project.Description.Substring(0, 57) + "..." : project.Description;
-                    spriteBatch.DrawString(_uiFont, description, new Vector2(x, y), TEXT_SECONDARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    spriteBatch.DrawString(_uiFont, description, new Vector2(x, y), textSecondaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
                 }
             }
         }
@@ -2029,7 +2236,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
             int thumbY = _scrollbarBounds.Y + (int)((_scrollbarBounds.Height - thumbHeight) * (_scrollY / (float)Math.Max(1, _contentHeight - _rightContentBounds.Height)));
 
             var thumbBounds = new Rectangle(_scrollbarBounds.X + 2, thumbY + 2, _scrollbarBounds.Width - 4, thumbHeight - 4);
-            bool isThumbHovered = thumbBounds.Contains(_currentMouseState.Position) || _isDraggingScrollbar;
+            bool isThumbHovered = (!IsMouseOverTopBarDropdown(_currentMouseState.Position) && thumbBounds.Contains(_currentMouseState.Position)) || _isDraggingScrollbar;
             Color thumbColor = isThumbHovered ? BUTTON_PRIMARY_HOVER : BUTTON_PRIMARY;
 
             DrawRoundedRectangle(spriteBatch, thumbBounds, thumbColor, 4);
@@ -2072,7 +2279,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 );
 
                 // Check if item is hovered
-                bool isHovered = itemBounds.Contains(_currentMouseState.Position);
+                bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && itemBounds.Contains(_currentMouseState.Position);
                 item.IsHovered = isHovered;
 
                 // Draw item background if hovered
@@ -2190,38 +2397,68 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 _content = content;
                 _windowManagement.LoadContent(content);
                 
-                // Try to load fonts with detailed error handling
+                // Try to load fonts with detailed error handling - using Roboto
                 try
                 {
-                    _uiFont = content.Load<SpriteFont>("Fonts/SpriteFonts/open_sans/regular");
-                    System.Diagnostics.Debug.WriteLine("[GameManager] Successfully loaded Open Sans regular font");
+                    _uiFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");
+                    System.Diagnostics.Debug.WriteLine("[GameManager] Successfully loaded Roboto regular font");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[GameManager] Failed to load Open Sans regular: {ex.Message}");
-                    _uiFont = _menuFont;
+                    System.Diagnostics.Debug.WriteLine($"[GameManager] Failed to load Roboto regular: {ex.Message}");
+                    try
+                    {
+                        // Fallback to Open Sans
+                        _uiFont = content.Load<SpriteFont>("Fonts/SpriteFonts/open_sans/regular");
+                        System.Diagnostics.Debug.WriteLine("[GameManager] Using Open Sans as fallback");
+                    }
+                    catch (Exception ex2)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GameManager] Failed to load Open Sans fallback: {ex2.Message}");
+                        _uiFont = _menuFont;
+                    }
                 }
                 
                 try
                 {
-                    _sidebarFont = content.Load<SpriteFont>("Fonts/SpriteFonts/open_sans/light");
-                    System.Diagnostics.Debug.WriteLine("[GameManager] Successfully loaded Open Sans light font for sidebar");
+                    _sidebarFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/light");
+                    System.Diagnostics.Debug.WriteLine("[GameManager] Successfully loaded Roboto light font for sidebar");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[GameManager] Failed to load Open Sans light: {ex.Message}");
-                    _sidebarFont = _menuFont;
+                    System.Diagnostics.Debug.WriteLine($"[GameManager] Failed to load Roboto light: {ex.Message}");
+                    try
+                    {
+                        // Fallback to Open Sans light
+                        _sidebarFont = content.Load<SpriteFont>("Fonts/SpriteFonts/open_sans/light");
+                        System.Diagnostics.Debug.WriteLine("[GameManager] Using Open Sans light as fallback");
+                    }
+                    catch (Exception ex2)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GameManager] Failed to load Open Sans light fallback: {ex2.Message}");
+                        _sidebarFont = _menuFont;
+                    }
                 }
                 
                 try
                 {
-                    _pixelFont = content.Load<SpriteFont>("Fonts/SpriteFonts/pixel/regular");
-                    System.Diagnostics.Debug.WriteLine("[GameManager] Successfully loaded pixel font for sidebar and titles");
+                    _pixelFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");
+                    System.Diagnostics.Debug.WriteLine("[GameManager] Successfully loaded Roboto for titles");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[GameManager] Failed to load pixel font: {ex.Message}");
-                    _pixelFont = _menuFont;
+                    System.Diagnostics.Debug.WriteLine($"[GameManager] Failed to load Roboto: {ex.Message}");
+                    try
+                    {
+                        // Fallback to pixel font
+                        _pixelFont = content.Load<SpriteFont>("Fonts/SpriteFonts/pixel/regular");
+                        System.Diagnostics.Debug.WriteLine("[GameManager] Using pixel font as fallback");
+                    }
+                    catch (Exception ex2)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GameManager] Failed to load pixel font fallback: {ex2.Message}");
+                        _pixelFont = _menuFont;
+                    }
                 }
                 
                 // Verify fonts are loaded correctly

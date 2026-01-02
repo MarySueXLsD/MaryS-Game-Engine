@@ -1346,7 +1346,12 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.Right, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
                 WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), WINDOW_BORDER_COLOR);
 
-            // Draw tooltip
+            // Tooltip is now drawn in DrawTooltips method called from Main.cs
+        }
+        
+        public void DrawTooltips(SpriteBatch spriteBatch)
+        {
+            // Draw tooltip on top layer so it appears above all windows
             DrawTooltip(spriteBatch);
         }
 
