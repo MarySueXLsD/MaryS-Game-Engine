@@ -88,6 +88,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
         // Layout properties
         private Rectangle _leftSidebarBounds;
         private Rectangle _rightContentBounds;
+        private Rectangle _scrollableContentBounds; // Area that can be scrolled (excludes create button)
         // Wizard step data
         private string[] _genreOptions = { "Isometric", "JRPG", "Top Down", "Card Based" };
         private string[] _genreDescriptions = {
@@ -229,13 +230,14 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 // Initialize window management
                 var windowProperties = new WindowProperties
                 {
-                    IsVisible = false,
+                    IsVisible = true,
                     IsMovable = true,
                     IsResizable = false
                 };
 
                 _windowManagement = new WindowManagement(graphicsDevice, menuFont, windowWidth, windowProperties);
                 _windowManagement.SetWindowTitle("Game Manager");
+                _windowManagement.SetVisible(true);  // Explicitly set visible by default
                 
                 // Set custom dimensions (1/4 of default height - 400/4 = 100, but make it a bit larger for usability)
                 _windowManagement.SetDefaultSize(1000, 200); // Increased width from 800 to 1000
@@ -302,7 +304,18 @@ namespace MarySGameEngine.Modules.GameManager_essential
                     _rightContentBounds.Height - (_contentPadding * 2)
                 );
                 
-                System.Diagnostics.Debug.WriteLine($"GameManager: Calculated wizard bounds: {_wizardContentBounds}, Right content bounds: {_rightContentBounds}");
+                // Calculate scrollable content bounds (area below create button)
+                // Create button is at Y + _contentPadding with height 44, plus some spacing (60 total from top)
+                int scrollableStartY = _rightContentBounds.Y + _contentPadding + 60; // Start after create button
+                int scrollableHeight = _rightContentBounds.Height - (_contentPadding + 60); // Remaining height
+                _scrollableContentBounds = new Rectangle(
+                    _rightContentBounds.X,
+                    scrollableStartY,
+                    _rightContentBounds.Width,
+                    scrollableHeight
+                );
+                
+                System.Diagnostics.Debug.WriteLine($"GameManager: Calculated wizard bounds: {_wizardContentBounds}, Right content bounds: {_rightContentBounds}, Scrollable bounds: {_scrollableContentBounds}");
 
                 // Update section button bounds
                 _sectionButtonBounds = new List<Rectangle>();
@@ -334,10 +347,10 @@ namespace MarySGameEngine.Modules.GameManager_essential
             if (_needsScrollbar)
             {
                 _scrollbarBounds = new Rectangle(
-                    _rightContentBounds.Right - SCROLLBAR_WIDTH - SCROLLBAR_PADDING,
-                    _rightContentBounds.Y + SCROLLBAR_PADDING,
+                    _scrollableContentBounds.Right - SCROLLBAR_WIDTH - SCROLLBAR_PADDING,
+                    _scrollableContentBounds.Y + SCROLLBAR_PADDING,
                     SCROLLBAR_WIDTH,
-                    _rightContentBounds.Height - (SCROLLBAR_PADDING * 2)
+                    _scrollableContentBounds.Height - (SCROLLBAR_PADDING * 2)
                 );
             }
         }
@@ -347,7 +360,26 @@ namespace MarySGameEngine.Modules.GameManager_essential
             System.Diagnostics.Debug.WriteLine($"GameManager: Setting up context menu for project: {project.Name} at position: {position}");
             
             _contextMenuItems.Clear();
-            _contextMenuItems.Add(new ContextMenuItem("Open"));
+            
+            // Check if this project is the active workspace
+            bool isActiveWorkspace = false;
+            if (!string.IsNullOrEmpty(project.Path) && !string.IsNullOrEmpty(_activeWorkspacePath))
+            {
+                string normalizedProjectPath = Path.GetFullPath(project.Path);
+                string normalizedActivePath = Path.GetFullPath(_activeWorkspacePath);
+                isActiveWorkspace = normalizedProjectPath == normalizedActivePath;
+            }
+            
+            // Show "Activate" or "Deactivate" instead of "Open" based on workspace state
+            if (isActiveWorkspace)
+            {
+                _contextMenuItems.Add(new ContextMenuItem("Deactivate"));
+            }
+            else
+            {
+                _contextMenuItems.Add(new ContextMenuItem("Activate"));
+            }
+            
             _contextMenuItems.Add(new ContextMenuItem("Rename"));
             _contextMenuItems.Add(new ContextMenuItem("Delete"));
             
@@ -410,9 +442,13 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             switch (action)
             {
-                case "Open":
-                    System.Diagnostics.Debug.WriteLine("GameManager: Starting open for project: " + targetProject.Name);
-                    StartRenameProject(targetProject);
+                case "Activate":
+                    System.Diagnostics.Debug.WriteLine("GameManager: Activating workspace for project: " + targetProject.Name);
+                    ActivateWorkspace(targetProject);
+                    break;
+                case "Deactivate":
+                    System.Diagnostics.Debug.WriteLine("GameManager: Deactivating workspace for project: " + targetProject.Name);
+                    DeactivateWorkspace();
                     break;
                 case "Rename":
                     System.Diagnostics.Debug.WriteLine("GameManager: Starting rename for project: " + targetProject.Name);
@@ -489,8 +525,36 @@ namespace MarySGameEngine.Modules.GameManager_essential
         {
             if (project != null)
             {
+                // Check if this was the active workspace
+                bool wasActiveWorkspace = false;
+                if (!string.IsNullOrEmpty(project.Path))
+                {
+                    string normalizedProjectPath = Path.GetFullPath(project.Path);
+                    string normalizedActivePath = !string.IsNullOrEmpty(_activeWorkspacePath) ? Path.GetFullPath(_activeWorkspacePath) : "";
+                    wasActiveWorkspace = normalizedProjectPath == normalizedActivePath;
+                }
+                else
+                {
+                    // If project has no path, construct it and compare
+                    string projectPath = Path.Combine(Directory.GetCurrentDirectory(), "Projects", project.Name);
+                    string normalizedProjectPath = Path.GetFullPath(projectPath);
+                    string normalizedActivePath = !string.IsNullOrEmpty(_activeWorkspacePath) ? Path.GetFullPath(_activeWorkspacePath) : "";
+                    wasActiveWorkspace = normalizedProjectPath == normalizedActivePath;
+                }
+                
+                // Store project name for flash message
+                string projectName = project.Name;
+                string gameType = !string.IsNullOrEmpty(project.Genre) ? project.Genre : "Unknown";
+                
                 _projects.Remove(project);
                 SaveProjects();
+                
+                // Clear active workspace if this was the active workspace
+                if (wasActiveWorkspace)
+                {
+                    _activeWorkspacePath = "";
+                    SaveActiveWorkspace();
+                }
                 
                 // Clear selection if the deleted project was selected
                 if (_selectedProject == project)
@@ -498,6 +562,13 @@ namespace MarySGameEngine.Modules.GameManager_essential
                     _selectedProject = null;
                     _selectedProjectIndex = -1;
                 }
+                
+                // Show flash message
+                FlashMessage.Show(
+                    $"Deleted workspace {projectName} ({gameType})",
+                    FlashMessageType.Success,
+                    3.0f
+                );
                 
                 System.Diagnostics.Debug.WriteLine($"Deleted project: {project.Name}");
             }
@@ -609,6 +680,66 @@ namespace MarySGameEngine.Modules.GameManager_essential
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error saving active workspace: {ex.Message}");
+            }
+        }
+
+        private void ActivateWorkspace(GameProject project)
+        {
+            try
+            {
+                // Ensure project has a path
+                if (string.IsNullOrEmpty(project.Path))
+                {
+                    project.Path = Path.Combine(Directory.GetCurrentDirectory(), "Projects", project.Name);
+                }
+                
+                // Normalize paths for comparison
+                string normalizedProjectPath = Path.GetFullPath(project.Path);
+                string normalizedActivePath = !string.IsNullOrEmpty(_activeWorkspacePath) ? Path.GetFullPath(_activeWorkspacePath) : "";
+                
+                // Only set and show message if it's a different workspace
+                if (normalizedProjectPath != normalizedActivePath)
+                {
+                    // Set as active workspace (only one can be active at a time)
+                    _activeWorkspacePath = project.Path;
+                    SaveActiveWorkspace();
+                    
+                    // Show flash message
+                    string gameType = !string.IsNullOrEmpty(project.Genre) ? project.Genre : "Unknown";
+                    FlashMessage.Show(
+                        $"Activated workspace: {project.Name} ({gameType})",
+                        FlashMessageType.Info,
+                        3.0f
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error activating workspace: {ex.Message}");
+            }
+        }
+
+        private void DeactivateWorkspace()
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(_activeWorkspacePath))
+                {
+                    // Clear active workspace
+                    _activeWorkspacePath = "";
+                    SaveActiveWorkspace();
+                    
+                    // Show flash message
+                    FlashMessage.Show(
+                        "Workspace deactivated",
+                        FlashMessageType.Info,
+                        3.0f
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error deactivating workspace: {ex.Message}");
             }
         }
 
@@ -824,8 +955,12 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
         private void HandleProjectClicks(Point mousePosition)
         {
-            // Account for create button and header - match drawing positions exactly
-            int startY = _rightContentBounds.Y + _contentPadding + 60 - _scrollY; // Below create button
+            // Only handle clicks within the scrollable content bounds
+            if (!_scrollableContentBounds.Contains(mousePosition))
+                return;
+
+            // Account for scrolling - match drawing positions exactly
+            int startY = _scrollableContentBounds.Y - _scrollY; // Start of scrollable content
             int itemY = startY + 40; // Below header
 
             System.Diagnostics.Debug.WriteLine($"HandleProjectClicks: Mouse at {mousePosition}, startY: {startY}, itemY: {itemY}, projects count: {_projects.Count}");
@@ -837,13 +972,16 @@ namespace MarySGameEngine.Modules.GameManager_essential
             for (int i = 0; i < _projects.Count; i++)
             {
                 var itemBounds = new Rectangle(
-                    _rightContentBounds.X + _contentPadding,
+                    _scrollableContentBounds.X + _contentPadding,
                     itemY,
-                    _rightContentBounds.Width - (_contentPadding * 2) - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0),
+                    _scrollableContentBounds.Width - (_contentPadding * 2) - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0),
                     _projectItemHeight
                 );
 
-                if (itemBounds.Contains(mousePosition))
+                // Only check clicks on items that are actually visible
+                if (itemBounds.Contains(mousePosition) && 
+                    itemBounds.Bottom > _scrollableContentBounds.Y && 
+                    itemBounds.Top < _scrollableContentBounds.Bottom)
                 {
                     clickedProjectIndex = i;
                     
@@ -918,18 +1056,27 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
         private void HandleProjectRightClick(Point mousePosition)
         {
-            // Account for create button and header - match drawing positions exactly
-            int startY = _rightContentBounds.Y + _contentPadding + 60 - _scrollY; // Below create button
+            // Only handle clicks within the scrollable content bounds
+            if (!_scrollableContentBounds.Contains(mousePosition))
+                return;
+
+            // Account for scrolling - match drawing positions exactly
+            int startY = _scrollableContentBounds.Y - _scrollY; // Start of scrollable content
             int itemY = startY + 40; // Below header
 
             for (int i = 0; i < _projects.Count; i++)
             {
                 var itemBounds = new Rectangle(
-                    _rightContentBounds.X + _contentPadding,
+                    _scrollableContentBounds.X + _contentPadding,
                     itemY,
-                    _rightContentBounds.Width - (_contentPadding * 2) - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0),
+                    _scrollableContentBounds.Width - (_contentPadding * 2) - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0),
                     _projectItemHeight
                 );
+
+                // Only check clicks on items that are actually visible
+                if (itemBounds.Bottom > _scrollableContentBounds.Y && 
+                    itemBounds.Top < _scrollableContentBounds.Bottom &&
+                    itemBounds.Contains(mousePosition))
 
                 if (itemBounds.Contains(mousePosition))
                 {
@@ -1088,12 +1235,21 @@ namespace MarySGameEngine.Modules.GameManager_essential
         {
             if (!_scrollingEnabled) return;
 
+            // Disable scrolling when in wizard mode (creating project)
+            if (_isCreatingProject)
+            {
+                _needsScrollbar = false;
+                _scrollY = 0;
+                return;
+            }
+
             _contentHeight = CalculateContentHeight();
-            _needsScrollbar = _contentHeight > _rightContentBounds.Height;
+            // Use scrollable content bounds height for scrollbar calculation
+            _needsScrollbar = _contentHeight > _scrollableContentBounds.Height;
 
             if (_needsScrollbar)
             {
-                _scrollY = MathHelper.Clamp(_scrollY, 0, Math.Max(0, _contentHeight - _rightContentBounds.Height));
+                _scrollY = MathHelper.Clamp(_scrollY, 0, Math.Max(0, _contentHeight - _scrollableContentBounds.Height));
                 UpdateScrollbarBounds();
             }
             else
@@ -1112,16 +1268,19 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 }
                 else if (_projects.Count == 0)
                 {
-                    return _rightContentBounds.Height; // Center the "no projects" message
+                    return _scrollableContentBounds.Height; // Center the "no projects" message
                 }
                 else
                 {
-                    return (_projects.Count * _projectItemHeight) + ((_projects.Count - 1) * _projectItemPadding) + (_contentPadding * 2);
+                    // Calculate total height: header (40) + all project items + padding
+                    int headerHeight = 40; // Header height
+                    int projectsHeight = (_projects.Count * _projectItemHeight) + ((_projects.Count - 1) * _projectItemPadding);
+                    return headerHeight + projectsHeight + (_contentPadding * 2);
                 }
             }
             else
             {
-                return _rightContentBounds.Height; // For Learn and Community sections
+                return _scrollableContentBounds.Height; // For Learn and Community sections
             }
         }
 
@@ -1309,7 +1468,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
                     float deltaY = mousePosition.Y - _scrollbarDragStart.Y;
                     float scrollbarHeight = _scrollbarBounds.Height;
                     float contentHeight = (float)_contentHeight;
-                    float visibleHeight = _rightContentBounds.Height;
+                    float visibleHeight = _scrollableContentBounds.Height;
 
                     float scrollRatio = deltaY / (scrollbarHeight - (scrollbarHeight * visibleHeight / contentHeight));
                     _scrollY = (int)(scrollRatio * (contentHeight - visibleHeight));
@@ -1321,12 +1480,13 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 }
             }
 
-            // Handle mouse wheel scrolling
-            if (_currentMouseState.ScrollWheelValue != _previousMouseState.ScrollWheelValue)
+            // Handle mouse wheel scrolling - only if mouse is over scrollable area
+            if (_scrollableContentBounds.Contains(_currentMouseState.Position) && 
+                _currentMouseState.ScrollWheelValue != _previousMouseState.ScrollWheelValue)
             {
                 int delta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
                 _scrollY -= delta / 3; // Adjust scroll speed
-                _scrollY = MathHelper.Clamp(_scrollY, 0, Math.Max(0, _contentHeight - _rightContentBounds.Height));
+                _scrollY = MathHelper.Clamp(_scrollY, 0, Math.Max(0, _contentHeight - _scrollableContentBounds.Height));
             }
         }
 
@@ -1624,19 +1784,43 @@ namespace MarySGameEngine.Modules.GameManager_essential
             {
                 System.Diagnostics.Debug.WriteLine($"GameManager: Drawing content - Sidebar: {_leftSidebarBounds}, Content: {_rightContentBounds}");
                 
+                // Set up scissor rectangle for the entire window content area to prevent clipping through borders
+                Rectangle originalScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
+                var windowBounds = _windowManagement.GetWindowBounds();
+                Rectangle windowScissorRect = new Rectangle(
+                    windowBounds.X + 2, // Account for window border
+                    windowBounds.Y + 42, // Account for title bar
+                    windowBounds.Width - 4, // Account for borders (2px on each side)
+                    windowBounds.Height - 44 // Account for title bar and borders
+                );
+                
+                // Enable scissor test for entire window content
+                spriteBatch.GraphicsDevice.ScissorRectangle = windowScissorRect;
+                spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+                {
+                    ScissorTestEnable = true
+                };
+                
                 // Draw sidebar
                 DrawSidebar(spriteBatch);
 
                 // Draw main content
                 DrawMainContent(spriteBatch);
 
-                // Draw scrollbar if needed
+                // Restore scissor test before drawing UI elements that should be able to extend beyond (scrollbar, context menu)
+                spriteBatch.GraphicsDevice.ScissorRectangle = originalScissor;
+                spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+                {
+                    ScissorTestEnable = false
+                };
+
+                // Draw scrollbar if needed (can extend slightly beyond but should still respect window bounds)
                 if (_needsScrollbar)
                 {
                     DrawScrollbar(spriteBatch);
                 }
 
-                // Draw context menu if visible
+                // Draw context menu if visible (can extend beyond content area but should respect window bounds)
                 if (_isContextMenuVisible)
                 {
                     DrawContextMenu(spriteBatch);
@@ -1985,90 +2169,194 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
         private void DrawProjectsList(SpriteBatch spriteBatch)
         {
-            int startY = _rightContentBounds.Y + _contentPadding + 60 - _scrollY; // Position below create button
+            // Set up scissor rectangle specifically for the scrollable content area
+            // This will be intersected with any existing scissor rectangle (window bounds)
+            Rectangle currentScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
+            Rectangle scrollableScissorRect = new Rectangle(
+                _scrollableContentBounds.X,
+                _scrollableContentBounds.Y,
+                _scrollableContentBounds.Width - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0),
+                _scrollableContentBounds.Height
+            );
+            
+            // Intersect with current scissor (window bounds) to ensure proper clipping
+            int scissorLeft = Math.Max(scrollableScissorRect.X, currentScissor.X);
+            int scissorTop = Math.Max(scrollableScissorRect.Y, currentScissor.Y);
+            int scissorRight = Math.Min(scrollableScissorRect.Right, currentScissor.Right);
+            int scissorBottom = Math.Min(scrollableScissorRect.Bottom, currentScissor.Bottom);
+            
+            // Ensure we have valid dimensions
+            int scissorWidth = Math.Max(0, scissorRight - scissorLeft);
+            int scissorHeight = Math.Max(0, scissorBottom - scissorTop);
+            
+            Rectangle scissorRect = new Rectangle(
+                scissorLeft,
+                scissorTop,
+                scissorWidth,
+                scissorHeight
+            );
+            
+            // Only set scissor if we have valid dimensions
+            if (scissorWidth > 0 && scissorHeight > 0)
+            {
+                // Enable scissor test for scrollable area
+                spriteBatch.GraphicsDevice.ScissorRectangle = scissorRect;
+                spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+                {
+                    ScissorTestEnable = true
+                };
+                
+                // Header is always fixed at the top of scrollable area - only draw if visible
+                if (_scrollableContentBounds.Y + 40 >= scissorRect.Y && _scrollableContentBounds.Y < scissorRect.Bottom)
+                {
+                    DrawProjectHeader(spriteBatch, _scrollableContentBounds.Y, scissorRect);
+                }
+            }
+            else
+            {
+                // If scissor not set, use current scissor for header clipping
+                DrawProjectHeader(spriteBatch, _scrollableContentBounds.Y, currentScissor);
+            }
+
+            // Items scroll, starting below the header
+            int startY = _scrollableContentBounds.Y + 40 - _scrollY; // Start below header, account for scroll
             int itemY = startY;
-
-            // Draw header
-            DrawProjectHeader(spriteBatch, _rightContentBounds.Y + _contentPadding + 60);
-
-            itemY += 40; // Space for header
 
             for (int i = 0; i < _projects.Count; i++)
             {
                 var project = _projects[i];
                 var itemBounds = new Rectangle(
-                    _rightContentBounds.X + _contentPadding,
+                    _scrollableContentBounds.X + _contentPadding,
                     itemY,
-                    _rightContentBounds.Width - (_contentPadding * 2) - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0),
+                    _scrollableContentBounds.Width - (_contentPadding * 2) - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0),
                     _projectItemHeight
                 );
 
-                // Only draw if visible
-                if (itemBounds.Bottom > _rightContentBounds.Y && itemBounds.Top < _rightContentBounds.Bottom)
+                // Only draw if visible within scrollable bounds and not overlapping the header
+                // Header is 40px tall, so items should start at Y + 40
+                // Use the scissor rectangle bottom to ensure proper clipping to window bounds
+                int visibleTop = _scrollableContentBounds.Y + 40; // Start below header
+                // Use the actual scissor bottom if scissor was set, otherwise use current scissor (window bounds)
+                int visibleBottom = (scissorWidth > 0 && scissorHeight > 0) ? scissorRect.Bottom : currentScissor.Bottom;
+                
+                // Only draw if item is at least partially visible and doesn't start below the visible area
+                if (itemBounds.Top < visibleBottom && itemBounds.Bottom > visibleTop)
                 {
-                    bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && itemBounds.Contains(_currentMouseState.Position);
+                    // Clip item bounds to visible area to prevent drawing outside window
+                    // This ensures that even if scissor doesn't work, we won't draw outside bounds
+                    int clippedTop = Math.Max(itemBounds.Y, visibleTop);
+                    int clippedBottom = Math.Min(itemBounds.Bottom, visibleBottom);
+                    int clippedHeight = clippedBottom - clippedTop;
                     
-                    // Ensure project has a path for comparison
-                    string projectPath = !string.IsNullOrEmpty(project.Path) ? project.Path : Path.Combine(Directory.GetCurrentDirectory(), "Projects", project.Name);
-                    string normalizedProjectPath = Path.GetFullPath(projectPath);
-                    string normalizedActivePath = !string.IsNullOrEmpty(_activeWorkspacePath) ? Path.GetFullPath(_activeWorkspacePath) : "";
-                    bool isActiveWorkspace = !string.IsNullOrEmpty(_activeWorkspacePath) && 
-                                           normalizedProjectPath == normalizedActivePath;
+                    // Only draw if there's something visible
+                    if (clippedHeight > 0)
+                    {
+                        // Calculate the source rectangle for partial drawing
+                        int sourceY = clippedTop - itemBounds.Y;
+                        Rectangle clippedBounds = new Rectangle(
+                            itemBounds.X,
+                            clippedTop,
+                            itemBounds.Width,
+                            clippedHeight
+                        );
+                        
+                        // Only allow hover if mouse is within scrollable bounds
+                        bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                                         _scrollableContentBounds.Contains(_currentMouseState.Position) &&
+                                         itemBounds.Contains(_currentMouseState.Position);
+                        
+                        // Ensure project has a path for comparison
+                        string projectPath = !string.IsNullOrEmpty(project.Path) ? project.Path : Path.Combine(Directory.GetCurrentDirectory(), "Projects", project.Name);
+                        string normalizedProjectPath = Path.GetFullPath(projectPath);
+                        string normalizedActivePath = !string.IsNullOrEmpty(_activeWorkspacePath) ? Path.GetFullPath(_activeWorkspacePath) : "";
+                        bool isActiveWorkspace = !string.IsNullOrEmpty(_activeWorkspacePath) && 
+                                               normalizedProjectPath == normalizedActivePath;
 
-                    // Draw modern card - active workspace has highest priority, hover only if not active
-                    Color cardColor;
-                    if (isActiveWorkspace)
-                    {
-                        cardColor = PROJECT_ACTIVE_WORKSPACE_COLOR;
-                    }
-                    else if (isHovered)
-                    {
-                        cardColor = PROJECT_HOVER_COLOR;
-                    }
-                    else
-                    {
-                        cardColor = CARD_BACKGROUND;
-                    }
-                    
-                    DrawCard(spriteBatch, itemBounds, cardColor, true);
-                    
-                    // Draw subtle hover border if hovering and not active
-                    if (isHovered && !isActiveWorkspace)
-                    {
-                        DrawBorder(spriteBatch, itemBounds, new Color(147, 112, 219, 100)); // Subtle purple border
-                    }
+                        // Draw modern card - active workspace has highest priority, hover only if not active
+                        Color cardColor;
+                        if (isActiveWorkspace)
+                        {
+                            cardColor = PROJECT_ACTIVE_WORKSPACE_COLOR;
+                        }
+                        else if (isHovered)
+                        {
+                            cardColor = PROJECT_HOVER_COLOR;
+                        }
+                        else
+                        {
+                            cardColor = CARD_BACKGROUND;
+                        }
+                        
+                        // Draw card using clipped bounds - this ensures we only draw the visible portion
+                        // The scissor rectangle will also clip, but this is a backup
+                        DrawCard(spriteBatch, clippedBounds, cardColor, true);
+                        
+                        // Draw subtle hover border if hovering and not active (only if fully visible)
+                        if (isHovered && !isActiveWorkspace && itemBounds.Top >= visibleTop && itemBounds.Bottom <= visibleBottom)
+                        {
+                            DrawBorder(spriteBatch, clippedBounds, new Color(147, 112, 219, 100)); // Subtle purple border
+                        }
 
-                    // Draw project info
-                    DrawProjectItem(spriteBatch, project, itemBounds, isActiveWorkspace);
+                        // Draw project info - pass clipped bounds to ensure text is also clipped
+                        DrawProjectItem(spriteBatch, project, itemBounds, clippedBounds, isActiveWorkspace);
+                    }
                 }
 
                 itemY += _projectItemHeight + _projectItemPadding;
             }
+
+            // Restore scissor test to the window-level scissor (not completely disabled)
+            spriteBatch.GraphicsDevice.ScissorRectangle = currentScissor;
+            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+            {
+                ScissorTestEnable = true // Keep enabled to maintain window clipping
+            };
         }
 
-        private void DrawProjectHeader(SpriteBatch spriteBatch, int y)
+        private void DrawProjectHeader(SpriteBatch spriteBatch, int y, Rectangle clipBounds)
         {
-            int x = _rightContentBounds.X + _contentPadding;
-            int width = _rightContentBounds.Width - (_contentPadding * 2) - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0);
+            int x = _scrollableContentBounds.X + _contentPadding;
+            int width = _scrollableContentBounds.Width - (_contentPadding * 2) - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0);
 
-            // Draw header background with modern styling
+            // Draw header background with modern styling - clip to visible area
             var headerBounds = new Rectangle(x, y, width, 32);
-            DrawCard(spriteBatch, headerBounds, new Color(55, 65, 81), false); // Gray-700
-
-            // Draw header text with normal font
-            string[] headers = { "Name", "Genre", "Created", "Modified" };
-            int[] columnWidths = { width / 4, width / 4, width / 4, width / 4 };
-
-            int currentX = x + _cardPadding;
-            int textY = y + (headerBounds.Height - (int)(_uiFont.MeasureString("A").Y * FONT_SCALE)) / 2; // Center vertically
-            for (int i = 0; i < headers.Length; i++)
+            Rectangle clippedHeaderBounds = new Rectangle(
+                headerBounds.X,
+                Math.Max(headerBounds.Y, clipBounds.Y),
+                headerBounds.Width,
+                Math.Min(headerBounds.Bottom, clipBounds.Bottom) - Math.Max(headerBounds.Y, clipBounds.Y)
+            );
+            
+            if (clippedHeaderBounds.Height > 0)
             {
-                spriteBatch.DrawString(_uiFont, headers[i], new Vector2(currentX, textY), TEXT_SECONDARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
-                currentX += columnWidths[i];
+                DrawCard(spriteBatch, clippedHeaderBounds, new Color(55, 65, 81), false); // Gray-700
+            }
+
+            // Draw header text with normal font - only if fully within visible bounds
+            float textHeight = _uiFont.MeasureString("A").Y * FONT_SCALE;
+            int textY = y + (headerBounds.Height - (int)textHeight) / 2; // Center vertically
+            
+            // Only draw if text is fully within clipped bounds
+            if (textY >= clipBounds.Y && textY + textHeight <= clipBounds.Bottom)
+            {
+                string[] headers = { "Name", "Genre", "Created", "Modified" };
+                int[] columnWidths = { width / 4, width / 4, width / 4, width / 4 };
+
+                int currentX = x + _cardPadding;
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    Vector2 textSize = _uiFont.MeasureString(headers[i]) * FONT_SCALE;
+                    // Only draw if text doesn't extend beyond right edge
+                    if (currentX + textSize.X <= clipBounds.Right)
+                    {
+                        spriteBatch.DrawString(_uiFont, headers[i], new Vector2(currentX, textY), TEXT_SECONDARY, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    }
+                    currentX += columnWidths[i];
+                }
             }
         }
 
-        private void DrawProjectItem(SpriteBatch spriteBatch, GameProject project, Rectangle bounds, bool isActiveWorkspace)
+        private void DrawProjectItem(SpriteBatch spriteBatch, GameProject project, Rectangle bounds, Rectangle clippedBounds, bool isActiveWorkspace)
         {
             int x = bounds.X + _cardPadding;
             int y = bounds.Y + _cardPadding;
@@ -2081,51 +2369,100 @@ namespace MarySGameEngine.Modules.GameManager_essential
             Color textTertiaryColor = isActiveWorkspace ? new Color(30, 30, 30) : TEXT_TERTIARY; // Dark gray instead of pure black for tertiary
             Color genreColor = isActiveWorkspace ? Color.Black : (string.IsNullOrEmpty(project.Genre) ? TEXT_TERTIARY : ACCENT_COLOR);
 
+            // Get text height for visibility checking
+            float textHeight = _uiFont.MeasureString("A").Y * FONT_SCALE;
+
             // Check if this project is being renamed
             bool isBeingRenamed = _isRenaming && _contextMenuTargetProject == project;
 
             if (isBeingRenamed)
             {
                 System.Diagnostics.Debug.WriteLine($"GameManager: Drawing rename input field for project: {project.Name}");
-                // Draw rename input field only in the name column
-                DrawRenameInputField(spriteBatch, bounds, x, y, columnWidths[0]);
+                // Draw rename input field only in the name column - check if visible
+                if (y + 30 >= clippedBounds.Y && y < clippedBounds.Bottom)
+                {
+                    DrawRenameInputField(spriteBatch, bounds, x, y, columnWidths[0]);
+                }
                 
-                // Draw other columns normally
-                x += columnWidths[0];
-                spriteBatch.DrawString(_uiFont, project.Genre ?? "Unknown", new Vector2(x, y), genreColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                // Draw other columns normally - only if fully within visible bounds
+                if (y >= clippedBounds.Y && y + textHeight <= clippedBounds.Bottom)
+                {
+                    x += columnWidths[0];
+                    Vector2 textSize = _uiFont.MeasureString(project.Genre ?? "Unknown") * FONT_SCALE;
+                    if (x + textSize.X <= clippedBounds.Right)
+                    {
+                        spriteBatch.DrawString(_uiFont, project.Genre ?? "Unknown", new Vector2(x, y), genreColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    }
 
-                // Draw created date
-                x += columnWidths[1];
-                spriteBatch.DrawString(_uiFont, project.CreatedDate.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    // Draw created date
+                    x += columnWidths[1];
+                    textSize = _uiFont.MeasureString(project.CreatedDate.ToString("MM/dd/yyyy")) * FONT_SCALE;
+                    if (x + textSize.X <= clippedBounds.Right)
+                    {
+                        spriteBatch.DrawString(_uiFont, project.CreatedDate.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    }
 
-                // Draw modified date
-                x += columnWidths[2];
-                spriteBatch.DrawString(_uiFont, project.LastModified.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    // Draw modified date
+                    x += columnWidths[2];
+                    textSize = _uiFont.MeasureString(project.LastModified.ToString("MM/dd/yyyy")) * FONT_SCALE;
+                    if (x + textSize.X <= clippedBounds.Right)
+                    {
+                        spriteBatch.DrawString(_uiFont, project.LastModified.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    }
+                }
             }
             else
             {
-                // Draw project name
-                spriteBatch.DrawString(_uiFont, project.Name, new Vector2(x, y), textPrimaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                // Draw project name - only if fully within visible bounds
+                if (y >= clippedBounds.Y && y + textHeight <= clippedBounds.Bottom)
+                {
+                    Vector2 textSize = _uiFont.MeasureString(project.Name) * FONT_SCALE;
+                    if (x + textSize.X <= clippedBounds.Right)
+                    {
+                        spriteBatch.DrawString(_uiFont, project.Name, new Vector2(x, y), textPrimaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    }
 
-                // Draw genre
-                x += columnWidths[0];
-                spriteBatch.DrawString(_uiFont, project.Genre ?? "Unknown", new Vector2(x, y), genreColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    // Draw genre
+                    x += columnWidths[0];
+                    textSize = _uiFont.MeasureString(project.Genre ?? "Unknown") * FONT_SCALE;
+                    if (x + textSize.X <= clippedBounds.Right)
+                    {
+                        spriteBatch.DrawString(_uiFont, project.Genre ?? "Unknown", new Vector2(x, y), genreColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    }
 
-                // Draw created date
-                x += columnWidths[1];
-                spriteBatch.DrawString(_uiFont, project.CreatedDate.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    // Draw created date
+                    x += columnWidths[1];
+                    textSize = _uiFont.MeasureString(project.CreatedDate.ToString("MM/dd/yyyy")) * FONT_SCALE;
+                    if (x + textSize.X <= clippedBounds.Right)
+                    {
+                        spriteBatch.DrawString(_uiFont, project.CreatedDate.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    }
 
-                // Draw modified date
-                x += columnWidths[2];
-                spriteBatch.DrawString(_uiFont, project.LastModified.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    // Draw modified date
+                    x += columnWidths[2];
+                    textSize = _uiFont.MeasureString(project.LastModified.ToString("MM/dd/yyyy")) * FONT_SCALE;
+                    if (x + textSize.X <= clippedBounds.Right)
+                    {
+                        spriteBatch.DrawString(_uiFont, project.LastModified.ToString("MM/dd/yyyy"), new Vector2(x, y), textTertiaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    }
+                }
 
-                // Draw description on second line with better styling
+                // Draw description on second line with better styling - only if fully visible
                 if (!string.IsNullOrEmpty(project.Description))
                 {
                     x = bounds.X + _cardPadding;
-                    y += 24; // Better line spacing
-                    string description = project.Description.Length > 60 ? project.Description.Substring(0, 57) + "..." : project.Description;
-                    spriteBatch.DrawString(_uiFont, description, new Vector2(x, y), textSecondaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                    int descY = bounds.Y + _cardPadding + 24; // Better line spacing
+                    
+                    // Only draw if description line is fully within visible bounds
+                    if (descY >= clippedBounds.Y && descY + textHeight <= clippedBounds.Bottom)
+                    {
+                        string description = project.Description.Length > 60 ? project.Description.Substring(0, 57) + "..." : project.Description;
+                        Vector2 textSize = _uiFont.MeasureString(description) * FONT_SCALE;
+                        if (x + textSize.X <= clippedBounds.Right)
+                        {
+                            spriteBatch.DrawString(_uiFont, description, new Vector2(x, descY), textSecondaryColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
+                        }
+                    }
                 }
             }
         }
@@ -2231,9 +2568,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
             DrawRoundedRectangle(spriteBatch, _scrollbarBounds, new Color(55, 65, 81), 4);
 
             // Calculate thumb size and position
-            float contentRatio = (float)_rightContentBounds.Height / _contentHeight;
+            float contentRatio = (float)_scrollableContentBounds.Height / _contentHeight;
             int thumbHeight = Math.Max(20, (int)(_scrollbarBounds.Height * contentRatio));
-            int thumbY = _scrollbarBounds.Y + (int)((_scrollbarBounds.Height - thumbHeight) * (_scrollY / (float)Math.Max(1, _contentHeight - _rightContentBounds.Height)));
+            int thumbY = _scrollbarBounds.Y + (int)((_scrollbarBounds.Height - thumbHeight) * (_scrollY / (float)Math.Max(1, _contentHeight - _scrollableContentBounds.Height)));
 
             var thumbBounds = new Rectangle(_scrollbarBounds.X + 2, thumbY + 2, _scrollbarBounds.Width - 4, thumbHeight - 4);
             bool isThumbHovered = (!IsMouseOverTopBarDropdown(_currentMouseState.Position) && thumbBounds.Contains(_currentMouseState.Position)) || _isDraggingScrollbar;

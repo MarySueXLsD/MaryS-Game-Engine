@@ -26,14 +26,14 @@ namespace MarySGameEngine.Modules.HierarchyTree_essential
             // Create window properties from bridge.json
             var properties = new WindowProperties
             {
-                IsVisible = true,
+                IsVisible = false,
                 IsMovable = true,
                 IsResizable = true
             };
 
             // Initialize window management
             _windowManagement = new WindowManagement(graphicsDevice, menuFont, windowWidth, properties);
-            _windowManagement.SetVisible(true);  // Explicitly set visible
+            _windowManagement.SetVisible(false);  // Not visible by default
 
             // Position the window on the left side of the screen
             UpdateBounds();

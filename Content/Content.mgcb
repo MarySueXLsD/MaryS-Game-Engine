@@ -408,6 +408,30 @@
 /processorParam:TextureFormat=Color
 /build:Modules/WindowManagement_essential/unpin.png
 
+#begin Modules/WindowManagement_essential/BarGradients/artistic_blurry.jpg
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Modules/WindowManagement_essential/BarGradients/artistic_blurry.jpg
+
+#begin Modules/WindowManagement_essential/BarGradients/artistic_blurry_2.jpg
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyColor=255,0,255,255
+/processorParam:ColorKeyEnabled=True
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:Modules/WindowManagement_essential/BarGradients/artistic_blurry_2.jpg
+
 #begin Modules/Desktop_essential/arrow_down.png
 /importer:TextureImporter
 /processor:TextureProcessor
