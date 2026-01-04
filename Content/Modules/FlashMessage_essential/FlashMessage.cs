@@ -90,27 +90,38 @@ namespace MarySGameEngine.Modules.FlashMessage_essential
         {
             _content = content;
             
-            // Load a different font for flash messages (try Open Sans, fallback to menu font)
+            // Load a different font for flash messages (try Roboto, then Inconsolata, fallback to menu font)
+            // Match the same font loading logic as TopBar workspace font
             try
             {
-                _flashMessageFont = content.Load<SpriteFont>("Fonts/SpriteFonts/open_sans/regular");
-                System.Diagnostics.Debug.WriteLine("FlashMessage: Successfully loaded Open Sans font");
+                _flashMessageFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");
+                System.Diagnostics.Debug.WriteLine("FlashMessage: Successfully loaded Roboto font");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"FlashMessage: Failed to load Open Sans font: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"FlashMessage: Failed to load Roboto font: {ex.Message}");
                 try
                 {
-                    // Try Roboto as fallback
-                    _flashMessageFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");
-                    System.Diagnostics.Debug.WriteLine("FlashMessage: Using Roboto font as fallback");
+                    // Try Inconsolata as fallback
+                    _flashMessageFont = content.Load<SpriteFont>("Fonts/SpriteFonts/inconsolata/regular");
+                    System.Diagnostics.Debug.WriteLine("FlashMessage: Using Inconsolata font as fallback");
                 }
                 catch (Exception ex2)
                 {
-                    System.Diagnostics.Debug.WriteLine($"FlashMessage: Failed to load Roboto font: {ex2.Message}");
-                    // Use menu font as last resort
-                    _flashMessageFont = _menuFont;
-                    System.Diagnostics.Debug.WriteLine("FlashMessage: Using menu font as last resort");
+                    System.Diagnostics.Debug.WriteLine($"FlashMessage: Failed to load Inconsolata font: {ex2.Message}");
+                    try
+                    {
+                        // Try Open Sans as another fallback
+                        _flashMessageFont = content.Load<SpriteFont>("Fonts/SpriteFonts/open_sans/regular");
+                        System.Diagnostics.Debug.WriteLine("FlashMessage: Using Open Sans font as fallback");
+                    }
+                    catch (Exception ex3)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"FlashMessage: Failed to load Open Sans font: {ex3.Message}");
+                        // Use menu font as last resort
+                        _flashMessageFont = _menuFont;
+                        System.Diagnostics.Debug.WriteLine("FlashMessage: Using menu font as last resort");
+                    }
                 }
             }
             

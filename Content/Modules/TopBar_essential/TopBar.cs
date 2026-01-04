@@ -113,7 +113,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
         private const float HIGHLIGHT_MAX_ALPHA = 0.7f; // Match WindowManagement
         
         // Workspace display
-        private string _workspaceText = "Workspace: None";
+        private string _workspaceText = "No workspace chosen";
         private string _previousWorkspaceText = "";
         private float _workspaceAnimationTimer = 0f;
         private const float WORKSPACE_ANIMATION_DURATION = 0.5f; // 500ms fade-in animation
@@ -1326,7 +1326,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
                 System.Diagnostics.Debug.WriteLine($"TopBar: Error getting active workspace: {ex.Message}");
             }
             
-            return "Workspace: None";
+            return "No workspace chosen";
         }
     }
 } 

@@ -91,7 +91,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private bool _isHighlighted = false;
 
         // Font scaling
-        private const float TITLE_FONT_SCALE = 0.9f; // Scale to 18px (assuming base font is 16px)
+        private const float TITLE_FONT_SCALE = 1.2f; // Increased from 0.9f to make title text more visible
 
         // Resources
         private SpriteFont _menuFont;
@@ -104,6 +104,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private Texture2D _settingsIcon;
         private Texture2D _pinIcon;
         private Texture2D _unpinIcon;
+        private Texture2D _titleBarGradient;
+        private Texture2D _titleBarGradientLine; // Single horizontal line extracted from gradient
+        private bool _useGradientForTitleBar = true; // Toggle between gradient and solid color
         private MouseState _currentMouseState;
         private MouseState _previousMouseState;
         private GraphicsDevice _graphicsDevice;
@@ -1069,6 +1072,11 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             {
                 _engine.Log($"WindowManagement: Starting close animation for window {_windowTitle}");
                 
+                // Clear tooltip when closing starts
+                _currentTooltip = string.Empty;
+                _tooltipTimer = 0f;
+                _showTooltip = false;
+                
                 // Calculate the center of the window for the shrink animation
                 _closeAnimationCenter = new Vector2(
                     _position.X + (_windowBounds.Width / 2),
@@ -1240,7 +1248,17 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 _titleBarHeight
             );
             Color titleBarColor = _isPinned ? _pinnedTitleBarColor : _titleBarColor;
-            spriteBatch.Draw(_pixel, titleBarBounds, titleBarColor);
+            
+            // Use gradient if enabled and loaded, otherwise use solid color
+            if (_useGradientForTitleBar && _titleBarGradientLine != null)
+            {
+                // Draw the horizontal gradient line stretched across the title bar width
+                spriteBatch.Draw(_titleBarGradientLine, titleBarBounds, Color.White);
+            }
+            else
+            {
+                spriteBatch.Draw(_pixel, titleBarBounds, titleBarColor);
+            }
 
             // Draw title text with the title font
             Vector2 titleTextPos = new Vector2(
@@ -1416,6 +1434,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _pinnedWindows.Remove(this);
             _pinnedWindowsOrder.Remove(this);
             _pixel?.Dispose();
+            _titleBarGradientLine?.Dispose();
         }
 
         public void ResetCursor()
@@ -1506,6 +1525,16 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         {
             _position = newPosition;
             UpdateWindowBounds();
+        }
+
+        public void SetUseGradientForTitleBar(bool useGradient)
+        {
+            _useGradientForTitleBar = useGradient;
+        }
+
+        public bool GetUseGradientForTitleBar()
+        {
+            return _useGradientForTitleBar;
         }
 
         public void HandleTaskBarClick()
@@ -1731,7 +1760,71 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _settingsIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/settings");
             _pinIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/pin");
             _unpinIcon = content.Load<Texture2D>("Modules/WindowManagement_essential/unpin");
-            _titleFont = content.Load<SpriteFont>("Fonts/SpriteFonts/bitcount_grid/regular");
+            _titleFont = content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font/regular");
+            
+            // Load title bar gradient and extract top-middle horizontal line
+            try
+            {
+                _titleBarGradient = content.Load<Texture2D>("Modules/WindowManagement_essential/BarGradients/artistic_blurry");
+                
+                // Extract the top-middle horizontal line from the gradient
+                ExtractGradientLine();
+                
+                _engine.Log("WindowManagement: Title bar gradient loaded and line extracted successfully");
+            }
+            catch (Exception ex)
+            {
+                _titleBarGradient = null;
+                _titleBarGradientLine = null;
+                _useGradientForTitleBar = false; // Fall back to solid color if gradient can't be loaded
+                _engine.Log($"WindowManagement: Failed to load title bar gradient: {ex.Message}. Using solid color instead.");
+            }
+        }
+
+        private void ExtractGradientLine()
+        {
+            if (_titleBarGradient == null || _graphicsDevice == null)
+                return;
+
+            try
+            {
+                // Get texture dimensions
+                int width = _titleBarGradient.Width;
+                int height = _titleBarGradient.Height;
+                
+                // Extract a horizontal strip from the top-middle area (use a strip around 5-10% from top)
+                int stripStartY = Math.Max(0, height / 20); // Start at ~5% from top
+                int stripHeight = Math.Min(10, height / 10); // Use a strip about 10% of image height, max 10 pixels
+                
+                // Get the pixel data from the entire texture
+                Color[] textureData = new Color[width * height];
+                _titleBarGradient.GetData(textureData);
+                
+                // Extract the horizontal strip
+                Color[] stripData = new Color[width * stripHeight];
+                for (int y = 0; y < stripHeight; y++)
+                {
+                    int sourceY = stripStartY + y;
+                    if (sourceY < height)
+                    {
+                        for (int x = 0; x < width; x++)
+                        {
+                            stripData[y * width + x] = textureData[sourceY * width + x];
+                        }
+                    }
+                }
+                
+                // Create a texture from the extracted horizontal strip
+                _titleBarGradientLine = new Texture2D(_graphicsDevice, width, stripHeight);
+                _titleBarGradientLine.SetData(stripData);
+                
+                _engine.Log($"WindowManagement: Extracted gradient strip from y={stripStartY} to y={stripStartY + stripHeight - 1} (width={width}, height={stripHeight})");
+            }
+            catch (Exception ex)
+            {
+                _titleBarGradientLine = null;
+                _engine.Log($"WindowManagement: Failed to extract gradient strip: {ex.Message}");
+            }
         }
 
         private string GetButtonTooltip(Rectangle bounds)
@@ -1751,6 +1844,15 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
         private void UpdateTooltip(MouseState mouseState)
         {
+            // Don't process tooltips if window is closing or not visible
+            if (_isClosing || !_properties.IsVisible)
+            {
+                _currentTooltip = string.Empty;
+                _tooltipTimer = 0f;
+                _showTooltip = false;
+                return;
+            }
+            
             // Only process tooltips if this window is the topmost window under the mouse
             if (!IsTopmostWindowUnderMouse(this, mouseState.Position))
             {
@@ -1843,6 +1945,10 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
         private void DrawTooltip(SpriteBatch spriteBatch)
         {
+            // Don't draw tooltip if window is closing or not visible
+            if (_isClosing || !_properties.IsVisible)
+                return;
+                
             if (!_showTooltip || string.IsNullOrEmpty(_currentTooltip))
                 return;
 
