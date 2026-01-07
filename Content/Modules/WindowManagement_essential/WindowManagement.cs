@@ -1473,28 +1473,32 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     _pinnedWindowsOrder.Remove(this);
                 }
             }
-            else if (!_activeWindows.Contains(this))
+            else
             {
-                _activeWindows.Add(this);
-                
-                // Reset pinned state when reopening a window
-                // This ensures that closed and reopened windows start unpinned
-                if (_isPinned)
+                // Ensure window is in active windows list
+                if (!_activeWindows.Contains(this))
                 {
-                    _engine.Log($"WindowManagement: Resetting pinned state for reopened window {_windowTitle}");
-                    _isPinned = false;
+                    _activeWindows.Add(this);
+                    
+                    // Reset pinned state when reopening a window
+                    // This ensures that closed and reopened windows start unpinned
+                    if (_isPinned)
+                    {
+                        _engine.Log($"WindowManagement: Resetting pinned state for reopened window {_windowTitle}");
+                        _isPinned = false;
+                    }
+                    
+                    // Start opening animation
+                    StartOpenAnimation();
+                    
+                    BringToFront();
                 }
                 
-                // Ensure TaskBar has an icon for this window
+                // Always ensure TaskBar has an icon for this window when visible
                 if (_taskBar != null)
                 {
                     _taskBar.EnsureModuleIconExists(_windowTitle);
                 }
-                
-                // Start opening animation
-                StartOpenAnimation();
-                
-                BringToFront();
             }
         }
 

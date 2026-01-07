@@ -9,6 +9,7 @@ using System.Linq;
 using System;
 using MarySGameEngine;
 using MarySGameEngine.Modules.WindowManagement_essential;
+using MarySGameEngine.Modules.NotificationCenter_essential;
 
 namespace MarySGameEngine.Modules.TopBar_essential
 {
@@ -120,6 +121,9 @@ namespace MarySGameEngine.Modules.TopBar_essential
         private bool _workspaceTextChanged = false;
         private Vector2 _workspaceTextPosition;
         private Rectangle _workspaceSeparatorBounds;
+
+        // NotificationCenter integration
+        private NotificationCenter _notificationCenter;
 
         public TopBar(GraphicsDevice graphicsDevice, SpriteFont menuFont, SpriteFont dropdownFont, int windowWidth)
         {
@@ -398,6 +402,27 @@ namespace MarySGameEngine.Modules.TopBar_essential
             
             // Update workspace display
             UpdateWorkspaceDisplay();
+
+            // Check for notification icon click first (before processing menu items)
+            if (_notificationCenter != null)
+            {
+                Rectangle iconBounds = _notificationCenter.GetIconBounds();
+                bool isIconHovered = iconBounds.Contains(_currentMouseState.Position);
+                
+                // Handle notification icon click
+                if (_currentMouseState.LeftButton == ButtonState.Pressed &&
+                    _previousMouseState.LeftButton == ButtonState.Released &&
+                    isIconHovered)
+                {
+                    // Toggle notification dropdown
+                    System.Diagnostics.Debug.WriteLine($"TopBar: Notification icon clicked at {_currentMouseState.Position}, icon bounds: {iconBounds}");
+                    _notificationCenter.ToggleDropdown();
+                    GameEngine.Instance.SetTopBarHandledClick(true);
+                }
+                
+                // Update NotificationCenter (for hover states, dropdown handling, etc.)
+                _notificationCenter.Update();
+            }
 
             // Update menu items
             for (int menuIndex = 0; menuIndex < _menuItems.Count; menuIndex++)
@@ -1022,6 +1047,12 @@ namespace MarySGameEngine.Modules.TopBar_essential
                 
                 spriteBatch.DrawString(fontToUse, _workspaceText, workspaceTextDrawPosition, workspaceTextColor);
             }
+
+            // Draw notification icon at right edge
+            if (_notificationCenter != null)
+            {
+                _notificationCenter.Draw(spriteBatch);
+            }
         }
 
         public void DrawHighlight(SpriteBatch spriteBatch)
@@ -1173,6 +1204,27 @@ namespace MarySGameEngine.Modules.TopBar_essential
         {
             _windowWidth = newWidth;
             InitializeMenuItems();
+            
+            // Update NotificationCenter icon bounds
+            if (_notificationCenter != null)
+            {
+                _notificationCenter.UpdateWindowWidth(newWidth);
+            }
+        }
+
+        public void SetNotificationCenter(NotificationCenter notificationCenter)
+        {
+            _notificationCenter = notificationCenter;
+            if (_notificationCenter != null)
+            {
+                // Set icon bounds at right edge, centered vertically in TopBar
+                const int ICON_SIZE = 30;
+                const int ICON_PADDING = 5;
+                int iconY = (_buttonHeight - ICON_SIZE) / 2; // Center vertically in TopBar
+                Rectangle iconBounds = new Rectangle(_windowWidth - ICON_SIZE - ICON_PADDING, iconY, ICON_SIZE, ICON_SIZE);
+                _notificationCenter.SetIconBounds(iconBounds);
+                System.Diagnostics.Debug.WriteLine($"TopBar: Set notification icon bounds to {iconBounds}");
+            }
         }
 
         public void LoadContent(ContentManager content)

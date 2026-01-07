@@ -302,14 +302,26 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             continue;
                         }
 
-                        // Skip GameManager module - it will be added when opened
-                        if (moduleInfo.Name == "Game Manager")
+                        // Skip Chat module - it will be added when opened
+                        if (moduleInfo.Name == "Chat")
                         {
                             continue;
                         }
 
-                        // Skip Chat module - it will be added when opened
-                        if (moduleInfo.Name == "Chat")
+                        // Skip Hierarchy Tree module - it will be added when opened
+                        if (moduleInfo.Name == "Hierarchy Tree")
+                        {
+                            continue;
+                        }
+
+                        // Skip Asset Browser module - it will be added when opened
+                        if (moduleInfo.Name == "Asset Browser")
+                        {
+                            continue;
+                        }
+
+                        // Skip Notification Center module - it's integrated into TopBar
+                        if (moduleInfo.Name == "Notification Center")
                         {
                             continue;
                         }

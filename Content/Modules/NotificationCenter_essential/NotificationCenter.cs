@@ -1,0 +1,758 @@
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+using Microsoft.Xna.Framework.Content;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using MarySGameEngine;
+
+namespace MarySGameEngine.Modules.NotificationCenter_essential
+{
+    public class NotificationCenter : IModule
+    {
+        private GraphicsDevice _graphicsDevice;
+        private SpriteFont _menuFont;
+        private SpriteFont _dropdownFont;
+        private SpriteFont _notificationFont; // Font for notifications (same as FlashMessage)
+        private int _windowWidth;
+        private GameEngine _engine;
+        private Texture2D _pixel;
+        private Texture2D _logo;
+        private MouseState _currentMouseState;
+        private MouseState _previousMouseState;
+        private bool _isHoveringOverInteractive = false;
+
+        // Notification properties
+        private class Notification
+        {
+            [JsonPropertyName("message")]
+            public string Message { get; set; }
+            
+            [JsonPropertyName("timestamp")]
+            public DateTime Timestamp { get; set; }
+            
+            [JsonPropertyName("type")]
+            public string Type { get; set; } // "workspace", "system", etc.
+        }
+
+        private class NotificationsData
+        {
+            [JsonPropertyName("notifications")]
+            public List<Notification> Notifications { get; set; } = new List<Notification>();
+        }
+
+        private List<Notification> _notifications = new List<Notification>();
+        private const int MAX_NOTIFICATIONS = 30; // Keep last 30 notifications
+        private string _notificationsFilePath;
+
+        // TopBar integration
+        private Rectangle _iconBounds;
+        private const int ICON_SIZE = 30;
+        private const int ICON_PADDING = 5;
+        private bool _isIconHovered = false;
+
+        // Dropdown properties
+        private bool _isDropdownOpen = false;
+        private Rectangle _dropdownBounds;
+        private int _hoveredNotificationIndex = -1;
+        private int _scrollOffset = 0;
+        private const int MAX_VISIBLE_ITEMS = 6; // Show 6 notifications visible
+        private const int ITEM_HEIGHT = 50;
+        private const int DROPDOWN_WIDTH = 650;
+        private Rectangle _scrollBarBounds;
+        private bool _isDraggingScroll = false;
+        private Vector2 _scrollDragStart;
+        private const int SCROLLBAR_WIDTH = 16;
+
+        // Colors (matching TopBar style)
+        private readonly Color MIAMI_BACKGROUND = new Color(40, 40, 40);
+        private readonly Color MIAMI_BORDER = new Color(147, 112, 219);
+        private readonly Color MIAMI_PURPLE = new Color(147, 112, 219); // Main purple color
+        private readonly Color MIAMI_PURPLE_LIGHT = new Color(180, 145, 250); // Lighter purple
+        private readonly Color MIAMI_HOVER = new Color(147, 112, 219, 180);
+        private readonly Color MIAMI_TEXT = new Color(220, 220, 220);
+        private readonly Color MIAMI_SHADOW = new Color(0, 0, 0, 100);
+        private readonly Color NOTIFICATION_BACKGROUND = new Color(50, 50, 50);
+        private readonly Color NOTIFICATION_HOVER = new Color(60, 60, 60);
+
+        // Previous workspace tracking
+        private string _previousWorkspaceText = "";
+
+        public NotificationCenter(GraphicsDevice graphicsDevice, SpriteFont menuFont, SpriteFont dropdownFont, int windowWidth)
+        {
+            _graphicsDevice = graphicsDevice;
+            _menuFont = menuFont;
+            _dropdownFont = dropdownFont;
+            _windowWidth = windowWidth;
+            _engine = (GameEngine)GameEngine.Instance;
+
+            // Create 1x1 white pixel texture
+            _pixel = new Texture2D(graphicsDevice, 1, 1);
+            _pixel.SetData(new[] { Color.White });
+
+            // Initialize icon bounds (will be set by TopBar)
+            _iconBounds = new Rectangle(_windowWidth - ICON_SIZE - ICON_PADDING, ICON_PADDING, ICON_SIZE, ICON_SIZE);
+
+            // Set notifications file path
+            string dataDir = Path.Combine(Directory.GetCurrentDirectory(), "Data");
+            if (!Directory.Exists(dataDir))
+            {
+                Directory.CreateDirectory(dataDir);
+            }
+            _notificationsFilePath = Path.Combine(dataDir, "notifications.json");
+
+            // Load notifications from file
+            LoadNotifications();
+        }
+
+        public void Update()
+        {
+            _previousMouseState = _currentMouseState;
+            _currentMouseState = Mouse.GetState();
+
+            // Track if we're hovering over any interactive element
+            bool wasHoveringOverInteractive = _isHoveringOverInteractive;
+            _isHoveringOverInteractive = false;
+
+            // Check for workspace changes
+            CheckWorkspaceChanges();
+
+            // Update icon hover state
+            _isIconHovered = _iconBounds.Contains(_currentMouseState.Position);
+            if (_isIconHovered)
+            {
+                _isHoveringOverInteractive = true;
+            }
+
+            // Handle dropdown
+            if (_isDropdownOpen)
+            {
+                HandleDropdown();
+            }
+
+            // Update cursor based on hover state
+            UpdateCursor(wasHoveringOverInteractive);
+        }
+
+        private void CheckWorkspaceChanges()
+        {
+            try
+            {
+                string currentWorkspaceText = GetActiveWorkspaceText();
+                
+                // Only trigger notification if workspace actually changed (not just initialized)
+                if (!string.IsNullOrEmpty(_previousWorkspaceText) &&
+                    !string.IsNullOrEmpty(currentWorkspaceText) && 
+                    currentWorkspaceText != _previousWorkspaceText &&
+                    currentWorkspaceText != "No workspace chosen" &&
+                    _previousWorkspaceText != "No workspace chosen")
+                {
+                    // Workspace changed, add notification
+                    AddNotification($"Workspace changed to {currentWorkspaceText}", "workspace");
+                }
+                
+                // Update previous workspace text
+                _previousWorkspaceText = currentWorkspaceText;
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"NotificationCenter: Error checking workspace changes: {ex.Message}");
+            }
+        }
+
+        private string GetActiveWorkspaceText()
+        {
+            try
+            {
+                var modules = GameEngine.Instance.GetActiveModules();
+                foreach (var module in modules)
+                {
+                    if (module is MarySGameEngine.Modules.GameManager_essential.GameManager gameManager)
+                    {
+                        var activeWorkspacePathField = gameManager.GetType().GetField("_activeWorkspacePath",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        
+                        if (activeWorkspacePathField != null)
+                        {
+                            string activeWorkspacePath = activeWorkspacePathField.GetValue(gameManager) as string ?? "";
+                            
+                            if (!string.IsNullOrEmpty(activeWorkspacePath))
+                            {
+                                var projectsField = gameManager.GetType().GetField("_projects",
+                                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                
+                                if (projectsField != null)
+                                {
+                                    var projects = projectsField.GetValue(gameManager) as System.Collections.Generic.List<MarySGameEngine.Modules.GameManager_essential.GameProject>;
+                                    
+                                    if (projects != null)
+                                    {
+                                        foreach (var project in projects)
+                                        {
+                                            string projectPath = !string.IsNullOrEmpty(project.Path) 
+                                                ? project.Path 
+                                                : System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Projects", project.Name);
+                                            
+                                            string normalizedProjectPath = System.IO.Path.GetFullPath(projectPath);
+                                            string normalizedActivePath = System.IO.Path.GetFullPath(activeWorkspacePath);
+                                            
+                                            if (normalizedProjectPath == normalizedActivePath)
+                                            {
+                                                string gameType = !string.IsNullOrEmpty(project.Genre) ? project.Genre : "Unknown";
+                                                return $"{project.Name} ({gameType})";
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"NotificationCenter: Error getting active workspace: {ex.Message}");
+            }
+            
+            return "No workspace chosen";
+        }
+
+        private void AddNotification(string message, string type)
+        {
+            var notification = new Notification
+            {
+                Message = message,
+                Timestamp = DateTime.Now,
+                Type = type
+            };
+
+            _notifications.Insert(0, notification); // Add to beginning
+
+            // Limit to max notifications (keep only last 15, remove older ones)
+            if (_notifications.Count > MAX_NOTIFICATIONS)
+            {
+                _notifications.RemoveRange(MAX_NOTIFICATIONS, _notifications.Count - MAX_NOTIFICATIONS);
+            }
+
+            // Save to file
+            SaveNotifications();
+
+            _engine.Log($"NotificationCenter: Added notification: {message}");
+        }
+
+        private void LoadNotifications()
+        {
+            try
+            {
+                if (File.Exists(_notificationsFilePath))
+                {
+                    string jsonContent = File.ReadAllText(_notificationsFilePath);
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        ReadCommentHandling = JsonCommentHandling.Skip
+                    };
+                    var data = JsonSerializer.Deserialize<NotificationsData>(jsonContent, options);
+                    if (data != null && data.Notifications != null)
+                    {
+                        _notifications = data.Notifications;
+                        // Ensure we only have max notifications
+                        if (_notifications.Count > MAX_NOTIFICATIONS)
+                        {
+                            _notifications = _notifications.Take(MAX_NOTIFICATIONS).ToList();
+                        }
+                        _engine.Log($"NotificationCenter: Loaded {_notifications.Count} notifications from file");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"NotificationCenter: Error loading notifications: {ex.Message}");
+                _notifications = new List<Notification>();
+            }
+        }
+
+        private void SaveNotifications()
+        {
+            try
+            {
+                var data = new NotificationsData
+                {
+                    Notifications = _notifications
+                };
+                
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                };
+                
+                string jsonContent = JsonSerializer.Serialize(data, options);
+                File.WriteAllText(_notificationsFilePath, jsonContent);
+                _engine.Log($"NotificationCenter: Saved {_notifications.Count} notifications to file");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"NotificationCenter: Error saving notifications: {ex.Message}");
+            }
+        }
+
+        private void HandleDropdown()
+        {
+            var mousePos = _currentMouseState.Position;
+            bool leftPressed = _currentMouseState.LeftButton == ButtonState.Pressed;
+            bool leftJustPressed = leftPressed && _previousMouseState.LeftButton == ButtonState.Released;
+
+            if (leftJustPressed)
+            {
+                // Check if clicked on scrollbar
+                if (!_scrollBarBounds.IsEmpty && _scrollBarBounds.Contains(mousePos))
+                {
+                    _isDraggingScroll = true;
+                    _scrollDragStart = new Vector2(mousePos.X, mousePos.Y);
+                    return;
+                }
+
+                // Check if clicked on notification item
+                int visibleItems = Math.Min(_notifications.Count, MAX_VISIBLE_ITEMS);
+                for (int i = 0; i < visibleItems; i++)
+                {
+                    int actualIndex = i + _scrollOffset;
+                    if (actualIndex >= _notifications.Count) break;
+
+                    Rectangle itemRect = new Rectangle(
+                        _dropdownBounds.X,
+                        _dropdownBounds.Y + (i * ITEM_HEIGHT),
+                        _dropdownBounds.Width - (_scrollBarBounds.IsEmpty ? 0 : SCROLLBAR_WIDTH),
+                        ITEM_HEIGHT
+                    );
+
+                    if (itemRect.Contains(mousePos))
+                    {
+                        // Notification clicked (could add action here)
+                        _engine.Log($"NotificationCenter: Clicked notification: {_notifications[actualIndex].Message}");
+                        break;
+                    }
+                }
+
+                // If clicked outside dropdown, close it
+                if (!_dropdownBounds.Contains(mousePos) && !_iconBounds.Contains(mousePos))
+                {
+                    CloseDropdown();
+                }
+            }
+            else if (leftPressed && _isDraggingScroll)
+            {
+                // Handle scrollbar dragging
+                float deltaY = mousePos.Y - _scrollDragStart.Y;
+                int maxScroll = _notifications.Count - MAX_VISIBLE_ITEMS;
+                float scrollBarHeight = _scrollBarBounds.Height;
+
+                // Calculate new scroll offset based on mouse position relative to scrollbar
+                float mouseRatio = (mousePos.Y - _scrollBarBounds.Y) / scrollBarHeight;
+                mouseRatio = Math.Max(0, Math.Min(1, mouseRatio));
+
+                _scrollOffset = (int)(mouseRatio * maxScroll);
+                _scrollDragStart = new Vector2(mousePos.X, mousePos.Y);
+            }
+            else if (!leftPressed && _isDraggingScroll)
+            {
+                _isDraggingScroll = false;
+            }
+            else
+            {
+                // Update hover state for dropdown items
+                _hoveredNotificationIndex = -1;
+                int visibleItems = Math.Min(_notifications.Count, MAX_VISIBLE_ITEMS);
+                for (int i = 0; i < visibleItems; i++)
+                {
+                    int actualIndex = i + _scrollOffset;
+                    if (actualIndex >= _notifications.Count) break;
+
+                    Rectangle itemRect = new Rectangle(
+                        _dropdownBounds.X,
+                        _dropdownBounds.Y + (i * ITEM_HEIGHT),
+                        _dropdownBounds.Width - (_scrollBarBounds.IsEmpty ? 0 : SCROLLBAR_WIDTH),
+                        ITEM_HEIGHT
+                    );
+
+                    if (itemRect.Contains(mousePos))
+                    {
+                        _hoveredNotificationIndex = actualIndex;
+                        _isHoveringOverInteractive = true;
+                        break;
+                    }
+                }
+            }
+
+            // Handle mouse wheel scrolling when dropdown is open
+            if (_notifications.Count > MAX_VISIBLE_ITEMS)
+            {
+                int scrollDelta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
+                if (scrollDelta != 0 && _dropdownBounds.Contains(mousePos))
+                {
+                    int scrollStep = scrollDelta > 0 ? -1 : 1;
+                    int maxScroll = Math.Max(0, _notifications.Count - MAX_VISIBLE_ITEMS);
+                    _scrollOffset = Math.Max(0, Math.Min(maxScroll, _scrollOffset + scrollStep));
+                }
+            }
+        }
+
+        private void UpdateDropdownBounds()
+        {
+            // Calculate dropdown position (above the icon, aligned to right)
+            // Always show 4 notifications at a time (or fewer if less available)
+            int visibleItems = Math.Min(_notifications.Count, MAX_VISIBLE_ITEMS);
+            int dropdownHeight = visibleItems * ITEM_HEIGHT;
+            
+            // If no notifications, show a small empty dropdown
+            if (_notifications.Count == 0)
+            {
+                dropdownHeight = ITEM_HEIGHT * 2; // Show empty state with some height
+            }
+
+            int dropdownX = _windowWidth - DROPDOWN_WIDTH - ICON_PADDING;
+            int dropdownY = _iconBounds.Bottom + ICON_PADDING;
+
+            // Check if dropdown would go off screen, position above icon instead
+            if (dropdownY + dropdownHeight > _graphicsDevice.Viewport.Height)
+            {
+                dropdownY = _iconBounds.Y - dropdownHeight - ICON_PADDING;
+            }
+
+            _dropdownBounds = new Rectangle(dropdownX, dropdownY, DROPDOWN_WIDTH, dropdownHeight);
+            UpdateScrollBar();
+        }
+
+        private void UpdateScrollBar()
+        {
+            int visibleItems = Math.Min(_notifications.Count, MAX_VISIBLE_ITEMS);
+            if (_notifications.Count > visibleItems)
+            {
+                int scrollBarWidth = SCROLLBAR_WIDTH;
+                _scrollBarBounds = new Rectangle(
+                    _dropdownBounds.Right - scrollBarWidth,
+                    _dropdownBounds.Y,
+                    scrollBarWidth,
+                    _dropdownBounds.Height
+                );
+            }
+            else
+            {
+                _scrollBarBounds = Rectangle.Empty;
+            }
+        }
+
+        private void CloseDropdown()
+        {
+            _isDropdownOpen = false;
+            _scrollOffset = 0;
+        }
+
+        private void UpdateCursor(bool wasHoveringOverInteractive)
+        {
+            try
+            {
+                if (_isHoveringOverInteractive != wasHoveringOverInteractive)
+                {
+                    if (_isHoveringOverInteractive)
+                    {
+                        GameEngine.Instance.RequestHandCursor();
+                    }
+                    else
+                    {
+                        GameEngine.Instance.ReleaseHandCursor();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"NotificationCenter: Error updating cursor: {ex.Message}");
+            }
+        }
+
+        public void Draw(SpriteBatch spriteBatch)
+        {
+            // Draw notification icon (will be called from TopBar)
+            if (_logo != null)
+            {
+                Color iconColor = _isIconHovered ? Color.White : new Color(200, 200, 200);
+                spriteBatch.Draw(_logo, _iconBounds, iconColor);
+
+                // Draw hover background
+                if (_isIconHovered)
+                {
+                    spriteBatch.Draw(_pixel, _iconBounds, MIAMI_HOVER);
+                }
+            }
+            else
+            {
+                // Fallback: draw a simple rectangle if logo not loaded
+                Color iconColor = _isIconHovered ? MIAMI_PURPLE_LIGHT : MIAMI_PURPLE;
+                spriteBatch.Draw(_pixel, _iconBounds, iconColor);
+            }
+        }
+
+        public void DrawTopLayer(SpriteBatch spriteBatch)
+        {
+            // Draw dropdown if open
+            if (_isDropdownOpen)
+            {
+                DrawDropdown(spriteBatch);
+            }
+        }
+
+        private void DrawDropdown(SpriteBatch spriteBatch)
+        {
+            const int BORDER_THICKNESS = 2;
+
+            // Draw empty state if no notifications
+            if (_notifications.Count == 0)
+            {
+                // Draw dropdown background
+                spriteBatch.Draw(_pixel, _dropdownBounds, MIAMI_BACKGROUND);
+
+                // Draw dropdown border (outer border, like TopBar)
+                // Top border
+                spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.X - BORDER_THICKNESS, _dropdownBounds.Y - BORDER_THICKNESS, 
+                    _dropdownBounds.Width + (BORDER_THICKNESS * 2), BORDER_THICKNESS), MIAMI_BORDER);
+                // Bottom border
+                spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.X - BORDER_THICKNESS, _dropdownBounds.Bottom, 
+                    _dropdownBounds.Width + (BORDER_THICKNESS * 2), BORDER_THICKNESS), MIAMI_BORDER);
+                // Left border
+                spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.X - BORDER_THICKNESS, _dropdownBounds.Y - BORDER_THICKNESS, 
+                    BORDER_THICKNESS, _dropdownBounds.Height + (BORDER_THICKNESS * 2)), MIAMI_BORDER);
+                // Right border
+                spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.Right, _dropdownBounds.Y - BORDER_THICKNESS, 
+                    BORDER_THICKNESS, _dropdownBounds.Height + (BORDER_THICKNESS * 2)), MIAMI_BORDER);
+
+                // Draw "No notifications" text
+                string emptyText = "No notifications";
+                SpriteFont fontToUse = _notificationFont ?? _dropdownFont;
+                Vector2 textSize = fontToUse.MeasureString(emptyText);
+                Vector2 textPos = new Vector2(
+                    _dropdownBounds.X + (_dropdownBounds.Width - textSize.X) / 2,
+                    _dropdownBounds.Y + (_dropdownBounds.Height - textSize.Y) / 2
+                );
+                spriteBatch.DrawString(fontToUse, emptyText, textPos, new Color((byte)MIAMI_TEXT.R, (byte)MIAMI_TEXT.G, (byte)MIAMI_TEXT.B, (byte)150));
+                return;
+            }
+
+            // Draw dropdown shadow
+            Rectangle shadowBounds = new Rectangle(
+                _dropdownBounds.X + 2,
+                _dropdownBounds.Y + 2,
+                _dropdownBounds.Width,
+                _dropdownBounds.Height
+            );
+            spriteBatch.Draw(_pixel, shadowBounds, MIAMI_SHADOW);
+
+            // Draw dropdown background
+            spriteBatch.Draw(_pixel, _dropdownBounds, MIAMI_BACKGROUND);
+
+            // Draw dropdown border (outer border, like TopBar)
+            // Top border
+            spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.X - BORDER_THICKNESS, _dropdownBounds.Y - BORDER_THICKNESS, 
+                _dropdownBounds.Width + (BORDER_THICKNESS * 2), BORDER_THICKNESS), MIAMI_BORDER);
+            // Bottom border
+            spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.X - BORDER_THICKNESS, _dropdownBounds.Bottom, 
+                _dropdownBounds.Width + (BORDER_THICKNESS * 2), BORDER_THICKNESS), MIAMI_BORDER);
+            // Left border
+            spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.X - BORDER_THICKNESS, _dropdownBounds.Y - BORDER_THICKNESS, 
+                BORDER_THICKNESS, _dropdownBounds.Height + (BORDER_THICKNESS * 2)), MIAMI_BORDER);
+            // Right border
+            spriteBatch.Draw(_pixel, new Rectangle(_dropdownBounds.Right, _dropdownBounds.Y - BORDER_THICKNESS, 
+                BORDER_THICKNESS, _dropdownBounds.Height + (BORDER_THICKNESS * 2)), MIAMI_BORDER);
+
+            // Draw notification items
+            int visibleItems = Math.Min(_notifications.Count, MAX_VISIBLE_ITEMS);
+            for (int i = 0; i < visibleItems; i++)
+            {
+                int actualIndex = i + _scrollOffset;
+                if (actualIndex >= _notifications.Count) break;
+
+                Rectangle itemRect = new Rectangle(
+                    _dropdownBounds.X,
+                    _dropdownBounds.Y + (i * ITEM_HEIGHT),
+                    _dropdownBounds.Width - (_scrollBarBounds.IsEmpty ? 0 : SCROLLBAR_WIDTH),
+                    ITEM_HEIGHT
+                );
+
+                // Draw item background if hovered
+                if (actualIndex == _hoveredNotificationIndex)
+                {
+                    spriteBatch.Draw(_pixel, itemRect, NOTIFICATION_HOVER);
+                }
+                else
+                {
+                    spriteBatch.Draw(_pixel, itemRect, NOTIFICATION_BACKGROUND);
+                }
+
+                // Draw notification text
+                var notification = _notifications[actualIndex];
+                string timeText = notification.Timestamp.ToString("HH:mm");
+                string displayText = $"[{timeText}] {notification.Message}";
+
+                // Use notification font (same as FlashMessage)
+                SpriteFont fontToUse = _notificationFont ?? _dropdownFont;
+
+                // Wrap text if needed
+                Vector2 textSize = fontToUse.MeasureString(displayText);
+                if (textSize.X > itemRect.Width - 20)
+                {
+                    // Truncate text
+                    string truncated = displayText;
+                    while (fontToUse.MeasureString(truncated + "...").X > itemRect.Width - 20 && truncated.Length > 0)
+                    {
+                        truncated = truncated.Substring(0, truncated.Length - 1);
+                    }
+                    displayText = truncated + "...";
+                }
+
+                Vector2 textPos = new Vector2(
+                    itemRect.X + 10,
+                    itemRect.Y + (itemRect.Height - textSize.Y) / 2
+                );
+                spriteBatch.DrawString(fontToUse, displayText, textPos, MIAMI_TEXT);
+
+                // Draw separator line at bottom of item (except for last item)
+                if (i < visibleItems - 1 && actualIndex < _notifications.Count - 1)
+                {
+                    Color separatorColor = new Color(80, 80, 80); // Dark gray separator
+                    int separatorY = itemRect.Bottom - 1;
+                    int separatorWidth = itemRect.Width - (_scrollBarBounds.IsEmpty ? 0 : SCROLLBAR_WIDTH);
+                    spriteBatch.Draw(_pixel, new Rectangle(itemRect.X, separatorY, separatorWidth, 1), separatorColor);
+                }
+            }
+
+            // Draw scrollbar if needed
+            if (!_scrollBarBounds.IsEmpty)
+            {
+                DrawScrollBar(spriteBatch);
+            }
+        }
+
+        private void DrawScrollBar(SpriteBatch spriteBatch)
+        {
+            // Draw scrollbar background
+            spriteBatch.Draw(_pixel, _scrollBarBounds, new Color(60, 60, 60, 200));
+
+            // Calculate scrollbar thumb size and position
+            int visibleItems = Math.Min(_notifications.Count, MAX_VISIBLE_ITEMS);
+            float scrollRatio = (float)_scrollOffset / Math.Max(1, _notifications.Count - visibleItems);
+            int thumbHeight = Math.Max(20, (int)(_scrollBarBounds.Height * (visibleItems / (float)_notifications.Count)));
+            int thumbY = _scrollBarBounds.Y + (int)((_scrollBarBounds.Height - thumbHeight) * scrollRatio);
+
+            Rectangle thumbBounds = new Rectangle(
+                _scrollBarBounds.X + 2,
+                thumbY,
+                _scrollBarBounds.Width - 4,
+                thumbHeight
+            );
+
+            // Draw scrollbar thumb
+            Color thumbColor = _isDraggingScroll ? new Color(180, 145, 250) : new Color(147, 112, 219);
+            spriteBatch.Draw(_pixel, thumbBounds, thumbColor);
+
+            // Draw scrollbar border
+            Color scrollBorderColor = new Color(100, 100, 100);
+            spriteBatch.Draw(_pixel, new Rectangle(_scrollBarBounds.X, _scrollBarBounds.Y, 1, _scrollBarBounds.Height), scrollBorderColor);
+        }
+
+        public void LoadContent(ContentManager content)
+        {
+            try
+            {
+                _logo = content.Load<Texture2D>("Modules/NotificationCenter_essential/logo");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"NotificationCenter: Failed to load logo: {ex.Message}");
+                _logo = null;
+            }
+
+            // Load notification font (same as FlashMessage - try Roboto, then Inconsolata, fallback to menu font)
+            try
+            {
+                _notificationFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");
+                _engine.Log("NotificationCenter: Successfully loaded Roboto font");
+            }
+            catch (Exception ex)
+            {
+                _engine.Log($"NotificationCenter: Failed to load Roboto font: {ex.Message}");
+                try
+                {
+                    // Try Inconsolata as fallback
+                    _notificationFont = content.Load<SpriteFont>("Fonts/SpriteFonts/inconsolata/regular");
+                    _engine.Log("NotificationCenter: Using Inconsolata font as fallback");
+                }
+                catch (Exception ex2)
+                {
+                    _engine.Log($"NotificationCenter: Failed to load Inconsolata font: {ex2.Message}");
+                    try
+                    {
+                        // Try Open Sans as another fallback
+                        _notificationFont = content.Load<SpriteFont>("Fonts/SpriteFonts/open_sans/regular");
+                        _engine.Log("NotificationCenter: Using Open Sans font as fallback");
+                    }
+                    catch (Exception ex3)
+                    {
+                        _engine.Log($"NotificationCenter: Failed to load Open Sans font: {ex3.Message}");
+                        // Use menu font as last resort
+                        _notificationFont = _menuFont;
+                        _engine.Log("NotificationCenter: Using menu font as last resort");
+                    }
+                }
+            }
+        }
+
+        public void UpdateWindowWidth(int newWidth)
+        {
+            _windowWidth = newWidth;
+            // Keep the same Y position, just update X
+            _iconBounds = new Rectangle(_windowWidth - ICON_SIZE - ICON_PADDING, _iconBounds.Y, ICON_SIZE, ICON_SIZE);
+            if (_isDropdownOpen)
+            {
+                UpdateDropdownBounds();
+            }
+        }
+
+        public void SetIconBounds(Rectangle bounds)
+        {
+            _iconBounds = bounds;
+            _engine.Log($"NotificationCenter: Icon bounds set to {bounds}");
+        }
+
+        public Rectangle GetIconBounds()
+        {
+            return _iconBounds;
+        }
+
+        public void ToggleDropdown()
+        {
+            if (_isDropdownOpen)
+            {
+                _engine.Log("NotificationCenter: Closing dropdown");
+                CloseDropdown();
+            }
+            else
+            {
+                _engine.Log("NotificationCenter: Opening dropdown");
+                _isDropdownOpen = true;
+                UpdateDropdownBounds();
+            }
+        }
+
+        public void Dispose()
+        {
+            _pixel?.Dispose();
+            _logo?.Dispose();
+        }
+    }
+}
+

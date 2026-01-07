@@ -33,6 +33,7 @@ namespace MarySGameEngine.Modules.HierarchyTree_essential
 
             // Initialize window management
             _windowManagement = new WindowManagement(graphicsDevice, menuFont, windowWidth, properties);
+            _windowManagement.SetWindowTitle("Hierarchy Tree");  // Set title so it can be found by TopBar
             _windowManagement.SetVisible(false);  // Not visible by default
 
             // Position the window on the left side of the screen

@@ -772,6 +772,17 @@ namespace MarySGameEngine.Modules.GameManager_essential
         {
             _taskBar = taskBar;
             _windowManagement.SetTaskBar(taskBar);
+            
+            // If window is already visible, ensure icon is added to taskbar
+            if (_windowManagement != null && _windowManagement.IsVisible())
+            {
+                // Icon will be added in LoadContent when content is available
+                // But we can also trigger it here if content is already loaded
+                if (_content != null)
+                {
+                    _taskBar.EnsureModuleIconExists("Game Manager", _content);
+                }
+            }
         }
 
         public void Update()

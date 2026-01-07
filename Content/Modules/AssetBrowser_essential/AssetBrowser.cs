@@ -32,6 +32,7 @@ namespace MarySGameEngine.Modules.AssetBrowser_essential
 
             // Initialize window management
             _windowManagement = new WindowManagement(graphicsDevice, menuFont, windowWidth, properties);
+            _windowManagement.SetWindowTitle("Asset Browser");  // Set title so it can be found by TopBar
             _windowManagement.SetVisible(false);  // Not visible by default
 
             // Position the window on the right side of the screen

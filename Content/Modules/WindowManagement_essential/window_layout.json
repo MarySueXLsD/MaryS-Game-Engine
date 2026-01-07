@@ -1,0 +1,49 @@
+{
+  "windows": {
+    "Asset Browser": {
+      "position": {
+        "x": 100,
+        "y": 35
+      },
+      "size": {
+        "x": 272,
+        "y": 400
+      },
+      "is_visible": false,
+      "is_maximized": false,
+      "is_minimized": false,
+      "is_pinned": false
+    },
+    "Game Manager": {
+      "position": {
+        "x": 200,
+        "y": 95
+      },
+      "size": {
+        "x": 272,
+        "y": 385
+      },
+      "is_visible": true,
+      "is_maximized": false,
+      "is_minimized": false,
+      "is_pinned": false
+    },
+    "Hierarchy Tree": {
+      "position": {
+        "x": 250,
+        "y": 125
+      },
+      "size": {
+        "x": 272,
+        "y": 355
+      },
+      "is_visible": false,
+      "is_maximized": false,
+      "is_minimized": false,
+      "is_pinned": false
+    }
+  },
+  "taskbar": {
+    "position": 0
+  }
+}
