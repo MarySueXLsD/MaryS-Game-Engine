@@ -14,6 +14,7 @@ using MarySGameEngine.Modules.TopBar_essential;
 using MarySGameEngine.Modules.Desktop_essential;
 using MarySGameEngine.Modules.ModuleSettings_essential;
 using MarySGameEngine.Modules.GameManager_essential;
+using MarySGameEngine.Modules.NotificationCenter_essential;
 
 namespace MarySGameEngine;
 
@@ -200,8 +201,8 @@ public class GameEngine : Game
                     Log($"Module info - Name: {moduleInfo.Name}, IsVisible: {moduleInfo.IsVisible}");
 
                     // Special case for Desktop module - always load it regardless of visibility
-                    // Also always load ModuleSettings, Console, GameManager, and FlashMessage as they're essential for the engine
-                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential" || moduleName == "GameManager_essential" || moduleName == "FlashMessage_essential";
+                    // Also always load ModuleSettings, Console, GameManager, FlashMessage, and NotificationCenter as they're essential for the engine
+                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential" || moduleName == "GameManager_essential" || moduleName == "FlashMessage_essential" || moduleName == "NotificationCenter_essential";
 
                     if (!shouldLoad)
                     {
@@ -233,8 +234,8 @@ public class GameEngine : Game
                     Log($"Creating instance of {moduleInfo.Name}");
                     IModule module;
                     
-                    // Special handling for TopBar to pass dropdown font
-                    if (moduleName == "TopBar_essential")
+                    // Special handling for TopBar and NotificationCenter to pass dropdown font
+                    if (moduleName == "TopBar_essential" || moduleName == "NotificationCenter_essential")
                     {
                         module = (IModule)Activator.CreateInstance(moduleType, 
                             GraphicsDevice, _menuFont, _dropdownFont, GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width);
@@ -266,6 +267,26 @@ public class GameEngine : Game
                     Log($"Error loading module {moduleName}: {ex.Message}");
                     Log($"Stack trace: {ex.StackTrace}");
                 }
+            }
+
+            // Connect TopBar with NotificationCenter
+            TopBar topBarModule = null;
+            NotificationCenter notificationCenter = null;
+            foreach (var module in _activeModules)
+            {
+                if (module is TopBar tb)
+                {
+                    topBarModule = tb;
+                }
+                else if (module is NotificationCenter nc)
+                {
+                    notificationCenter = nc;
+                }
+            }
+            if (topBarModule != null && notificationCenter != null)
+            {
+                Log("Connecting TopBar with NotificationCenter");
+                topBarModule.SetNotificationCenter(notificationCenter);
             }
 
             // Connect TaskBar with WindowManagement instances
