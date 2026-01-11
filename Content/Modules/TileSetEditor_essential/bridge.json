@@ -1,0 +1,13 @@
+{
+    "name": "TileSet Editor",
+    "version": "0.1.0",
+    "author": "MaryS Game Engine Team",
+    "description": "Editor for creating and editing tilesets.",
+    "shortcut": "Ctrl Shift T",
+    "dependencies": [],
+    "minEngineVersion": "1.0.0",
+    "is_visible": true,
+    "is_movable": true,
+    "is_resizable": true,
+    "lastUpdated": "2024-06-07"
+} 
