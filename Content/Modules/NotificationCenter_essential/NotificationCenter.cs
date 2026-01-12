@@ -78,6 +78,7 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
         private readonly Color MIAMI_SHADOW = new Color(0, 0, 0, 100);
         private readonly Color NOTIFICATION_BACKGROUND = new Color(50, 50, 50);
         private readonly Color NOTIFICATION_HOVER = new Color(60, 60, 60);
+        private readonly Color PINK_COLOR = new Color(255, 192, 203); // Pink color for workspace names
 
         // Previous workspace tracking
         private string _previousWorkspaceText = "";
@@ -454,6 +455,119 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
             _scrollOffset = 0;
         }
 
+        private string FormatNotificationDateTime(DateTime timestamp)
+        {
+            DateTime now = DateTime.Now;
+            DateTime today = now.Date;
+            DateTime yesterday = today.AddDays(-1);
+            DateTime twoDaysAgo = today.AddDays(-2);
+            
+            DateTime notificationDate = timestamp.Date;
+            
+            if (notificationDate == today)
+            {
+                // Today: show time only
+                return $"Today {timestamp:HH:mm}";
+            }
+            else if (notificationDate == yesterday)
+            {
+                // Yesterday: show "Yesterday" and time
+                return $"Yesterday {timestamp:HH:mm}";
+            }
+            else if (notificationDate == twoDaysAgo)
+            {
+                // Two days ago: show "Two days ago" and time
+                return $"Two days ago {timestamp:HH:mm}";
+            }
+            else
+            {
+                // Older: show date in format "08 Apr", "21 Dec", "02 Jan"
+                string[] monthAbbreviations = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+                int day = timestamp.Day;
+                string month = monthAbbreviations[timestamp.Month - 1];
+                return $"{day:D2} {month}";
+            }
+        }
+
+        private void DrawNotificationText(SpriteBatch spriteBatch, Notification notification, Rectangle itemRect)
+        {
+            // Use notification font (same as FlashMessage)
+            SpriteFont fontToUse = _notificationFont ?? _dropdownFont;
+            
+            string dateTimeText = FormatNotificationDateTime(notification.Timestamp);
+            string bracketText = $"[{dateTimeText}] ";
+            string message = notification.Message;
+            
+            // Calculate starting position
+            Vector2 currentPos = new Vector2(
+                itemRect.X + 10,
+                itemRect.Y + (itemRect.Height - fontToUse.LineSpacing) / 2
+            );
+            
+            // Draw bracketed date/time in purple
+            Vector2 bracketSize = fontToUse.MeasureString(bracketText);
+            spriteBatch.DrawString(fontToUse, bracketText, currentPos, MIAMI_PURPLE);
+            currentPos.X += bracketSize.X;
+            
+            // For workspace notifications, extract workspace name and make it pink
+            if (notification.Type == "workspace" && message.StartsWith("Workspace changed to "))
+            {
+                // Extract workspace name (everything after "Workspace changed to ")
+                string prefix = "Workspace changed to ";
+                string workspaceName = message.Substring(prefix.Length);
+                
+                // Draw prefix in white
+                Vector2 prefixSize = fontToUse.MeasureString(prefix);
+                spriteBatch.DrawString(fontToUse, prefix, currentPos, MIAMI_TEXT);
+                currentPos.X += prefixSize.X;
+                
+                // Draw workspace name in pink
+                Vector2 workspaceSize = fontToUse.MeasureString(workspaceName);
+                
+                // Check if text would overflow
+                float totalWidth = currentPos.X - (itemRect.X + 10) + workspaceSize.X;
+                int maxWidth = itemRect.Width - 20 - (_scrollBarBounds.IsEmpty ? 0 : SCROLLBAR_WIDTH);
+                
+                if (totalWidth > maxWidth)
+                {
+                    // Truncate workspace name
+                    string truncated = workspaceName;
+                    while (fontToUse.MeasureString(truncated + "...").X + (currentPos.X - (itemRect.X + 10)) > maxWidth && truncated.Length > 0)
+                    {
+                        truncated = truncated.Substring(0, truncated.Length - 1);
+                    }
+                    workspaceName = truncated + "...";
+                    workspaceSize = fontToUse.MeasureString(workspaceName);
+                }
+                
+                spriteBatch.DrawString(fontToUse, workspaceName, currentPos, PINK_COLOR);
+            }
+            else
+            {
+                // Draw regular message in white
+                string displayText = message;
+                Vector2 messageSize = fontToUse.MeasureString(displayText);
+                
+                // Check if text would overflow
+                float totalWidth = currentPos.X - (itemRect.X + 10) + messageSize.X;
+                int maxWidth = itemRect.Width - 20 - (_scrollBarBounds.IsEmpty ? 0 : SCROLLBAR_WIDTH);
+                
+                if (totalWidth > maxWidth)
+                {
+                    // Truncate message
+                    string truncated = displayText;
+                    while (fontToUse.MeasureString(truncated + "...").X + (currentPos.X - (itemRect.X + 10)) > maxWidth && truncated.Length > 0)
+                    {
+                        truncated = truncated.Substring(0, truncated.Length - 1);
+                    }
+                    displayText = truncated + "...";
+                }
+                
+                spriteBatch.DrawString(fontToUse, displayText, currentPos, MIAMI_TEXT);
+            }
+        }
+
         private void UpdateCursor(bool wasHoveringOverInteractive)
         {
             try
@@ -593,32 +707,9 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
                     spriteBatch.Draw(_pixel, itemRect, NOTIFICATION_BACKGROUND);
                 }
 
-                // Draw notification text
+                // Draw notification text with colored segments
                 var notification = _notifications[actualIndex];
-                string timeText = notification.Timestamp.ToString("HH:mm");
-                string displayText = $"[{timeText}] {notification.Message}";
-
-                // Use notification font (same as FlashMessage)
-                SpriteFont fontToUse = _notificationFont ?? _dropdownFont;
-
-                // Wrap text if needed
-                Vector2 textSize = fontToUse.MeasureString(displayText);
-                if (textSize.X > itemRect.Width - 20)
-                {
-                    // Truncate text
-                    string truncated = displayText;
-                    while (fontToUse.MeasureString(truncated + "...").X > itemRect.Width - 20 && truncated.Length > 0)
-                    {
-                        truncated = truncated.Substring(0, truncated.Length - 1);
-                    }
-                    displayText = truncated + "...";
-                }
-
-                Vector2 textPos = new Vector2(
-                    itemRect.X + 10,
-                    itemRect.Y + (itemRect.Height - textSize.Y) / 2
-                );
-                spriteBatch.DrawString(fontToUse, displayText, textPos, MIAMI_TEXT);
+                DrawNotificationText(spriteBatch, notification, itemRect);
 
                 // Draw separator line at bottom of item (except for last item)
                 if (i < visibleItems - 1 && actualIndex < _notifications.Count - 1)
