@@ -1,6 +1,41 @@
 {
   "notifications": [
     {
+      "message": "Workspace changed to Balatro (Card Based)",
+      "timestamp": "2026-01-08T20:34:39.3345534+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Final F (JRPG)",
+      "timestamp": "2026-01-08T20:32:17.0694963+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Balatro (Card Based)",
+      "timestamp": "2026-01-08T10:30:34.8260521+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Fallout (Isometric)",
+      "timestamp": "2026-01-08T10:30:33.7265502+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Final F (JRPG)",
+      "timestamp": "2026-01-08T10:30:26.6587296+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Hotline (Top Down)",
+      "timestamp": "2026-01-08T10:30:25.3922216+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Final F (JRPG)",
+      "timestamp": "2026-01-08T10:30:17.695695+01:00",
+      "type": "workspace"
+    },
+    {
       "message": "Workspace changed to Fallout (Isometric)",
       "timestamp": "2026-01-07T21:08:40.7047736+01:00",
       "type": "workspace"
