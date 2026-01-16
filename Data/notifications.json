@@ -1,6 +1,11 @@
 {
   "notifications": [
     {
+      "message": "Workspace changed to Final F (JRPG)",
+      "timestamp": "2026-01-15T16:04:46.4169906+01:00",
+      "type": "workspace"
+    },
+    {
       "message": "Workspace changed to Balatro (Card Based)",
       "timestamp": "2026-01-08T20:34:39.3345534+01:00",
       "type": "workspace"
