@@ -1,0 +1,14 @@
+{
+  "name": "Character Creation",
+  "version": "1.0.0",
+  "author": "MaryS Game Engine",
+  "description": "Character template editor for creating and editing game characters",
+  "shortcut": "Ctrl Shift C",
+  "dependencies": [],
+  "category": "Development",
+  "is_essential": false,
+  "min_engine_version": "1.0.0",
+  "is_visible": true,
+  "last_updated": "2025-01-09"
+}
+
