@@ -308,6 +308,12 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             continue;
                         }
 
+                        // Skip Character Creation module - it will be added when opened
+                        if (moduleInfo.Name == "Character Creation")
+                        {
+                            continue;
+                        }
+
                         // Skip Hierarchy Tree module - it will be added when opened
                         if (moduleInfo.Name == "Hierarchy Tree")
                         {

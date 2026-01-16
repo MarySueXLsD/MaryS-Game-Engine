@@ -1592,7 +1592,48 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 }
                 else
                 {
-                    _engine.Log($"WindowManagement: Window {_windowTitle} is not minimized, no action needed");
+                    // Window is not minimized - ensure it's visible and properly initialized
+                    _engine.Log($"WindowManagement: Window {_windowTitle} is not minimized, ensuring visibility");
+                    
+                    // Ensure window is visible
+                    if (!_properties.IsVisible)
+                    {
+                        _engine.Log($"WindowManagement: Window {_windowTitle} was not visible, making it visible");
+                        _properties.IsVisible = true;
+                    }
+                    
+                    // Ensure window is in active windows list
+                    if (!_activeWindows.Contains(this))
+                    {
+                        _activeWindows.Add(this);
+                        _engine.Log($"WindowManagement: Added window {_windowTitle} to active windows list");
+                        
+                        // Start opening animation if window was just added and not already opening
+                        if (!_isOpening && _openAnimationScale < 1.0f)
+                        {
+                            StartOpenAnimation();
+                            _engine.Log($"WindowManagement: Started open animation for window {_windowTitle}");
+                        }
+                    }
+                    else if (!_isOpening && _openAnimationScale < 1.0f)
+                    {
+                        // Window is in list but animation hasn't started or completed - start it
+                        StartOpenAnimation();
+                        _engine.Log($"WindowManagement: Started open animation for window {_windowTitle} (was in list but not animated)");
+                    }
+                    else if (_isOpening && _openAnimationScale >= 1.0f)
+                    {
+                        // Animation completed but flag wasn't cleared - fix it
+                        _isOpening = false;
+                        _openAnimationScale = 1.0f;
+                        _engine.Log($"WindowManagement: Fixed open animation state for window {_windowTitle}");
+                    }
+                    
+                    // Ensure TaskBar has an icon for this window
+                    if (_taskBar != null)
+                    {
+                        _taskBar.EnsureModuleIconExists(_windowTitle);
+                    }
                 }
 
                 // Only bring to front if this window is pinned or if there are no pinned windows
