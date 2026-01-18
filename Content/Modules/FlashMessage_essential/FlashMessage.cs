@@ -54,9 +54,10 @@ namespace MarySGameEngine.Modules.FlashMessage_essential
         private const int MESSAGE_PADDING = 20;
         private const int MESSAGE_SPACING = 10;
         private const int MESSAGE_MIN_WIDTH = 300;
-        private const int MESSAGE_MAX_WIDTH = 600;
+        private const int MESSAGE_MAX_WIDTH = 1000;
         private const int MESSAGE_BORDER_THICKNESS = 2;
         private const int MESSAGE_CORNER_RADIUS = 8;
+        private const float LINE_SPACING = 1.2f; // Line spacing multiplier
 
         // Colors - more purple/dark themed
         private readonly Color SUCCESS_BACKGROUND = new Color(80, 50, 120, 240); // Dark purple with transparency
@@ -182,10 +183,25 @@ namespace MarySGameEngine.Modules.FlashMessage_essential
 
         private void DrawMessage(SpriteBatch spriteBatch, FlashMessageData message, int y)
         {
-            // Calculate message dimensions
-            Vector2 textSize = _flashMessageFont.MeasureString(message.Message);
-            int messageWidth = Math.Max(MESSAGE_MIN_WIDTH, Math.Min(MESSAGE_MAX_WIDTH, (int)textSize.X + (MESSAGE_PADDING * 2)));
-            int messageHeight = (int)textSize.Y + (MESSAGE_PADDING * 2);
+            // Wrap text into multiple lines
+            int maxTextWidth = MESSAGE_MAX_WIDTH - (MESSAGE_PADDING * 2);
+            List<string> wrappedLines = WrapText(message.Message, maxTextWidth);
+
+            // Calculate message dimensions based on wrapped text
+            float lineHeight = _flashMessageFont.MeasureString("A").Y;
+            float totalTextHeight = wrappedLines.Count * lineHeight * LINE_SPACING;
+            
+            // Find the widest line
+            float maxLineWidth = 0;
+            foreach (string line in wrappedLines)
+            {
+                Vector2 lineSize = _flashMessageFont.MeasureString(line);
+                if (lineSize.X > maxLineWidth)
+                    maxLineWidth = lineSize.X;
+            }
+
+            int messageWidth = Math.Max(MESSAGE_MIN_WIDTH, Math.Min(MESSAGE_MAX_WIDTH, (int)maxLineWidth + (MESSAGE_PADDING * 2)));
+            int messageHeight = (int)totalTextHeight + (MESSAGE_PADDING * 2);
             int centerX = _windowWidth / 2;
             int messageX = centerX - (messageWidth / 2);
 
@@ -212,12 +228,18 @@ namespace MarySGameEngine.Modules.FlashMessage_essential
             // Draw border
             DrawRoundedRectangleBorder(spriteBatch, messageBounds, borderColor, MESSAGE_BORDER_THICKNESS, MESSAGE_CORNER_RADIUS);
 
-            // Draw text (centered)
-            Vector2 textPosition = new Vector2(
-                messageBounds.X + (messageBounds.Width / 2) - (textSize.X / 2),
-                messageBounds.Y + (messageBounds.Height / 2) - (textSize.Y / 2)
-            );
-            spriteBatch.DrawString(_flashMessageFont, message.Message, textPosition, textColor);
+            // Draw text (multiline, centered)
+            float startY = messageBounds.Y + MESSAGE_PADDING;
+            for (int i = 0; i < wrappedLines.Count; i++)
+            {
+                string line = wrappedLines[i];
+                Vector2 lineSize = _flashMessageFont.MeasureString(line);
+                Vector2 textPosition = new Vector2(
+                    messageBounds.X + (messageBounds.Width / 2) - (lineSize.X / 2),
+                    startY + (i * lineHeight * LINE_SPACING)
+                );
+                spriteBatch.DrawString(_flashMessageFont, line, textPosition, textColor);
+            }
         }
 
         private void GetMessageColors(FlashMessageType type, out Color backgroundColor, out Color borderColor)
@@ -243,10 +265,59 @@ namespace MarySGameEngine.Modules.FlashMessage_essential
             }
         }
 
+        private List<string> WrapText(string text, int maxWidth)
+        {
+            List<string> lines = new List<string>();
+            if (string.IsNullOrEmpty(text))
+                return lines;
+
+            string[] words = text.Split(' ');
+            string currentLine = "";
+
+            foreach (string word in words)
+            {
+                string testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+                Vector2 testSize = _flashMessageFont.MeasureString(testLine);
+
+                if (testSize.X <= maxWidth)
+                {
+                    currentLine = testLine;
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(currentLine))
+                    {
+                        lines.Add(currentLine);
+                    }
+                    // If a single word is too long, break it (though this shouldn't happen often)
+                    if (_flashMessageFont.MeasureString(word).X > maxWidth)
+                    {
+                        // Word is too long, add it anyway (will be clipped but better than nothing)
+                        lines.Add(word);
+                        currentLine = "";
+                    }
+                    else
+                    {
+                        currentLine = word;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(currentLine))
+            {
+                lines.Add(currentLine);
+            }
+
+            return lines;
+        }
+
         private int GetMessageHeight(FlashMessageData message)
         {
-            Vector2 textSize = _flashMessageFont.MeasureString(message.Message);
-            return (int)textSize.Y + (MESSAGE_PADDING * 2);
+            int maxWidth = MESSAGE_MAX_WIDTH - (MESSAGE_PADDING * 2);
+            List<string> wrappedLines = WrapText(message.Message, maxWidth);
+            float lineHeight = _flashMessageFont.MeasureString("A").Y;
+            int totalHeight = (int)(wrappedLines.Count * lineHeight * LINE_SPACING) + (MESSAGE_PADDING * 2);
+            return totalHeight;
         }
 
         private void DrawRoundedRectangle(SpriteBatch spriteBatch, Rectangle bounds, Color color, int cornerRadius)
