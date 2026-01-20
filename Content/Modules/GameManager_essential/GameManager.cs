@@ -849,6 +849,13 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                     _previousMouseState.LeftButton == ButtonState.Released)
                 {
+                    // Only handle clicks if window is topmost
+                    if (!IsTopmostWindowUnderMouse(_windowManagement, mousePosition))
+                    {
+                        CloseContextMenu();
+                        return;
+                    }
+
                     // Check if clicked on context menu item
                     bool clickedOnMenuItem = false;
                     for (int i = 0; i < _contextMenuItems.Count; i++)
@@ -883,6 +890,10 @@ namespace MarySGameEngine.Modules.GameManager_essential
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
             {
+                // Only handle clicks if window is topmost
+                if (!IsTopmostWindowUnderMouse(_windowManagement, mousePosition))
+                    return;
+
                 // Debug: Log mouse position for troubleshooting
                 System.Diagnostics.Debug.WriteLine($"GameManager: Mouse click at {mousePosition}");
                 
@@ -922,6 +933,10 @@ namespace MarySGameEngine.Modules.GameManager_essential
             if (_currentMouseState.RightButton == ButtonState.Pressed && 
                 _previousMouseState.RightButton == ButtonState.Released)
             {
+                // Only handle clicks if window is topmost
+                if (!IsTopmostWindowUnderMouse(_windowManagement, mousePosition))
+                    return;
+
                 // Close TaskBar context menu if it's visible
                 if (_taskBar != null)
                 {
@@ -966,6 +981,10 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
         private void HandleProjectClicks(Point mousePosition)
         {
+            // Only handle clicks if window is topmost
+            if (!IsTopmostWindowUnderMouse(_windowManagement, mousePosition))
+                return;
+
             // Only handle clicks within the scrollable content bounds
             if (!_scrollableContentBounds.Contains(mousePosition))
                 return;
@@ -1067,6 +1086,10 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
         private void HandleProjectRightClick(Point mousePosition)
         {
+            // Only handle clicks if window is topmost
+            if (!IsTopmostWindowUnderMouse(_windowManagement, mousePosition))
+                return;
+
             // Only handle clicks within the scrollable content bounds
             if (!_scrollableContentBounds.Contains(mousePosition))
                 return;
@@ -1320,6 +1343,10 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             if (mouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released)
             {
+                // Only handle clicks if window is topmost
+                if (!IsTopmostWindowUnderMouse(_windowManagement, mousePosition))
+                    return;
+
                 System.Diagnostics.Debug.WriteLine($"GameManager: Wizard click at {mousePosition}, step {_currentWizardStep}");
                 
                 if (_currentWizardStep == 0)
@@ -1462,10 +1489,13 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             var mousePosition = _currentMouseState.Position;
 
+            // Only handle scrollbar interaction if window is topmost
+            bool isTopmost = IsTopmostWindowUnderMouse(_windowManagement, mousePosition);
+
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
             {
-                if (_scrollbarBounds.Contains(mousePosition))
+                if (isTopmost && _scrollbarBounds.Contains(mousePosition))
                 {
                     _isDraggingScrollbar = true;
                     _scrollbarDragStart = new Vector2(mousePosition.X, mousePosition.Y);
@@ -1474,7 +1504,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             if (_isDraggingScrollbar)
             {
-                if (_currentMouseState.LeftButton == ButtonState.Pressed)
+                if (_currentMouseState.LeftButton == ButtonState.Pressed && isTopmost)
                 {
                     float deltaY = mousePosition.Y - _scrollbarDragStart.Y;
                     float scrollbarHeight = _scrollbarBounds.Height;
@@ -1491,8 +1521,8 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 }
             }
 
-            // Handle mouse wheel scrolling - only if mouse is over scrollable area
-            if (_scrollableContentBounds.Contains(_currentMouseState.Position) && 
+            // Handle mouse wheel scrolling - only if mouse is over scrollable area and window is topmost
+            if (isTopmost && _scrollableContentBounds.Contains(_currentMouseState.Position) && 
                 _currentMouseState.ScrollWheelValue != _previousMouseState.ScrollWheelValue)
             {
                 int delta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
