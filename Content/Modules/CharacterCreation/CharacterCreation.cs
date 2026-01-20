@@ -5,6 +5,8 @@ using Microsoft.Xna.Framework.Content;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System.Text.Json;
 using MarySGameEngine;
 using MarySGameEngine.Modules.WindowManagement_essential;
 using MarySGameEngine.Modules.TaskBar_essential;
@@ -27,7 +29,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private GameEngine _engine;
         private bool _hasShownError = false; // Prevent showing error messages repeatedly
 
-        // Scrolling properties
+        // Scrolling properties (center panel)
         private int _scrollY = 0;
         private int _contentHeight = 0;
         private bool _needsScrollbar = false;
@@ -38,6 +40,14 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private const int SCROLLBAR_PADDING = 2;
         private bool _isHoveringScrollbar = false;
         private bool _scrollingEnabled = true;
+        
+        // Right panel scrolling properties
+        private int _rightPanelScrollY = 0;
+        private int _rightPanelContentHeight = 0;
+        private bool _rightPanelNeedsScrollbar = false;
+        private Rectangle _rightPanelScrollbarBounds = Rectangle.Empty;
+        private bool _isDraggingRightPanelScrollbar = false;
+        private Vector2 _rightPanelScrollbarDragStart;
 
         // Panel bounds
         private Rectangle _leftPanelBounds = Rectangle.Empty;      // Asset Browser
@@ -48,14 +58,18 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private Rectangle _searchBarBounds = Rectangle.Empty;
         private string _searchText = "Search Assets...";
         private bool _isSearchFocused = false;
-        private List<string> _assetCategories = new List<string> { "All", "Characters", "Traits", "Abilities", "Cards", "Effects" };
+        private List<string> _assetCategories = new List<string> { "All", "Characters", "Traits", "Skills", "Effects", "Stats", "Tags" };
         private int _selectedCategoryIndex = 0;
         private List<Rectangle> _categoryButtonBounds = new List<Rectangle>();
-        private List<TraitItem> _availableTraits = new List<TraitItem>();
-        private List<TraitItem> _filteredTraits = new List<TraitItem>();
-        private bool _isTraitsExpanded = true;
-        private int _traitScrollOffset = 0;
-        private const int TRAIT_ITEM_HEIGHT = 30;
+        
+        // Screen/View system
+        private string _currentView = "All"; // Default to "All" tab
+        private string _previousView = "All"; // Track previous view to reset scroll on tab change
+        private bool _isInspectingCharacter = false; // Whether we're inspecting a character (shows character details)
+        
+        // Workspace tracking
+        private string _currentWorkspaceName = "";
+        private string _previousWorkspaceName = "";
 
         // Center Panel - Character Details
         private string _characterName = "Knight_Warrior";
@@ -70,12 +84,20 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private List<TraitItem> _characterTraits = new List<TraitItem>();
         private List<AbilityItem> _characterAbilities = new List<AbilityItem>();
 
-        // Right Panel - Inspector
-        private Rectangle _inspectorHeaderBounds = Rectangle.Empty;
-        private Rectangle _referencesSectionBounds = Rectangle.Empty;
-        private Rectangle _linkedTraitsSectionBounds = Rectangle.Empty;
-        private bool _isReferencesExpanded = true;
-        private bool _isLinkedTraitsExpanded = true;
+        // Entity type descriptions (loaded from JSON)
+        private Dictionary<string, string> _entityDescriptionsShort = new Dictionary<string, string>();
+        private Dictionary<string, string> _entityDescriptionsLong = new Dictionary<string, string>();
+        
+        // Map tab names to entity type names
+        private Dictionary<string, string> _tabToEntityType = new Dictionary<string, string>
+        {
+            { "Characters", "Character" },
+            { "Traits", "Trait" },
+            { "Skills", "Skill" },
+            { "Effects", "Effect" },
+            { "Stats", "Stat" },
+            { "Tags", "Tag" }
+        };
 
         // Colors
         private readonly Color PANEL_BACKGROUND = new Color(40, 40, 40);
@@ -90,6 +112,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private readonly Color SECTION_HEADER = new Color(60, 60, 60);
         private readonly Color STAT_BAR_BACKGROUND = new Color(30, 30, 30);
         private readonly Color STAT_BAR_FILL = new Color(147, 112, 219);
+        private readonly Color PROJECT_NAME_COLOR = new Color(147, 112, 219); // Purple for project names
 
         // Panel widths
         private const int LEFT_PANEL_WIDTH = 250;
@@ -154,25 +177,40 @@ namespace MarySGameEngine.Modules.CharacterCreation
             
             // Also call SetDefaultSize to ensure UpdateWindowBounds is called
             _windowManagement.SetDefaultSize(1400, 350);
-            _windowManagement.SetCustomMinimumSize(1000, 600);
+            _windowManagement.SetCustomMinimumSize(1400, 600);
             _windowManagement.SetPosition(new Vector2(100, 50)); // Set initial position
             _windowManagement.SetVisible(false); // Explicitly set to not visible on startup
 
             // Initialize sample data
             InitializeSampleData();
+            
+            // Initialize default descriptions (will be overridden by JSON if available)
+            InitializeDefaultDescriptions();
+        }
+        
+        private void InitializeDefaultDescriptions()
+        {
+            // Short descriptions for "All" tab
+            _entityDescriptionsShort["Character"] = "Defines a character template that composes stats, traits, skills, tags, and loadout into a playable or simulated entity.";
+            _entityDescriptionsShort["Trait"] = "Defines a passive rule modifier that alters character behavior by modifying stats, adding triggers, granting skills, or enforcing constraints.";
+            _entityDescriptionsShort["Skill"] = "Defines an active or reactive ability that a character can use, specifying costs, targeting, and which effects are executed.";
+            _entityDescriptionsShort["Effect"] = "Defines an atomic gameplay operation (damage, heal, apply status, modify stat, etc.) that changes game state and is reused by skills and traits.";
+            _entityDescriptionsShort["Stat"] = "Defines a numerical attribute schema (base, derived, or resource) that characters possess and that other systems reference and modify.";
+            _entityDescriptionsShort["Tag"] = "Defines a semantic label used for filtering, conditions, targeting, and rule logic across characters, skills, traits, and effects.";
+            
+            // Long descriptions for individual tabs (formatted with subtitles)
+            _entityDescriptionsLong["Character"] = "a complete, composable entity that can exist in the game world, combat simulation, or any other gameplay context. It acts as the central aggregation point where stats, traits, skills, tags, and starting state are brought together into a single definition. Characters are usually authored as templates or blueprints, which are then instantiated at runtime to create individual units with current health, cooldowns, statuses, and other mutable state.\n\nto provide structure and ownership: traits attach to a character, skills belong to a character, and stats are evaluated in the context of a character. Without this entity, all other systems would exist in isolation with no authoritative place to resolve conflicts, compute derived values, or apply effects. Characters also define the boundary for rule evaluation, meaning that triggers, conditions, and effects always execute relative to a specific character instance.\n\nall other entities through the Character, the engine ensures consistency and scalability. Whether the game is a turn-based RPG, a top-down action game, or a tactical simulation, the Character remains the stable anchor that systems reference when applying rules, resolving abilities, and advancing game state.";
+            _entityDescriptionsLong["Trait"] = "a passive feature that permanently or semi-permanently modifies how a character behaves. Traits can adjust stats, inject new skills, register triggers, impose restrictions, or alter core rules such as costs, cooldowns, or targeting logic. Unlike skills, traits do not require explicit player activation; instead, they react to game events or continuously affect the character.\n\nto encode identity, specialization, and long-term mechanical differences without duplicating logic across skills or characters. By attaching behavior to traits rather than hardcoding it into characters, the engine allows designers to recombine the same trait across many characters while maintaining consistent behavior. Traits also serve as a clean place to express trade-offs, synergies, and mutually exclusive design choices.\n\nheavily to effects and skills: a trait may apply effects directly through triggers or grant access to specific skills based on conditions. This makes traits a powerful composition layer that bridges character definition and moment-to-moment gameplay logic, enabling complex behavior through data rather than code.";
+            _entityDescriptionsLong["Skill"] = "an action or ability that a character can attempt to use, typically during gameplay. It specifies how the action is initiated, what it targets, what it costs, and which effects it executes when resolved. Skills can represent attacks, spells, abilities, reactions, or any other deliberate action available to a character.\n\nto separate intent from outcome. The skill defines when and how an action can be used, while the actual gameplay impact is handled by effects. This separation allows the same effect logic to be reused across multiple skills while still allowing each skill to have unique costs, targeting rules, and conditions. Skills also provide a clear interface for AI, UI, and input systems to interact with gameplay mechanics.\n\nto characters and traits. Characters own skills, traits may grant or restrict skills, and skills apply effects to characters or the environment. This structure allows skills to remain modular and reusable while still being deeply integrated into character progression and specialization systems.";
+            _entityDescriptionsLong["Effect"] = "a single, atomic change to the game state. It represents the smallest unit of gameplay logic, such as dealing damage, healing, applying a status, modifying a stat, or spawning an entity. Effects are intentionally narrow in scope so they can be reused, combined, and sequenced without ambiguity.\n\nto centralize and standardize game state changes. Instead of embedding damage formulas or stat changes directly into skills or traits, effects provide a shared language for all gameplay outcomes. This makes balancing, debugging, and extending the system significantly easier, as changes to an effect propagate consistently wherever it is used.\n\nto skills, traits, and triggers, always in the context of a character or target. They rely on stats, tags, and conditions to resolve their parameters, and they may themselves apply additional traits or statuses. In this way, effects form the execution layer of the engine, turning abstract rules into concrete results.";
+            _entityDescriptionsLong["Stat"] = "a numeric attribute schema that characters possess, such as health, strength, power, or initiative. It establishes the valid range, default value, and interpretation of a number, without embedding any specific gameplay behavior by itself. Stats can be base values, derived values, or resources depending on how they are configured.\n\nto provide a flexible numerical foundation that can be referenced consistently across the engine. Skills, traits, and effects all rely on stats for scaling, conditions, and calculations, so defining stats as first-class entities prevents hardcoded assumptions and allows different games to define entirely different stat systems. This makes the engine adaptable to many genres without rewriting core logic.\n\nto nearly every other entity: characters own stat values, traits modify them, skills consume or scale from them, and effects read or change them at runtime. By separating stat definitions from their usage, the engine ensures that numerical systems remain data-driven and extensible.";
+            _entityDescriptionsLong["Tag"] = "a semantic label that can be attached to characters, traits, skills, effects, or stats to convey meaning without enforcing structure. Tags do not directly change gameplay values; instead, they are used for filtering, conditions, targeting, and rule evaluation. Examples include tags like Melee, Fire, Undead, Human, or Magical.\n\nto decouple logic from specific entity IDs and enable flexible rule definitions. Instead of checking for exact skill or trait names, conditions can operate on tags, making systems more reusable and expressive. This allows designers to create broad interactions, such as bonuses against all Fire abilities or restrictions that apply to all Undead characters, without special-case code.\n\nthe entire system together by acting as a shared vocabulary. Skills can target by tag, traits can react to tagged events, and effects can apply differently based on tag presence. This makes tags one of the most important tools for scaling complexity while keeping the engine clean and maintainable.";
+            
+            _engine?.Log($"CharacterCreation: Initialized {_entityDescriptionsLong.Count} default long descriptions");
         }
 
         private void InitializeSampleData()
         {
-            // Initialize available traits
-            _availableTraits = new List<TraitItem>
-            {
-                new TraitItem { Name = "Berserker Rage", IsChecked = true, Icon = "fist" },
-                new TraitItem { Name = "Sharpshooter", IsChecked = true, Icon = "target" },
-                new TraitItem { Name = "Arcane Adept", IsChecked = false, Icon = "magic" }
-            };
-            _filteredTraits = _availableTraits.ToList();
-
             // Initialize base stats
             _baseStats = new List<StatItem>
             {
@@ -195,6 +233,106 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 new AbilityItem { Name = "Shield Bash", Icon = "shield" },
                 new AbilityItem { Name = "Chainmail Armor", Icon = "armor" }
             };
+        }
+        
+        private void HandleInput()
+        {
+            if (_currentMouseState.LeftButton == ButtonState.Pressed && 
+                _previousMouseState.LeftButton == ButtonState.Released)
+            {
+                // Handle category button clicks
+                for (int i = 0; i < _categoryButtonBounds.Count && i < _assetCategories.Count; i++)
+                {
+                    if (_categoryButtonBounds[i].Contains(_currentMouseState.Position))
+                    {
+                        _selectedCategoryIndex = i;
+                        _currentView = _assetCategories[i];
+                        _isInspectingCharacter = false; // Reset inspection when switching tabs
+                        
+                        // Reset scroll position when switching tabs
+                        if (_previousView != _currentView)
+                        {
+                            _rightPanelScrollY = 0;
+                            _previousView = _currentView;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        
+        private void UpdateWorkspaceDisplay()
+        {
+            try
+            {
+                string newWorkspaceName = GetActiveWorkspaceName();
+                
+                if (newWorkspaceName != _previousWorkspaceName)
+                {
+                    _currentWorkspaceName = newWorkspaceName;
+                    _previousWorkspaceName = newWorkspaceName;
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine?.Log($"CharacterCreation: Error updating workspace display: {ex.Message}");
+            }
+        }
+        
+        private string GetActiveWorkspaceName()
+        {
+            try
+            {
+                var modules = GameEngine.Instance.GetActiveModules();
+                foreach (var module in modules)
+                {
+                    if (module is MarySGameEngine.Modules.GameManager_essential.GameManager gameManager)
+                    {
+                        var activeWorkspacePathField = gameManager.GetType().GetField("_activeWorkspacePath",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        
+                        if (activeWorkspacePathField != null)
+                        {
+                            string activeWorkspacePath = activeWorkspacePathField.GetValue(gameManager) as string ?? "";
+                            
+                            if (!string.IsNullOrEmpty(activeWorkspacePath))
+                            {
+                                var projectsField = gameManager.GetType().GetField("_projects",
+                                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                
+                                if (projectsField != null)
+                                {
+                                    var projects = projectsField.GetValue(gameManager) as System.Collections.Generic.List<MarySGameEngine.Modules.GameManager_essential.GameProject>;
+                                    
+                                    if (projects != null)
+                                    {
+                                        foreach (var project in projects)
+                                        {
+                                            string projectPath = !string.IsNullOrEmpty(project.Path) 
+                                                ? project.Path 
+                                                : System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Projects", project.Name);
+                                            
+                                            string normalizedProjectPath = System.IO.Path.GetFullPath(projectPath);
+                                            string normalizedActivePath = System.IO.Path.GetFullPath(activeWorkspacePath);
+                                            
+                                            if (normalizedProjectPath == normalizedActivePath)
+                                            {
+                                                return project.Name;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine?.Log($"CharacterCreation: Error getting workspace name: {ex.Message}");
+            }
+            
+            return "No workspace";
         }
 
         public void SetTaskBar(TaskBar taskBar)
@@ -229,17 +367,37 @@ namespace MarySGameEngine.Modules.CharacterCreation
                         defaultHeightField.SetValue(_windowManagement, 350);
                     
                     _windowManagement.SetDefaultSize(1400, 350);
-                    _windowManagement.SetCustomMinimumSize(1000, 600);
+                    _windowManagement.SetCustomMinimumSize(1400, 600);
                     _windowManagement.SetPosition(new Vector2(100, 50));
+                    
+                    // Reset to "All" tab when opening
+                    _selectedCategoryIndex = 0;
+                    _currentView = "All";
+                    _previousView = "All";
+                    _isInspectingCharacter = false;
+                    _rightPanelScrollY = 0; // Reset scroll position
+                    
                     UpdateBounds();
                 }
 
                 if (_windowManagement == null || !isVisible)
                     return;
 
+                UpdateWorkspaceDisplay();
+                HandleInput();
+                
+                // Reset scroll position if view changed
+                if (_previousView != _currentView)
+                {
+                    _rightPanelScrollY = 0;
+                    _previousView = _currentView;
+                }
+                
                 UpdateBounds();
                 UpdateScrolling();
                 HandleScrollbarInteraction();
+                UpdateRightPanelScrolling();
+                HandleRightPanelScrollbarInteraction();
             }
             catch (Exception ex)
             {
@@ -349,26 +507,6 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 500
             );
 
-            // Update inspector sections
-            int inspectorTop = _rightPanelBounds.Y + PANEL_PADDING;
-            _inspectorHeaderBounds = new Rectangle(
-                _rightPanelBounds.X + PANEL_PADDING,
-                inspectorTop,
-                _rightPanelBounds.Width - PANEL_PADDING * 2,
-                100
-            );
-            _referencesSectionBounds = new Rectangle(
-                _rightPanelBounds.X + PANEL_PADDING,
-                _inspectorHeaderBounds.Bottom + PANEL_PADDING,
-                _rightPanelBounds.Width - PANEL_PADDING * 2,
-                150
-            );
-            _linkedTraitsSectionBounds = new Rectangle(
-                _rightPanelBounds.X + PANEL_PADDING,
-                _referencesSectionBounds.Bottom + PANEL_PADDING,
-                _rightPanelBounds.Width - PANEL_PADDING * 2,
-                300
-            );
             }
             catch (Exception ex)
             {
@@ -381,6 +519,15 @@ namespace MarySGameEngine.Modules.CharacterCreation
         {
             if (_windowManagement == null || !_windowManagement.IsVisible())
                 return;
+
+            // Only enable scrolling for character inspection view
+            if (!_isInspectingCharacter)
+            {
+                _scrollY = 0;
+                _needsScrollbar = false;
+                _scrollbarBounds = Rectangle.Empty;
+                return;
+            }
 
             // Calculate content height (approximate based on center panel content)
             _contentHeight = CalculateContentHeight();
@@ -415,31 +562,27 @@ namespace MarySGameEngine.Modules.CharacterCreation
 
         private int CalculateContentHeight()
         {
-            // Calculate approximate content height based on center panel elements
-            int height = 0;
-            
-            // Name and tags
-            height += 30 + PANEL_PADDING;
-            
-            // Character image
-            height += 500 + PANEL_PADDING * 2;
-            
-            // BASE STATS section
-            height += 30 + PANEL_PADDING; // Header
-            height += _baseStats.Count * 35; // Stats
-            
-            // TRAITS & PERKS section
-            height += 30 + PANEL_PADDING; // Header
-            height += _characterTraits.Count * 35; // Traits
-            
-            // ABILITIES & SKILLS section
-            height += 30 + PANEL_PADDING; // Header
-            height += _characterAbilities.Count * 35; // Abilities
-            
-            // Add some padding at bottom
-            height += PANEL_PADDING * 2;
-            
-            return height;
+            // Calculate content height based on current view
+            if (_isInspectingCharacter)
+            {
+                // Character inspection view
+                int height = 0;
+                height += 30 + PANEL_PADDING; // Name and tags
+                height += 500 + PANEL_PADDING * 2; // Character image
+                height += 30 + PANEL_PADDING; // BASE STATS header
+                height += _baseStats.Count * 35; // Stats
+                height += 30 + PANEL_PADDING; // TRAITS & PERKS header
+                height += _characterTraits.Count * 35; // Traits
+                height += 30 + PANEL_PADDING; // SKILLS header
+                height += _characterAbilities.Count * 35; // Abilities
+                height += PANEL_PADDING * 2;
+                return height;
+            }
+            else
+            {
+                // Tab view - minimal height needed
+                return _centerPanelBounds.Height;
+            }
         }
 
         private void HandleScrollbarInteraction()
@@ -641,50 +784,6 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 Vector2 textPos = new Vector2(bounds.X + 10, bounds.Y + 5);
                 spriteBatch.DrawString(_menuFont, _assetCategories[i], textPos, TEXT_COLOR);
             }
-
-            // Draw Traits section
-            int traitsY = _categoryButtonBounds.Count > 0 ? _categoryButtonBounds.Last().Bottom + PANEL_PADDING : _searchBarBounds.Bottom + PANEL_PADDING * 2;
-            Rectangle traitsHeaderBounds = new Rectangle(
-                _leftPanelBounds.X + PANEL_PADDING,
-                traitsY,
-                _leftPanelBounds.Width - PANEL_PADDING * 2,
-                30
-            );
-
-            spriteBatch.Draw(_pixel, traitsHeaderBounds, SECTION_HEADER);
-            Vector2 traitsHeaderPos = new Vector2(traitsHeaderBounds.X + 10, traitsHeaderBounds.Y + 5);
-            spriteBatch.DrawString(_menuFont, "Traits", traitsHeaderPos, TEXT_COLOR);
-
-            // Draw trait items
-            if (_isTraitsExpanded)
-            {
-                int traitY = traitsHeaderBounds.Bottom + 5;
-                SpriteFont traitFont = _uiFont ?? _menuFont; // Traits use UI font
-                for (int i = 0; i < _filteredTraits.Count; i++)
-                {
-                    Rectangle traitBounds = new Rectangle(
-                        _leftPanelBounds.X + PANEL_PADDING + 20,
-                        traitY + i * TRAIT_ITEM_HEIGHT,
-                        _leftPanelBounds.Width - PANEL_PADDING * 2 - 20,
-                        TRAIT_ITEM_HEIGHT - 2
-                    );
-
-                    // Draw checkbox
-                    Rectangle checkboxBounds = new Rectangle(traitBounds.X, traitBounds.Y + 5, 15, 15);
-                    spriteBatch.Draw(_pixel, checkboxBounds, BUTTON_COLOR);
-                    DrawBorder(spriteBatch, checkboxBounds, PANEL_BORDER);
-                    
-                    if (_filteredTraits[i].IsChecked)
-                    {
-                        // Draw checkmark
-                        spriteBatch.Draw(_pixel, new Rectangle(checkboxBounds.X + 3, checkboxBounds.Y + 3, 9, 9), BUTTON_ACTIVE);
-                    }
-
-                    // Draw trait name
-                    Vector2 traitNamePos = new Vector2(checkboxBounds.Right + 10, traitBounds.Y + 5);
-                    spriteBatch.DrawString(traitFont, _filteredTraits[i].Name, traitNamePos, TEXT_COLOR);
-                }
-            }
         }
 
         private bool IsVisible(Rectangle bounds, Rectangle scissorRect)
@@ -701,21 +800,15 @@ namespace MarySGameEngine.Modules.CharacterCreation
             
             SpriteFont uiFont = _uiFont ?? _menuFont; // Use UI font for center panel
             
-            // Apply scroll offset to all drawing positions
-            int scrollY = -scrollOffset;
-            
             // Set up scissor rectangle specifically for the center panel using CURRENT window bounds
             Rectangle originalScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
             int resizeHandleSize = 24;
             
             // Calculate center panel scissor based on ACTUAL current window visible area
-            // The scissor must match exactly what's visible in the window
             int centerPanelX = _centerPanelBounds.X;
             int centerPanelY = _centerPanelBounds.Y;
             int centerPanelWidth = _centerPanelBounds.Width - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0);
             
-            // The visible height is the window height minus title bar and resize handle
-            // This is the MAXIMUM visible area - content beyond this should be clipped
             int maxVisibleBottom = windowBounds.Y + windowBounds.Height - resizeHandleSize;
             int centerPanelScissorTop = centerPanelY;
             int centerPanelScissorBottom = Math.Min(centerPanelY + _centerPanelBounds.Height, maxVisibleBottom);
@@ -728,7 +821,6 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 centerPanelScissorHeight
             );
             
-            // Intersect with the window-level scissor (originalScissor) to ensure proper clipping
             int scissorLeft = Math.Max(centerPanelScissor.X, originalScissor.X);
             int scissorTop = Math.Max(centerPanelScissor.Y, originalScissor.Y);
             int scissorRight = Math.Min(centerPanelScissor.Right, originalScissor.Right);
@@ -737,8 +829,6 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int scissorWidth = Math.Max(0, scissorRight - scissorLeft);
             int scissorHeight = Math.Max(0, scissorBottom - scissorTop);
             
-            // Always set scissor for center panel to clip content properly
-            // Even if dimensions are small, we need to set it to prevent drawing outside bounds
             Rectangle scissorRect = new Rectangle(scissorLeft, scissorTop, scissorWidth, scissorHeight);
             spriteBatch.GraphicsDevice.ScissorRectangle = scissorRect;
             spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
@@ -750,6 +840,187 @@ namespace MarySGameEngine.Modules.CharacterCreation
             // Draw panel background
             spriteBatch.Draw(_pixel, _centerPanelBounds, PANEL_BACKGROUND);
             DrawBorder(spriteBatch, _centerPanelBounds, PANEL_BORDER);
+            
+            // Draw content based on current view
+            if (_isInspectingCharacter)
+            {
+                DrawCharacterInspectionView(spriteBatch, scrollOffset, scissorRect, uiFont);
+            }
+            else
+            {
+                DrawTabView(spriteBatch, scissorRect, uiFont);
+            }
+            
+            // Restore scissor rectangle
+            spriteBatch.GraphicsDevice.ScissorRectangle = originalScissor;
+            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+            {
+                ScissorTestEnable = false
+            };
+        }
+        
+        private void DrawTabView(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont)
+        {
+            // Draw content based on selected tab
+            if (_currentView == "All")
+            {
+                DrawAllTab(spriteBatch, scissorRect, uiFont);
+            }
+            else if (_currentView == "Characters")
+            {
+                DrawEmptyTab(spriteBatch, scissorRect, uiFont, "characters", "Create Character");
+            }
+            else if (_currentView == "Traits")
+            {
+                DrawEmptyTab(spriteBatch, scissorRect, uiFont, "traits", "Create Trait");
+            }
+            else if (_currentView == "Skills")
+            {
+                DrawEmptyTab(spriteBatch, scissorRect, uiFont, "skills", "Create Skill");
+            }
+            else if (_currentView == "Effects")
+            {
+                DrawEmptyTab(spriteBatch, scissorRect, uiFont, "effects", "Create Effect");
+            }
+            else if (_currentView == "Stats")
+            {
+                DrawEmptyTab(spriteBatch, scissorRect, uiFont, "stats", "Create Stat");
+            }
+            else if (_currentView == "Tags")
+            {
+                DrawEmptyTab(spriteBatch, scissorRect, uiFont, "tags", "Create Tag");
+            }
+        }
+        
+        private void DrawAllTab(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont)
+        {
+            // Check if there are any entities
+            bool hasEntities = false; // For now, always show empty state
+            
+            if (!hasEntities)
+            {
+                // Draw "Nothing is there" message
+                string message = "Nothing is there";
+                string subMessage = "Create your first entity to get started";
+                
+                Vector2 messageSize = uiFont.MeasureString(message);
+                Vector2 subMessageSize = uiFont.MeasureString(subMessage);
+                
+                Vector2 messagePosition = new Vector2(
+                    _centerPanelBounds.X + (_centerPanelBounds.Width - messageSize.X) / 2,
+                    _centerPanelBounds.Y + PANEL_PADDING * 2
+                );
+                
+                Vector2 subMessagePosition = new Vector2(
+                    _centerPanelBounds.X + (_centerPanelBounds.Width - subMessageSize.X) / 2,
+                    messagePosition.Y + messageSize.Y + 20
+                );
+                
+                spriteBatch.DrawString(uiFont, message, messagePosition, TEXT_COLOR);
+                spriteBatch.DrawString(uiFont, subMessage, subMessagePosition, TEXT_SECONDARY);
+                
+                // Draw all entity type buttons in a grid
+                int startY = (int)subMessagePosition.Y + (int)subMessageSize.Y + 40;
+                int buttonWidth = 180;
+                int buttonHeight = 35;
+                int buttonSpacing = 15;
+                int buttonsPerRow = 3;
+                
+                // Calculate starting X to center the grid
+                int totalWidth = (buttonsPerRow * buttonWidth) + ((buttonsPerRow - 1) * buttonSpacing);
+                int startX = _centerPanelBounds.X + (_centerPanelBounds.Width - totalWidth) / 2;
+                
+                // List of all entity types
+                string[] entityTypes = { "Character", "Trait", "Skill", "Effect", "Stat", "Tag" };
+                
+                int buttonIndex = 0;
+                foreach (string entityType in entityTypes)
+                {
+                    int row = buttonIndex / buttonsPerRow;
+                    int col = buttonIndex % buttonsPerRow;
+                    
+                    int buttonX = startX + col * (buttonWidth + buttonSpacing);
+                    int buttonY = startY + row * (buttonHeight + buttonSpacing);
+                    
+                    DrawDisabledButton(spriteBatch, $"Create {entityType}", buttonX, buttonY, buttonWidth, uiFont);
+                    
+                    buttonIndex++;
+                }
+            }
+        }
+        
+        private void DrawEmptyTab(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont, string entityType, string buttonText)
+        {
+            string workspaceName = !string.IsNullOrEmpty(_currentWorkspaceName) && _currentWorkspaceName != "No workspace" 
+                ? _currentWorkspaceName 
+                : "this project";
+            
+            string messagePrefix = $"No {entityType} in the project ";
+            string messageSuffix = " there yet";
+            string subMessage = $"Create first one to get started";
+            
+            // Measure text parts
+            Vector2 prefixSize = uiFont.MeasureString(messagePrefix);
+            Vector2 workspaceNameSize = uiFont.MeasureString(workspaceName);
+            Vector2 suffixSize = uiFont.MeasureString(messageSuffix);
+            Vector2 subMessageSize = uiFont.MeasureString(subMessage);
+            
+            // Account for bold scale when calculating total width
+            float boldScale = 1.1f; // Slightly larger for bold effect
+            float totalMessageWidth = prefixSize.X + (workspaceNameSize.X * boldScale) + suffixSize.X;
+            
+            Vector2 messagePosition = new Vector2(
+                _centerPanelBounds.X + (_centerPanelBounds.Width - totalMessageWidth) / 2,
+                _centerPanelBounds.Y + (_centerPanelBounds.Height - prefixSize.Y) / 2 - 30
+            );
+            
+            // Draw message parts with project name in purple and bold
+            Vector2 currentPos = messagePosition;
+            spriteBatch.DrawString(uiFont, messagePrefix, currentPos, TEXT_COLOR);
+            currentPos.X += prefixSize.X;
+            
+            // Draw project name in purple with bold effect (slightly larger scale)
+            Vector2 workspaceNamePos = new Vector2(
+                currentPos.X,
+                currentPos.Y - (workspaceNameSize.Y * (boldScale - 1.0f)) / 2
+            );
+            spriteBatch.DrawString(uiFont, workspaceName, workspaceNamePos, PROJECT_NAME_COLOR, 0f, Vector2.Zero, boldScale, SpriteEffects.None, 0f);
+            currentPos.X += workspaceNameSize.X * boldScale;
+            
+            spriteBatch.DrawString(uiFont, messageSuffix, currentPos, TEXT_COLOR);
+            
+            Vector2 subMessagePosition = new Vector2(
+                _centerPanelBounds.X + (_centerPanelBounds.Width - subMessageSize.X) / 2,
+                messagePosition.Y + prefixSize.Y + 20
+            );
+            
+            spriteBatch.DrawString(uiFont, subMessage, subMessagePosition, TEXT_SECONDARY);
+            
+            // Draw create button (disabled for now)
+            int buttonY = (int)subMessagePosition.Y + (int)subMessageSize.Y + 30;
+            int buttonX = _centerPanelBounds.X + (_centerPanelBounds.Width - 200) / 2;
+            DrawDisabledButton(spriteBatch, buttonText, buttonX, buttonY, 200, uiFont);
+        }
+        
+        private void DrawDisabledButton(SpriteBatch spriteBatch, string text, int x, int y, int width, SpriteFont font)
+        {
+            Rectangle buttonBounds = new Rectangle(x, y, width, 35);
+            Color disabledColor = new Color(BUTTON_COLOR.R / 2, BUTTON_COLOR.G / 2, BUTTON_COLOR.B / 2);
+            spriteBatch.Draw(_pixel, buttonBounds, disabledColor);
+            DrawBorder(spriteBatch, buttonBounds, new Color(PANEL_BORDER.R / 2, PANEL_BORDER.G / 2, PANEL_BORDER.B / 2));
+            
+            Vector2 textSize = font.MeasureString(text);
+            Vector2 textPos = new Vector2(
+                buttonBounds.X + (buttonBounds.Width - textSize.X) / 2,
+                buttonBounds.Y + (buttonBounds.Height - textSize.Y) / 2
+            );
+            spriteBatch.DrawString(font, text, textPos, new Color(TEXT_COLOR.R / 2, TEXT_COLOR.G / 2, TEXT_COLOR.B / 2));
+        }
+        
+        private void DrawCharacterInspectionView(SpriteBatch spriteBatch, int scrollOffset, Rectangle scissorRect, SpriteFont uiFont)
+        {
+            // Apply scroll offset to all drawing positions
+            int scrollY = -scrollOffset;
 
             // Draw name and tags (apply scroll offset) - only if visible
             Rectangle nameBounds = new Rectangle(_nameInputBounds.X, _nameInputBounds.Y + scrollY, _nameInputBounds.Width, _nameInputBounds.Height);
@@ -894,7 +1165,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 charTraitY += 35;
             }
 
-            // Draw ABILITIES & SKILLS section (apply scroll offset) - only if visible
+            // Draw SKILLS section (apply scroll offset) - only if visible
             int abilitiesSectionY = charTraitY + PANEL_PADDING;
             Rectangle abilitiesSectionHeader = new Rectangle(
                 _centerPanelBounds.X + PANEL_PADDING,
@@ -906,7 +1177,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             {
                 spriteBatch.Draw(_pixel, abilitiesSectionHeader, SECTION_HEADER);
                 Vector2 abilitiesSectionPos = new Vector2(abilitiesSectionHeader.X + 10, abilitiesSectionHeader.Y + 5);
-                spriteBatch.DrawString(uiFont, "ABILITIES & SKILLS", abilitiesSectionPos, TEXT_COLOR);
+                spriteBatch.DrawString(uiFont, "SKILLS", abilitiesSectionPos, TEXT_COLOR);
             }
 
             // Draw character abilities (apply scroll offset) - only if visible
@@ -936,13 +1207,6 @@ namespace MarySGameEngine.Modules.CharacterCreation
 
                 abilityY += 35;
             }
-            
-            // Restore scissor rectangle
-            spriteBatch.GraphicsDevice.ScissorRectangle = originalScissor;
-            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
-            {
-                ScissorTestEnable = false
-            };
         }
 
         private void DrawRightPanel(SpriteBatch spriteBatch)
@@ -950,65 +1214,528 @@ namespace MarySGameEngine.Modules.CharacterCreation
             if (_pixel == null || _menuFont == null) return;
             if (_rightPanelBounds.Width <= 0 || _rightPanelBounds.Height <= 0) return;
             
-            SpriteFont uiFont = _uiFont ?? _menuFont; // Use UI font for right panel
+            SpriteFont uiFont = _uiFont ?? _menuFont;
             
             // Draw panel background
             spriteBatch.Draw(_pixel, _rightPanelBounds, PANEL_BACKGROUND);
             DrawBorder(spriteBatch, _rightPanelBounds, PANEL_BORDER);
-
-            // Draw Inspector header
-            spriteBatch.Draw(_pixel, _inspectorHeaderBounds, SECTION_HEADER);
-            Vector2 inspectorTitlePos = new Vector2(_inspectorHeaderBounds.X + 10, _inspectorHeaderBounds.Y + 10);
-            spriteBatch.DrawString(uiFont, "Inspector", inspectorTitlePos, TEXT_COLOR);
-
-            // Draw character info in header
-            Vector2 charNamePos = new Vector2(_inspectorHeaderBounds.X + 10, _inspectorHeaderBounds.Y + 35);
-            spriteBatch.DrawString(uiFont, _characterName, charNamePos, TEXT_COLOR);
-
-            Vector2 charIdPos = new Vector2(_inspectorHeaderBounds.X + 10, _inspectorHeaderBounds.Y + 55);
-            spriteBatch.DrawString(uiFont, $"ID: char.{_characterName.ToLower()}", charIdPos, TEXT_SECONDARY);
-
-            Vector2 archetypePos = new Vector2(_inspectorHeaderBounds.X + 10, _inspectorHeaderBounds.Y + 75);
-            spriteBatch.DrawString(uiFont, "Archetype: Warrior", archetypePos, TEXT_SECONDARY);
-
-            Vector2 tagsPos = new Vector2(_inspectorHeaderBounds.X + 10, _inspectorHeaderBounds.Y + 95);
-            spriteBatch.DrawString(uiFont, $"Tags: {_characterTags}", tagsPos, TEXT_SECONDARY);
-
-            // Draw REFERENCES section
-            DrawCollapsibleSection(spriteBatch, "REFERENCES", _referencesSectionBounds, _isReferencesExpanded, uiFont, () =>
+            
+            // Set up scissor rectangle for right panel content (intersect with existing scissor)
+            Rectangle originalScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
+            int scissorWidth = _rightPanelBounds.Width - (_rightPanelNeedsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0);
+            
+            // Ensure scissor starts at panel top, not above it
+            // Intersect with existing scissor and window bounds, but ensure we don't go above panel top
+            int scissorLeft = Math.Max(_rightPanelBounds.X, originalScissor.X);
+            int scissorTop = Math.Max(_rightPanelBounds.Y, Math.Max(originalScissor.Y, _rightPanelBounds.Y));
+            int scissorRight = Math.Min(_rightPanelBounds.X + scissorWidth, originalScissor.Right);
+            int scissorBottom = Math.Min(_rightPanelBounds.Bottom, originalScissor.Bottom);
+            
+            int finalScissorWidth = Math.Max(0, scissorRight - scissorLeft);
+            int finalScissorHeight = Math.Max(0, scissorBottom - scissorTop);
+            
+            Rectangle rightPanelScissor = new Rectangle(
+                scissorLeft,
+                scissorTop,
+                finalScissorWidth,
+                finalScissorHeight
+            );
+            
+            spriteBatch.GraphicsDevice.ScissorRectangle = rightPanelScissor;
+            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
             {
-                Vector2 ref1Pos = new Vector2(_referencesSectionBounds.X + 20, _referencesSectionBounds.Y + 30);
-                spriteBatch.DrawString(uiFont, "Uses: 12 Quests, 5 Encounters", ref1Pos, TEXT_COLOR);
-
-                Vector2 ref2Pos = new Vector2(_referencesSectionBounds.X + 20, _referencesSectionBounds.Y + 50);
-                spriteBatch.DrawString(uiFont, "Used By: Mutant_Boss, Arena_02", ref2Pos, TEXT_COLOR);
-            });
-
-            // Draw LINKED TRAITS section
-            DrawCollapsibleSection(spriteBatch, "LINKED TRAITS", _linkedTraitsSectionBounds, _isLinkedTraitsExpanded, uiFont, () =>
+                ScissorTestEnable = true,
+                CullMode = CullMode.None
+            };
+            
+            // Draw entity type descriptions
+            int scrollY = -_rightPanelScrollY;
+            // Start drawing from panel top, applying scroll offset
+            // Note: currentY can go above panel top when scrolling - visibility checks will prevent drawing outside bounds
+            int currentY = _rightPanelBounds.Y + PANEL_PADDING + scrollY;
+            float headerBoldScale = 1.3f; // Larger scale for entity names
+            float subtitleScale = 1.1f; // Slightly larger for subtitles
+            float lineSpacing = uiFont.LineSpacing * 1.2f;
+            float descriptionLineSpacing = uiFont.LineSpacing * 1.1f;
+            
+            if (_currentView == "All")
             {
-                int linkedTraitY = _linkedTraitsSectionBounds.Y + 30;
-                foreach (var trait in _characterTraits)
+                // Draw all entity type descriptions
+                string[] entityTypes = { "Character", "Trait", "Skill", "Effect", "Stat", "Tag" };
+                
+                foreach (string entityType in entityTypes)
                 {
-                    Vector2 linkedTraitNamePos = new Vector2(_linkedTraitsSectionBounds.X + 20, linkedTraitY);
-                    spriteBatch.DrawString(uiFont, trait.Name, linkedTraitNamePos, TEXT_COLOR);
-
-                    // Draw effects
-                    Vector2 effectsPos = new Vector2(_linkedTraitsSectionBounds.X + 20, linkedTraitY + 20);
-                    string effects = trait.Name == "Battle Hardened" 
-                        ? "+20 Max HP, +10% DR" 
-                        : "+25% Melee Damage, -10% Crit Chance";
-                    spriteBatch.DrawString(uiFont, effects, effectsPos, TEXT_SECONDARY);
-
-                    linkedTraitY += 60;
+                    if (_entityDescriptionsShort != null && _entityDescriptionsShort.ContainsKey(entityType))
+                    {
+                        // Draw header in purple and bold
+                        Vector2 headerSize = uiFont.MeasureString(entityType) * headerBoldScale;
+                        Vector2 headerPos = new Vector2(_rightPanelBounds.X + PANEL_PADDING, currentY);
+                        
+                        // Only draw if header is visible within scissor bounds and panel bounds
+                        if (currentY >= _rightPanelBounds.Y && currentY + headerSize.Y <= _rightPanelBounds.Bottom && 
+                            currentY + headerSize.Y >= rightPanelScissor.Y && currentY <= rightPanelScissor.Bottom)
+                        {
+                            spriteBatch.DrawString(uiFont, entityType, headerPos, PROJECT_NAME_COLOR, 0f, Vector2.Zero, headerBoldScale, SpriteEffects.None, 0f);
+                        }
+                        currentY += (int)(headerSize.Y + 10);
+                        
+                        // Draw short description (word wrap) for "All" tab
+                        string description = _entityDescriptionsShort[entityType];
+                        float maxWidth = _rightPanelBounds.Width - PANEL_PADDING * 2 - (_rightPanelNeedsScrollbar ? SCROLLBAR_WIDTH : 0);
+                        currentY = DrawWrappedText(spriteBatch, uiFont, description, 
+                            _rightPanelBounds.X + PANEL_PADDING, currentY, maxWidth, TEXT_COLOR, descriptionLineSpacing, rightPanelScissor);
+                        
+                        currentY += 30; // Spacing between sections
+                    }
                 }
-            });
-
-            // Draw action buttons at bottom
-            int buttonY = _rightPanelBounds.Bottom - 120;
-            DrawActionButton(spriteBatch, "Find References", _rightPanelBounds.X + PANEL_PADDING, buttonY, 120);
-            DrawActionButton(spriteBatch, "Validate", _rightPanelBounds.X + PANEL_PADDING, buttonY + 35, 120);
-            DrawActionButton(spriteBatch, "Export Data", _rightPanelBounds.X + PANEL_PADDING, buttonY + 70, 120);
+            }
+            else
+            {
+                // Draw only the relevant entity type description
+                // Map tab name to entity type name
+                string entityType = _currentView;
+                if (_tabToEntityType.ContainsKey(_currentView))
+                {
+                    entityType = _tabToEntityType[_currentView];
+                }
+                
+                // Use long description for individual tabs
+                if (_entityDescriptionsLong.ContainsKey(entityType))
+                {
+                    // Draw entity name header in purple and bold (larger)
+                    Vector2 headerSize = uiFont.MeasureString(entityType) * headerBoldScale;
+                    Vector2 headerPos = new Vector2(_rightPanelBounds.X + PANEL_PADDING, currentY);
+                    
+                    // Only draw if visible within scissor bounds and panel bounds
+                    if (currentY >= _rightPanelBounds.Y && currentY + headerSize.Y <= _rightPanelBounds.Bottom && 
+                        currentY + headerSize.Y >= rightPanelScissor.Y && currentY <= rightPanelScissor.Bottom)
+                    {
+                        spriteBatch.DrawString(uiFont, entityType, headerPos, PROJECT_NAME_COLOR, 0f, Vector2.Zero, headerBoldScale, SpriteEffects.None, 0f);
+                    }
+                    currentY += (int)(headerSize.Y + 15);
+                    
+                    // Draw long description with paragraph subtitles
+                    string description = _entityDescriptionsLong[entityType];
+                    float maxWidth = _rightPanelBounds.Width - PANEL_PADDING * 2 - (_rightPanelNeedsScrollbar ? SCROLLBAR_WIDTH : 0);
+                    DrawLongDescriptionWithSubtitles(spriteBatch, uiFont, description, 
+                        _rightPanelBounds.X + PANEL_PADDING, currentY, maxWidth, TEXT_COLOR, descriptionLineSpacing, rightPanelScissor, subtitleScale);
+                }
+                else if (_entityDescriptionsShort.ContainsKey(entityType))
+                {
+                    // Fallback to short description if long is not available
+                    Vector2 headerSize = uiFont.MeasureString(entityType) * headerBoldScale;
+                    Vector2 headerPos = new Vector2(_rightPanelBounds.X + PANEL_PADDING, currentY);
+                    
+                    if (currentY >= _rightPanelBounds.Y && currentY + headerSize.Y <= _rightPanelBounds.Bottom && 
+                        currentY + headerSize.Y >= rightPanelScissor.Y && currentY <= rightPanelScissor.Bottom)
+                    {
+                        spriteBatch.DrawString(uiFont, entityType, headerPos, PROJECT_NAME_COLOR, 0f, Vector2.Zero, headerBoldScale, SpriteEffects.None, 0f);
+                    }
+                    currentY += (int)(headerSize.Y + 10);
+                    
+                    string description = _entityDescriptionsShort[entityType];
+                    float maxWidth = _rightPanelBounds.Width - PANEL_PADDING * 2 - (_rightPanelNeedsScrollbar ? SCROLLBAR_WIDTH : 0);
+                    DrawWrappedText(spriteBatch, uiFont, description, 
+                        _rightPanelBounds.X + PANEL_PADDING, currentY, maxWidth, TEXT_COLOR, descriptionLineSpacing, rightPanelScissor);
+                }
+            }
+            
+            // Restore scissor rectangle
+            spriteBatch.GraphicsDevice.ScissorRectangle = originalScissor;
+            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+            {
+                ScissorTestEnable = false
+            };
+            
+            // Draw scrollbar if needed
+            if (_rightPanelNeedsScrollbar)
+            {
+                DrawRightPanelScrollbar(spriteBatch);
+            }
+        }
+        
+        private int DrawWrappedText(SpriteBatch spriteBatch, SpriteFont font, string text, int x, int y, float maxWidth, Color color, float lineSpacing, Rectangle scissorRect)
+        {
+            // Split by newlines first to handle paragraph breaks
+            string[] paragraphs = text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            int currentY = y;
+            
+            foreach (string paragraph in paragraphs)
+            {
+                if (string.IsNullOrWhiteSpace(paragraph))
+                {
+                    currentY += (int)lineSpacing; // Extra spacing for empty paragraphs
+                    continue;
+                }
+                
+                string[] words = paragraph.Split(' ');
+                string currentLine = "";
+                
+                foreach (string word in words)
+                {
+                    string testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+                    Vector2 size = font.MeasureString(testLine);
+                    
+                    if (size.X > maxWidth && !string.IsNullOrEmpty(currentLine))
+                    {
+                        // Only draw if line is visible within scissor bounds
+                        if (currentY >= scissorRect.Y && currentY <= scissorRect.Bottom)
+                        {
+                            spriteBatch.DrawString(font, currentLine, new Vector2(x, currentY), color);
+                        }
+                        currentY += (int)lineSpacing;
+                        currentLine = word;
+                    }
+                    else
+                    {
+                        currentLine = testLine;
+                    }
+                }
+                
+                // Draw last line of paragraph if visible
+                if (!string.IsNullOrEmpty(currentLine))
+                {
+                    if (currentY >= scissorRect.Y && currentY <= scissorRect.Bottom)
+                    {
+                        spriteBatch.DrawString(font, currentLine, new Vector2(x, currentY), color);
+                    }
+                    currentY += (int)lineSpacing;
+                }
+                
+                // Add spacing between paragraphs
+                currentY += (int)(lineSpacing * 0.5f);
+            }
+            
+            return currentY;
+        }
+        
+        private int DrawLongDescriptionWithSubtitles(SpriteBatch spriteBatch, SpriteFont font, string text, int x, int y, float maxWidth, Color color, float lineSpacing, Rectangle scissorRect, float subtitleScale)
+        {
+            // Split by newlines to get paragraphs
+            string[] paragraphs = text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            int currentY = y;
+            string[] subtitles = { "Defines", "Exists", "Links" };
+            int subtitleIndex = 0;
+            
+            foreach (string paragraph in paragraphs)
+            {
+                if (string.IsNullOrWhiteSpace(paragraph))
+                {
+                    currentY += (int)lineSpacing;
+                    continue;
+                }
+                
+                // Draw subtitle if available
+                if (subtitleIndex < subtitles.Length)
+                {
+                    string subtitle = subtitles[subtitleIndex];
+                    Vector2 subtitleSize = font.MeasureString(subtitle) * subtitleScale;
+                    Vector2 subtitlePos = new Vector2(x, currentY);
+                    
+                    // Only draw if visible
+                    if (currentY >= scissorRect.Y && currentY + subtitleSize.Y <= scissorRect.Bottom)
+                    {
+                        spriteBatch.DrawString(font, subtitle, subtitlePos, PROJECT_NAME_COLOR, 0f, Vector2.Zero, subtitleScale, SpriteEffects.None, 0f);
+                    }
+                    currentY += (int)(subtitleSize.Y + 5);
+                    subtitleIndex++;
+                }
+                
+                // Draw paragraph text (word wrap)
+                string[] words = paragraph.Split(' ');
+                string currentLine = "";
+                
+                foreach (string word in words)
+                {
+                    string testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+                    Vector2 size = font.MeasureString(testLine);
+                    
+                    if (size.X > maxWidth && !string.IsNullOrEmpty(currentLine))
+                    {
+                        // Only draw if line is visible within scissor bounds
+                        if (currentY >= scissorRect.Y && currentY <= scissorRect.Bottom)
+                        {
+                            spriteBatch.DrawString(font, currentLine, new Vector2(x, currentY), color);
+                        }
+                        currentY += (int)lineSpacing;
+                        currentLine = word;
+                    }
+                    else
+                    {
+                        currentLine = testLine;
+                    }
+                }
+                
+                // Draw last line of paragraph if visible
+                if (!string.IsNullOrEmpty(currentLine))
+                {
+                    if (currentY >= scissorRect.Y && currentY <= scissorRect.Bottom)
+                    {
+                        spriteBatch.DrawString(font, currentLine, new Vector2(x, currentY), color);
+                    }
+                    currentY += (int)lineSpacing;
+                }
+                
+                // Add spacing between paragraphs
+                currentY += (int)(lineSpacing * 0.8f);
+            }
+            
+            return currentY;
+        }
+        
+        private void UpdateRightPanelScrolling()
+        {
+            if (_windowManagement == null || !_windowManagement.IsVisible())
+                return;
+            
+            // Calculate content height
+            _rightPanelContentHeight = CalculateRightPanelContentHeight();
+            
+            // Check if scrollbar is needed
+            _rightPanelNeedsScrollbar = _rightPanelContentHeight > _rightPanelBounds.Height;
+            
+            if (_rightPanelNeedsScrollbar)
+            {
+                // Update scrollbar bounds
+                _rightPanelScrollbarBounds = new Rectangle(
+                    _rightPanelBounds.Right - SCROLLBAR_WIDTH - 2,
+                    _rightPanelBounds.Y,
+                    SCROLLBAR_WIDTH,
+                    _rightPanelBounds.Height
+                );
+                
+                // Clamp scroll position
+                int maxScroll = Math.Max(0, _rightPanelContentHeight - _rightPanelBounds.Height);
+                _rightPanelScrollY = MathHelper.Clamp(_rightPanelScrollY, 0, maxScroll);
+            }
+            else
+            {
+                _rightPanelScrollY = 0;
+                _rightPanelScrollbarBounds = Rectangle.Empty;
+            }
+        }
+        
+        private int CalculateRightPanelContentHeight()
+        {
+            if (_uiFont == null) return 0;
+            
+            float headerBoldScale = 1.3f; // Larger scale for entity names
+            float subtitleScale = 1.1f; // Slightly larger for subtitles
+            float lineSpacing = _uiFont.LineSpacing * 1.2f;
+            float descriptionLineSpacing = _uiFont.LineSpacing * 1.1f;
+            float maxWidth = _rightPanelBounds.Width - PANEL_PADDING * 2 - SCROLLBAR_WIDTH;
+            int height = PANEL_PADDING;
+            
+            if (_currentView == "All")
+            {
+                string[] entityTypes = { "Character", "Trait", "Skill", "Effect", "Stat", "Tag" };
+                
+                foreach (string entityType in entityTypes)
+                {
+                    if (_entityDescriptionsShort.ContainsKey(entityType))
+                    {
+                        // Header height
+                        Vector2 headerSize = _uiFont.MeasureString(entityType) * headerBoldScale;
+                        height += (int)headerSize.Y + 10;
+                        
+                        // Description height (word wrap calculation) - use short for "All" tab
+                        string description = _entityDescriptionsShort[entityType];
+                        string[] words = description.Split(' ');
+                        string currentLine = "";
+                        int lines = 0;
+                        
+                        foreach (string word in words)
+                        {
+                            string testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+                            Vector2 size = _uiFont.MeasureString(testLine);
+                            
+                            if (size.X > maxWidth && !string.IsNullOrEmpty(currentLine))
+                            {
+                                lines++;
+                                currentLine = word;
+                            }
+                            else
+                            {
+                                currentLine = testLine;
+                            }
+                        }
+                        if (!string.IsNullOrEmpty(currentLine)) lines++;
+                        
+                        height += (int)(lines * descriptionLineSpacing);
+                        height += 30; // Spacing between sections
+                    }
+                }
+            }
+            else
+            {
+                // Map tab name to entity type name
+                string entityType = _currentView;
+                if (_tabToEntityType.ContainsKey(_currentView))
+                {
+                    entityType = _tabToEntityType[_currentView];
+                }
+                
+                // Use long description for individual tabs
+                if (_entityDescriptionsLong != null && _entityDescriptionsLong.ContainsKey(entityType))
+                {
+                    // Header height (larger entity name)
+                    Vector2 headerSize = _uiFont.MeasureString(entityType) * headerBoldScale;
+                    height += (int)headerSize.Y + 15;
+                    
+                    // Description height (word wrap calculation) - use long for individual tabs with subtitles
+                    string description = _entityDescriptionsLong[entityType];
+                    // Split by newlines first to handle paragraph breaks
+                    string[] paragraphs = description.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    int lines = 0;
+                    string[] subtitles = { "Defines", "Exists", "Links" };
+                    int subtitleIndex = 0;
+                    
+                    foreach (string paragraph in paragraphs)
+                    {
+                        if (string.IsNullOrWhiteSpace(paragraph))
+                        {
+                            lines++;
+                            continue;
+                        }
+                        
+                        // Add subtitle height
+                        if (subtitleIndex < subtitles.Length)
+                        {
+                            Vector2 subtitleSize = _uiFont.MeasureString(subtitles[subtitleIndex]) * subtitleScale;
+                            height += (int)(subtitleSize.Y + 5);
+                            subtitleIndex++;
+                        }
+                        
+                        string[] words = paragraph.Split(' ');
+                        string currentLine = "";
+                        
+                        foreach (string word in words)
+                        {
+                            string testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+                            Vector2 size = _uiFont.MeasureString(testLine);
+                            
+                            if (size.X > maxWidth && !string.IsNullOrEmpty(currentLine))
+                            {
+                                lines++;
+                                currentLine = word;
+                            }
+                            else
+                            {
+                                currentLine = testLine;
+                            }
+                        }
+                        if (!string.IsNullOrEmpty(currentLine)) lines++;
+                        lines++; // Spacing between paragraphs
+                    }
+                    
+                    height += (int)(lines * descriptionLineSpacing);
+                }
+                else if (_entityDescriptionsShort != null && _entityDescriptionsShort.ContainsKey(entityType))
+                {
+                    // Fallback to short description if long is not available
+                    Vector2 headerSize = _uiFont.MeasureString(entityType) * headerBoldScale;
+                    height += (int)headerSize.Y + 10;
+                    
+                    string description = _entityDescriptionsShort[entityType];
+                    string[] words = description.Split(' ');
+                    string currentLine = "";
+                    int lines = 0;
+                    
+                    foreach (string word in words)
+                    {
+                        string testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+                        Vector2 size = _uiFont.MeasureString(testLine);
+                        
+                        if (size.X > maxWidth && !string.IsNullOrEmpty(currentLine))
+                        {
+                            lines++;
+                            currentLine = word;
+                        }
+                        else
+                        {
+                            currentLine = testLine;
+                        }
+                    }
+                    if (!string.IsNullOrEmpty(currentLine)) lines++;
+                    
+                    height += (int)(lines * descriptionLineSpacing);
+                }
+            }
+            
+            height += PANEL_PADDING;
+            return height;
+        }
+        
+        private void HandleRightPanelScrollbarInteraction()
+        {
+            if (!_rightPanelNeedsScrollbar) return;
+            
+            var mousePosition = _currentMouseState.Position;
+            
+            // Handle scrollbar dragging
+            if (_currentMouseState.LeftButton == ButtonState.Pressed && 
+                _previousMouseState.LeftButton == ButtonState.Released)
+            {
+                if (_rightPanelScrollbarBounds.Contains(mousePosition))
+                {
+                    _isDraggingRightPanelScrollbar = true;
+                    _rightPanelScrollbarDragStart = new Vector2(mousePosition.X, mousePosition.Y);
+                }
+            }
+            
+            if (_isDraggingRightPanelScrollbar)
+            {
+                if (_currentMouseState.LeftButton == ButtonState.Pressed)
+                {
+                    float deltaY = mousePosition.Y - _rightPanelScrollbarDragStart.Y;
+                    float scrollbarHeight = _rightPanelScrollbarBounds.Height;
+                    
+                    float scrollRatio = deltaY / scrollbarHeight;
+                    _rightPanelScrollY = (int)(scrollRatio * (_rightPanelContentHeight - _rightPanelBounds.Height));
+                    
+                    int maxScroll = Math.Max(0, _rightPanelContentHeight - _rightPanelBounds.Height);
+                    _rightPanelScrollY = MathHelper.Clamp(_rightPanelScrollY, 0, maxScroll);
+                }
+                else
+                {
+                    _isDraggingRightPanelScrollbar = false;
+                }
+            }
+            
+            // Handle mouse wheel scrolling
+            if (_rightPanelBounds.Contains(mousePosition) && 
+                _currentMouseState.ScrollWheelValue != _previousMouseState.ScrollWheelValue)
+            {
+                int delta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
+                _rightPanelScrollY -= delta / 3;
+                
+                int maxScroll = Math.Max(0, _rightPanelContentHeight - _rightPanelBounds.Height);
+                _rightPanelScrollY = MathHelper.Clamp(_rightPanelScrollY, 0, maxScroll);
+            }
+        }
+        
+        private void DrawRightPanelScrollbar(SpriteBatch spriteBatch)
+        {
+            if (!_rightPanelNeedsScrollbar || _rightPanelScrollbarBounds.IsEmpty) return;
+            if (_pixel == null) return;
+            
+            // Draw scrollbar background
+            spriteBatch.Draw(_pixel, _rightPanelScrollbarBounds, new Color(55, 65, 81));
+            DrawBorder(spriteBatch, _rightPanelScrollbarBounds, PANEL_BORDER);
+            
+            // Calculate thumb size and position
+            float contentRatio = (float)_rightPanelBounds.Height / Math.Max(1, _rightPanelContentHeight);
+            int thumbHeight = Math.Max(20, (int)(_rightPanelScrollbarBounds.Height * contentRatio));
+            
+            int maxScroll = Math.Max(1, _rightPanelContentHeight - _rightPanelBounds.Height);
+            int thumbY = _rightPanelScrollbarBounds.Y + (int)((_rightPanelScrollbarBounds.Height - thumbHeight) * (_rightPanelScrollY / (float)maxScroll));
+            
+            var thumbBounds = new Rectangle(_rightPanelScrollbarBounds.X + 2, thumbY + 2, _rightPanelScrollbarBounds.Width - 4, thumbHeight - 4);
+            bool isThumbHovered = thumbBounds.Contains(_currentMouseState.Position) || _isDraggingRightPanelScrollbar;
+            Color thumbColor = isThumbHovered ? BUTTON_HOVER : BUTTON_COLOR;
+            
+            spriteBatch.Draw(_pixel, thumbBounds, thumbColor);
+            DrawBorder(spriteBatch, thumbBounds, PANEL_BORDER);
         }
 
         private void DrawStatDisplay(SpriteBatch spriteBatch, string text, int x, int y, Color iconColor)
@@ -1191,12 +1918,66 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 {
                     _pixelFont = _menuFont; // Fallback to menu font
                 }
+                
+                // Load entity descriptions from JSON (will override defaults if JSON exists)
+                LoadEntityDescriptions();
             }
             catch (Exception ex)
             {
                 _engine?.Log($"CharacterCreation: Error in LoadContent: {ex.Message}");
                 _uiFont = _menuFont; // Fallback to menu font
                 _pixelFont = _menuFont;
+            }
+        }
+        
+        private void LoadEntityDescriptions()
+        {
+            try
+            {
+                string descriptionsPath = Path.Combine(Directory.GetCurrentDirectory(), "Content", "Modules", "CharacterCreation", "EntityDescriptions.json");
+                
+                if (File.Exists(descriptionsPath))
+                {
+                    string jsonContent = File.ReadAllText(descriptionsPath);
+                    
+                    using (JsonDocument doc = JsonDocument.Parse(jsonContent))
+                    {
+                        var root = doc.RootElement;
+                        
+                        // Load short descriptions (override defaults)
+                        if (root.TryGetProperty("short", out JsonElement shortElement))
+                        {
+                            int count = 0;
+                            foreach (var prop in shortElement.EnumerateObject())
+                            {
+                                _entityDescriptionsShort[prop.Name] = prop.Value.GetString() ?? "";
+                                count++;
+                            }
+                            _engine?.Log($"CharacterCreation: Loaded {count} short descriptions from JSON (total: {_entityDescriptionsShort.Count})");
+                        }
+                        
+                        // Load long descriptions (override defaults)
+                        if (root.TryGetProperty("long", out JsonElement longElement))
+                        {
+                            int count = 0;
+                            foreach (var prop in longElement.EnumerateObject())
+                            {
+                                _entityDescriptionsLong[prop.Name] = prop.Value.GetString() ?? "";
+                                count++;
+                            }
+                            _engine?.Log($"CharacterCreation: Loaded {count} long descriptions from JSON (total: {_entityDescriptionsLong.Count})");
+                        }
+                    }
+                }
+                else
+                {
+                    _engine?.Log($"CharacterCreation: EntityDescriptions.json not found at {descriptionsPath}, using default descriptions");
+                }
+            }
+            catch (Exception ex)
+            {
+                _engine?.Log($"CharacterCreation: Error loading entity descriptions: {ex.Message}");
+                _engine?.Log($"CharacterCreation: Stack trace: {ex.StackTrace}");
             }
         }
 

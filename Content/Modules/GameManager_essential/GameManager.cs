@@ -1304,7 +1304,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
             if (_currentWizardStep == 1)
             {
                 _hoveredGenreIndex = -1;
-                if (!IsMouseOverTopBarDropdown(mousePosition))
+                if (!IsMouseOverTopBarDropdown(mousePosition) && IsTopmostWindowUnderMouse(_windowManagement, mousePosition))
                 {
                     for (int i = 0; i < _genreOptions.Length; i++)
                     {
@@ -1867,7 +1867,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
                     
                     var buttonBounds = _sectionButtonBounds[i];
                     bool isActive = _sectionNames[i] == _currentSection;
-                    bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && buttonBounds.Contains(_currentMouseState.Position);
+                    bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                                     IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
+                                     buttonBounds.Contains(_currentMouseState.Position);
 
                     // Draw modern button
                     if (isActive || isHovered)
@@ -2008,7 +2010,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             // Draw Next button with modern styling and pixel font
             var nextButtonBounds = GetWizardNextButtonBounds();
-            bool isNextHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && nextButtonBounds.Contains(_currentMouseState.Position);
+            bool isNextHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                                 IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
+                                 nextButtonBounds.Contains(_currentMouseState.Position);
             bool canProceed = !string.IsNullOrWhiteSpace(_projectName) && _projectName.Length <= 20 && IsValidProjectName(_projectName);
             
             // Calculate animated color
@@ -2020,7 +2024,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
             
             // Draw Cancel button at the bottom
             var cancelButtonBounds = GetWizardCancelButtonBounds();
-            bool isCancelHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && cancelButtonBounds.Contains(_currentMouseState.Position);
+            bool isCancelHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                                   IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
+                                   cancelButtonBounds.Contains(_currentMouseState.Position);
             DrawModernButton(spriteBatch, cancelButtonBounds, "Cancel", isCancelHovered, false, true, true);
         }
 
@@ -2028,7 +2034,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
         {
             // Draw Back button with modern styling and pixel font
             var backButtonBounds = GetWizardBackButtonBounds();
-            bool isBackHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && backButtonBounds.Contains(_currentMouseState.Position);
+            bool isBackHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                                 IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
+                                 backButtonBounds.Contains(_currentMouseState.Position);
             DrawModernButton(spriteBatch, backButtonBounds, "Back", isBackHovered, false, true, true);
 
             // Draw title with pixel font
@@ -2133,7 +2141,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
             // Draw Create Project button with modern styling and pixel font
             var nextButtonBounds = GetWizardNextButtonBounds();
-            bool isNextHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && nextButtonBounds.Contains(_currentMouseState.Position);
+            bool isNextHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                                 IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
+                                 nextButtonBounds.Contains(_currentMouseState.Position);
             bool canProceed = !string.IsNullOrWhiteSpace(_selectedGenre);
             
             // Make the button wider for "Create Project" text but keep it within bounds
@@ -2150,7 +2160,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private void DrawCreateProjectButton(SpriteBatch spriteBatch)
         {
             var createButtonBounds = GetCreateProjectButtonBounds();
-            bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && createButtonBounds.Contains(_currentMouseState.Position);
+            bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                             IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
+                             createButtonBounds.Contains(_currentMouseState.Position);
             
             // Use modern button styling with pixel font
             DrawModernButton(spriteBatch, createButtonBounds, "Create New Project", isHovered, false, false, true);
@@ -2271,8 +2283,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
                             clippedHeight
                         );
                         
-                        // Only allow hover if mouse is within scrollable bounds
+                        // Only allow hover if mouse is within scrollable bounds and window is topmost
                         bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                                         IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
                                          _scrollableContentBounds.Contains(_currentMouseState.Position) &&
                                          itemBounds.Contains(_currentMouseState.Position);
                         
@@ -2584,7 +2597,10 @@ namespace MarySGameEngine.Modules.GameManager_essential
             int thumbY = _scrollbarBounds.Y + (int)((_scrollbarBounds.Height - thumbHeight) * (_scrollY / (float)Math.Max(1, _contentHeight - _scrollableContentBounds.Height)));
 
             var thumbBounds = new Rectangle(_scrollbarBounds.X + 2, thumbY + 2, _scrollbarBounds.Width - 4, thumbHeight - 4);
-            bool isThumbHovered = (!IsMouseOverTopBarDropdown(_currentMouseState.Position) && thumbBounds.Contains(_currentMouseState.Position)) || _isDraggingScrollbar;
+            bool isThumbHovered = (_isDraggingScrollbar) || 
+                                  (!IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                                   IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
+                                   thumbBounds.Contains(_currentMouseState.Position));
             Color thumbColor = isThumbHovered ? BUTTON_PRIMARY_HOVER : BUTTON_PRIMARY;
 
             DrawRoundedRectangle(spriteBatch, thumbBounds, thumbColor, 4);
@@ -2627,7 +2643,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 );
 
                 // Check if item is hovered
-                bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && itemBounds.Contains(_currentMouseState.Position);
+                bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                                 IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
+                                 itemBounds.Contains(_currentMouseState.Position);
                 item.IsHovered = isHovered;
 
                 // Draw item background if hovered
@@ -2855,6 +2873,49 @@ namespace MarySGameEngine.Modules.GameManager_essential
         public void ClearFocus()
         {
             // Clear focus if needed
+        }
+
+        private bool IsTopmostWindowUnderMouse(WindowManagement window, Point mousePosition)
+        {
+            if (!window.IsVisible())
+                return false;
+
+            // Get the window bounds
+            Rectangle windowBounds = window.GetWindowBounds();
+            
+            // Check if mouse is over this window
+            if (!windowBounds.Contains(mousePosition))
+                return false;
+
+            // Get all active windows from WindowManagement using reflection
+            var activeWindowsField = typeof(WindowManagement).GetField("_activeWindows", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            
+            if (activeWindowsField == null)
+                return true; // If we can't access the list, assume this window is topmost
+
+            var activeWindows = activeWindowsField.GetValue(null) as List<WindowManagement>;
+            if (activeWindows == null)
+                return true;
+
+            // Check if this window has the highest z-order among all windows under the mouse
+            int highestZOrder = -1;
+            WindowManagement topmostWindow = null;
+
+            foreach (var activeWindow in activeWindows)
+            {
+                if (activeWindow.IsVisible() && activeWindow.GetWindowBounds().Contains(mousePosition))
+                {
+                    int zOrder = activeWindow.GetZOrder();
+                    if (zOrder > highestZOrder)
+                    {
+                        highestZOrder = zOrder;
+                        topmostWindow = activeWindow;
+                    }
+                }
+            }
+
+            return topmostWindow == window;
         }
     }
 }
