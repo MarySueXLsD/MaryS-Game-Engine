@@ -460,24 +460,18 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
             DateTime now = DateTime.Now;
             DateTime today = now.Date;
             DateTime yesterday = today.AddDays(-1);
-            DateTime twoDaysAgo = today.AddDays(-2);
             
             DateTime notificationDate = timestamp.Date;
             
             if (notificationDate == today)
             {
                 // Today: show time only
-                return $"Today {timestamp:HH:mm}";
+                return $"Today, {timestamp:HH:mm}";
             }
             else if (notificationDate == yesterday)
             {
                 // Yesterday: show "Yesterday" and time
-                return $"Yesterday {timestamp:HH:mm}";
-            }
-            else if (notificationDate == twoDaysAgo)
-            {
-                // Two days ago: show "Two days ago" and time
-                return $"Two days ago {timestamp:HH:mm}";
+                return $"Yesterday, {timestamp:HH:mm}";
             }
             else
             {
@@ -486,7 +480,7 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
                                                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
                 int day = timestamp.Day;
                 string month = monthAbbreviations[timestamp.Month - 1];
-                return $"{day:D2} {month}";
+                return $"{day:D2} {month}, {timestamp:HH:mm}";
             }
         }
 
