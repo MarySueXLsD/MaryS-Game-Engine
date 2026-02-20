@@ -230,14 +230,14 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 // Initialize window management
                 var windowProperties = new WindowProperties
                 {
-                    IsVisible = true,
+                    IsVisible = false,
                     IsMovable = true,
                     IsResizable = true  // Allow resize so user can adjust if default is too small
                 };
 
                 _windowManagement = new WindowManagement(graphicsDevice, menuFont, windowWidth, windowProperties);
                 _windowManagement.SetWindowTitle("Game Manager");
-                _windowManagement.SetVisible(true);  // Explicitly set visible by default
+                _windowManagement.SetVisible(false);  // Do not open by default
                 
                 // Use larger default height - 200 was too small on typical screens
                 _windowManagement.SetDefaultSize(1000, 550);
@@ -1811,6 +1811,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 System.Diagnostics.Debug.WriteLine("GameManager: Drawing window");
                 _windowManagement.Draw(spriteBatch, "Game Manager");
                 DrawContent(spriteBatch);
+                _windowManagement.DrawOverlay(spriteBatch);
             }
             catch (Exception ex)
             {

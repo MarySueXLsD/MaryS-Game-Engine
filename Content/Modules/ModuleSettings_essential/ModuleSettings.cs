@@ -218,6 +218,7 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
                     DrawTabBar(spriteBatch);
                     if (_uiElements != null)
                     _uiElements.Draw(spriteBatch);
+                    _windowManagement.DrawOverlay(spriteBatch);
                 }
             }
             catch (Exception ex)
