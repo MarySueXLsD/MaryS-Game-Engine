@@ -1424,6 +1424,10 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _windowWidth = newWidth;
             _windowHeight = _graphicsDevice.Viewport.Height;
             
+            // Guard against division by zero (can happen on first load when viewport not yet initialized)
+            if (oldWidth <= 0) oldWidth = 1;
+            if (oldHeight <= 0) oldHeight = 1;
+            
             // Calculate proportional sizes
             float widthRatio = (float)newWidth / oldWidth;
             float heightRatio = (float)_windowHeight / oldHeight;
@@ -1436,9 +1440,10 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _defaultWidth = Math.Max(_defaultWidth, MIN_WINDOW_WIDTH);
             _defaultHeight = Math.Max(_defaultHeight, MIN_WINDOW_HEIGHT);
             
-            // Update position to maintain relative position
-            float relativeX = _position.X / oldWidth;
-            float relativeY = (_position.Y - TOP_BAR_HEIGHT) / (oldHeight - TOP_BAR_HEIGHT);
+            // Update position to maintain relative position (guard against division by zero)
+            float relativeX = oldWidth > 0 ? _position.X / oldWidth : 0;
+            float heightRange = oldHeight - TOP_BAR_HEIGHT;
+            float relativeY = heightRange > 0 ? (_position.Y - TOP_BAR_HEIGHT) / heightRange : 0;
             
             _position = new Vector2(
                 relativeX * newWidth,

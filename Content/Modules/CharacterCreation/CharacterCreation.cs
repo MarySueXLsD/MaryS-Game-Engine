@@ -173,11 +173,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
             if (defaultWidthField != null)
                 defaultWidthField.SetValue(_windowManagement, 1400);
             if (defaultHeightField != null)
-                defaultHeightField.SetValue(_windowManagement, 350);
+                defaultHeightField.SetValue(_windowManagement, 600);
             
             // Also call SetDefaultSize to ensure UpdateWindowBounds is called
-            _windowManagement.SetDefaultSize(1400, 350);
-            _windowManagement.SetCustomMinimumSize(1400, 600);
+            _windowManagement.SetDefaultSize(1400, 600);  // 600 matches min - 350 was too small on typical screens
+            _windowManagement.SetCustomMinimumSize(1400, 500);
             _windowManagement.SetPosition(new Vector2(100, 50)); // Set initial position
             _windowManagement.SetVisible(false); // Explicitly set to not visible on startup
 
