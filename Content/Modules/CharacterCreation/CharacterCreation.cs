@@ -71,6 +71,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private string _currentWorkspaceName = "";
         private string _previousWorkspaceName = "";
 
+        // Character list (shown in Characters tab); click an entry to open inspection
+        private List<string> _characters = new List<string> { "Knight_Warrior" };
+        private List<Rectangle> _characterListBounds = new List<Rectangle>();
+        private List<Rectangle> _characterDeleteButtonBounds = new List<Rectangle>();
+
         // Center Panel - Character Details
         private string _characterName = "Knight_Warrior";
         private string _characterTags = "Human, Melee";
@@ -256,6 +261,51 @@ namespace MarySGameEngine.Modules.CharacterCreation
                             _previousView = _currentView;
                         }
                         break;
+                    }
+                }
+
+                // Handle character list click (Characters tab)
+                if (_currentView == "Characters" && !_isInspectingCharacter && _centerPanelBounds.Contains(_currentMouseState.Position))
+                {
+                    bool hitDelete = false;
+                    for (int i = 0; i < _characterDeleteButtonBounds.Count && i < _characters.Count; i++)
+                    {
+                        if (_characterDeleteButtonBounds[i].Contains(_currentMouseState.Position))
+                        {
+                            hitDelete = true;
+                            string nameToDelete = _characters[i];
+                            MarySGameEngine.Modules.PopUp_essential.PopUp.ShowConfirm(
+                                "Delete Character",
+                                $"Delete character \"{nameToDelete}\"?",
+                                onConfirm: () =>
+                                {
+                                    _characters.Remove(nameToDelete);
+                                    if (_isInspectingCharacter && _characterName == nameToDelete)
+                                    {
+                                        _isInspectingCharacter = false;
+                                    }
+                                },
+                                onCancel: () => { },
+                                confirmText: "Delete",
+                                cancelText: "Cancel"
+                            );
+                            break;
+                        }
+                    }
+                    if (!hitDelete)
+                    {
+                        for (int i = 0; i < _characterListBounds.Count && i < _characters.Count; i++)
+                        {
+                            if (_characterListBounds[i].Contains(_currentMouseState.Position) &&
+                                !_characterDeleteButtonBounds[i].Contains(_currentMouseState.Position))
+                            {
+                                _characterName = _characters[i];
+                                _characterTags = "Human, Melee";
+                                _isInspectingCharacter = true;
+                                _scrollY = 0;
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -868,7 +918,10 @@ namespace MarySGameEngine.Modules.CharacterCreation
             }
             else if (_currentView == "Characters")
             {
-                DrawEmptyTab(spriteBatch, scissorRect, uiFont, "characters", "Create Character");
+                if (_characters.Count > 0)
+                    DrawCharactersListTab(spriteBatch, scissorRect, uiFont);
+                else
+                    DrawEmptyTab(spriteBatch, scissorRect, uiFont, "characters", "Create Character");
             }
             else if (_currentView == "Traits")
             {
@@ -1000,6 +1053,61 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int buttonY = (int)subMessagePosition.Y + (int)subMessageSize.Y + 30;
             int buttonX = _centerPanelBounds.X + (_centerPanelBounds.Width - 200) / 2;
             DrawDisabledButton(spriteBatch, buttonText, buttonX, buttonY, 200, uiFont);
+        }
+
+        private void DrawCharactersListTab(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont)
+        {
+            _characterListBounds.Clear();
+            _characterDeleteButtonBounds.Clear();
+            int rowHeight = 40;
+            int padding = PANEL_PADDING;
+            int deleteBtnWidth = 60;
+            int deleteBtnMargin = 8;
+            int y = _centerPanelBounds.Y + padding;
+
+            foreach (string name in _characters)
+            {
+                Rectangle rowBounds = new Rectangle(
+                    _centerPanelBounds.X + padding,
+                    y,
+                    _centerPanelBounds.Width - padding * 2,
+                    rowHeight
+                );
+                _characterListBounds.Add(rowBounds);
+
+                Rectangle deleteBounds = new Rectangle(
+                    rowBounds.Right - deleteBtnWidth - deleteBtnMargin,
+                    rowBounds.Y + (rowHeight - 28) / 2,
+                    deleteBtnWidth,
+                    28
+                );
+                _characterDeleteButtonBounds.Add(deleteBounds);
+
+                if (IsVisible(rowBounds, scissorRect))
+                {
+                    var mousePos = _currentMouseState.Position;
+                    bool rowHover = rowBounds.Contains(mousePos) && !deleteBounds.Contains(mousePos);
+                    Color bg = rowHover ? BUTTON_HOVER : BUTTON_COLOR;
+                    spriteBatch.Draw(_pixel, rowBounds, bg);
+                    DrawBorder(spriteBatch, rowBounds, PANEL_BORDER);
+
+                    Vector2 textPos = new Vector2(rowBounds.X + 12, rowBounds.Y + (rowHeight - uiFont.MeasureString(name).Y) / 2);
+                    spriteBatch.DrawString(uiFont, name, textPos, TEXT_COLOR);
+
+                    bool deleteHover = deleteBounds.Contains(mousePos);
+                    Color deleteBg = deleteHover ? new Color(180, 60, 60) : new Color(120, 40, 40);
+                    spriteBatch.Draw(_pixel, deleteBounds, deleteBg);
+                    DrawBorder(spriteBatch, deleteBounds, PANEL_BORDER);
+                    string deleteLabel = "Delete";
+                    Vector2 deleteTextPos = new Vector2(
+                        deleteBounds.X + (deleteBounds.Width - uiFont.MeasureString(deleteLabel).X) / 2,
+                        deleteBounds.Y + (deleteBounds.Height - uiFont.MeasureString(deleteLabel).Y) / 2
+                    );
+                    spriteBatch.DrawString(uiFont, deleteLabel, deleteTextPos, TEXT_COLOR);
+                }
+
+                y += rowHeight + 4;
+            }
         }
         
         private void DrawDisabledButton(SpriteBatch spriteBatch, string text, int x, int y, int width, SpriteFont font)

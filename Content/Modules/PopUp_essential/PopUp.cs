@@ -146,6 +146,16 @@ namespace MarySGameEngine.Modules.PopUp_essential
                         return;
                     }
 
+                    bool enterPressed = (keyboardState.IsKeyDown(Keys.Enter) || keyboardState.IsKeyDown(Keys.Space)) &&
+                        !_previousKeyboardState.IsKeyDown(Keys.Enter) && !_previousKeyboardState.IsKeyDown(Keys.Space);
+                    if (enterPressed)
+                    {
+                        DismissCurrent(false);
+                        confirmPopUp.OnConfirm?.Invoke();
+                        _previousKeyboardState = keyboardState;
+                        return;
+                    }
+
                     Rectangle popupBounds = GetPopupBounds(confirmPopUp);
                     Rectangle closeButtonBounds = GetCloseButtonBounds(popupBounds);
                     Rectangle confirmButtonBounds = GetConfirmButtonBounds(popupBounds);
@@ -156,7 +166,12 @@ namespace MarySGameEngine.Modules.PopUp_essential
 
                     if (mouseClicked)
                     {
-                        if (closeButtonBounds.Contains(mouseState.Position))
+                        if (!popupBounds.Contains(mouseState.Position))
+                        {
+                            DismissCurrent(true);
+                            confirmPopUp.OnCancel?.Invoke();
+                        }
+                        else if (closeButtonBounds.Contains(mouseState.Position))
                         {
                             DismissCurrent(true);
                         }
