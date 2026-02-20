@@ -9,6 +9,7 @@ using MarySGameEngine.Modules.WindowManagement_essential;
 using MarySGameEngine.Modules.TaskBar_essential;
 using MarySGameEngine.Modules.TopBar_essential;
 using System.IO;
+using MarySGameEngine;
 
 namespace MarySGameEngine.Modules.Desktop_essential
 {
@@ -1569,11 +1570,11 @@ namespace MarySGameEngine.Modules.Desktop_essential
         {
             if (_taskBar == null) return;
 
-            // Get taskbar position and bounds
+            // Get in-engine taskbar position and bounds
             var taskBarPosition = _taskBar.GetCurrentPosition();
             var taskBarBounds = _taskBar.GetTaskBarBounds();
 
-            // Calculate available area based on taskbar position
+            // Calculate available area based on in-engine taskbar position
             switch (taskBarPosition)
             {
                 case TaskBarPosition.Left:
@@ -1600,6 +1601,35 @@ namespace MarySGameEngine.Modules.Desktop_essential
                     _gridEndX = _windowWidth;
                     _gridEndY = _windowHeight - TASK_BAR_SIZE;
                     break;
+            }
+            
+            // Account for Windows taskbar (only if not auto-hide)
+            if (!WindowsTaskbar.IsAutoHide())
+            {
+                Rectangle windowsTaskbarBounds = GetWindowsTaskbarBoundsInGameWindow();
+                WindowsTaskbarPosition windowsTaskbarPosition = WindowsTaskbar.GetPosition();
+                
+                switch (windowsTaskbarPosition)
+                {
+                    case WindowsTaskbarPosition.Left:
+                        // Windows taskbar is on the left - adjust grid start X
+                        _gridStartX = Math.Max(_gridStartX, windowsTaskbarBounds.Right);
+                        _gridEndX = Math.Min(_gridEndX, _windowWidth);
+                        break;
+                    case WindowsTaskbarPosition.Right:
+                        // Windows taskbar is on the right - adjust grid end X
+                        _gridEndX = Math.Min(_gridEndX, windowsTaskbarBounds.Left);
+                        break;
+                    case WindowsTaskbarPosition.Top:
+                        // Windows taskbar is on the top - adjust grid start Y
+                        _gridStartY = Math.Max(_gridStartY, windowsTaskbarBounds.Bottom);
+                        _gridEndY = Math.Min(_gridEndY, _windowHeight);
+                        break;
+                    case WindowsTaskbarPosition.Bottom:
+                        // Windows taskbar is on the bottom - adjust grid end Y
+                        _gridEndY = Math.Min(_gridEndY, windowsTaskbarBounds.Top);
+                        break;
+                }
             }
 
             // Calculate available space
@@ -1639,6 +1669,53 @@ namespace MarySGameEngine.Modules.Desktop_essential
             if (_desktopFiles.Count > 0)
             {
                 RepositionFilesForNewGrid();
+            }
+        }
+
+        /// <summary>
+        /// Gets the Windows taskbar bounds converted to game window coordinates
+        /// </summary>
+        private Rectangle GetWindowsTaskbarBoundsInGameWindow()
+        {
+            try
+            {
+                int gameWindowWidth = _windowWidth;
+                int gameWindowHeight = _windowHeight;
+                Rectangle workArea = WindowsTaskbar.GetWorkArea();
+                // When the game window is sized to the work area, the taskbar is outside — return edge sentinels so no space is reserved (use 2px tolerance for DPI)
+                const int tolerance = 2;
+                if (Math.Abs(gameWindowWidth - workArea.Width) <= tolerance && Math.Abs(gameWindowHeight - workArea.Height) <= tolerance)
+                {
+                    WindowsTaskbarPosition position = WindowsTaskbar.GetPosition();
+                    switch (position)
+                    {
+                        case WindowsTaskbarPosition.Left:  return new Rectangle(0, 0, 0, gameWindowHeight);
+                        case WindowsTaskbarPosition.Right: return new Rectangle(gameWindowWidth, 0, 0, gameWindowHeight);
+                        case WindowsTaskbarPosition.Top:   return new Rectangle(0, 0, gameWindowWidth, 0);
+                        case WindowsTaskbarPosition.Bottom:
+                        default: return new Rectangle(0, gameWindowHeight, gameWindowWidth, 0);
+                    }
+                }
+
+                Rectangle screenTaskbarBounds = WindowsTaskbar.GetBounds();
+                WindowsTaskbarPosition pos = WindowsTaskbar.GetPosition();
+
+                switch (pos)
+                {
+                    case WindowsTaskbarPosition.Left:
+                        return new Rectangle(0, 0, screenTaskbarBounds.Width, gameWindowHeight);
+                    case WindowsTaskbarPosition.Right:
+                        return new Rectangle(gameWindowWidth - screenTaskbarBounds.Width, 0, screenTaskbarBounds.Width, gameWindowHeight);
+                    case WindowsTaskbarPosition.Top:
+                        return new Rectangle(0, 0, gameWindowWidth, screenTaskbarBounds.Height);
+                    case WindowsTaskbarPosition.Bottom:
+                    default:
+                        return new Rectangle(0, gameWindowHeight - screenTaskbarBounds.Height, gameWindowWidth, screenTaskbarBounds.Height);
+                }
+            }
+            catch
+            {
+                return Rectangle.Empty;
             }
         }
 

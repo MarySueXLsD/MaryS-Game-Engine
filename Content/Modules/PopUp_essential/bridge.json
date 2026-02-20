@@ -1,0 +1,11 @@
+{
+  "name": "Pop Up",
+  "version": "1.0.0",
+  "author": "MaryS Game Engine",
+  "description": "In-engine pop-up dialog system for confirmations and messages",
+  "shortcut": "",
+  "dependencies": [],
+  "minEngineVersion": "1.0.0",
+  "is_visible": false,
+  "lastUpdated": "2025-02-20"
+}

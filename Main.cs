@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.Collections.Generic;
@@ -8,6 +8,9 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Reflection;
+using Rectangle = Microsoft.Xna.Framework.Rectangle;
+using Color = Microsoft.Xna.Framework.Color;
+using Point = Microsoft.Xna.Framework.Point;
 using MarySGameEngine.Modules.TaskBar_essential;
 using MarySGameEngine.Modules.WindowManagement_essential;
 using MarySGameEngine.Modules.TopBar_essential;
@@ -15,6 +18,7 @@ using MarySGameEngine.Modules.Desktop_essential;
 using MarySGameEngine.Modules.ModuleSettings_essential;
 using MarySGameEngine.Modules.GameManager_essential;
 using MarySGameEngine.Modules.NotificationCenter_essential;
+using MarySGameEngine.Modules.PopUp_essential;
 
 namespace MarySGameEngine;
 
@@ -67,6 +71,7 @@ public class GameEngine : Game
     private TaskBar _taskBar;
     private Desktop _desktop;
     private MouseState _previousMouseState;
+    private KeyboardState _previousKeyboardState;
     public static GameEngine Instance { get; private set; }
 
     // Click handling prevention
@@ -98,8 +103,9 @@ public class GameEngine : Game
         // Get main directory (root project folder)
         _mainDirectory = Directory.GetCurrentDirectory();
 
-        // Initialize mouse state
+        // Initialize mouse state and keyboard state
         _previousMouseState = Mouse.GetState();
+        _previousKeyboardState = Keyboard.GetState();
 
         // Initialize log file
         InitializeLogging();
@@ -201,8 +207,8 @@ public class GameEngine : Game
                     Log($"Module info - Name: {moduleInfo.Name}, IsVisible: {moduleInfo.IsVisible}");
 
                     // Special case for Desktop module - always load it regardless of visibility
-                    // Also always load ModuleSettings, Console, GameManager, FlashMessage, and NotificationCenter as they're essential for the engine
-                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential" || moduleName == "GameManager_essential" || moduleName == "FlashMessage_essential" || moduleName == "NotificationCenter_essential";
+                    // Also always load ModuleSettings, Console, GameManager, FlashMessage, NotificationCenter, and PopUp as they're essential for the engine
+                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential" || moduleName == "GameManager_essential" || moduleName == "FlashMessage_essential" || moduleName == "NotificationCenter_essential" || moduleName == "PopUp_essential";
 
                     if (!shouldLoad)
                     {
@@ -325,11 +331,14 @@ public class GameEngine : Game
             base.Initialize();
             Window.AllowUserResizing = true;
             
-            // Set maximized windowed mode immediately
+            // Use work area (screen minus taskbar) so the window doesn't overflow or overlap the taskbar
+            WindowsTaskbar.ClearCache();
+            var workArea = WindowsTaskbar.GetWorkArea();
             _graphics.IsFullScreen = false;
-            _graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
-            _graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
+            _graphics.PreferredBackBufferWidth = workArea.Width;
+            _graphics.PreferredBackBufferHeight = workArea.Height;
             _graphics.ApplyChanges();
+            Window.Position = new Point(workArea.X, workArea.Y);
 
             // Handle window size changes
             Window.ClientSizeChanged += (s, e) =>
@@ -368,7 +377,21 @@ public class GameEngine : Game
             _dropdownFont = Content.Load<SpriteFont>("Fonts/SpriteFonts/pixel_font/regular");
             Log("Main: Loaded dropdown font (using pixel_font)");
 
-            // Ensure GraphicsDevice viewport is updated to match the maximized window
+            // Re-apply working area size/position now that the window is fully created (fixes right-edge overflow on startup)
+            try
+            {
+                WindowsTaskbar.ClearCache();
+                Rectangle workArea = WindowsTaskbar.GetWorkArea();
+                int cw = Window.ClientBounds.Width, ch = Window.ClientBounds.Height;
+                if (cw != workArea.Width || ch != workArea.Height)
+                {
+                    _graphics.PreferredBackBufferWidth = workArea.Width;
+                    _graphics.PreferredBackBufferHeight = workArea.Height;
+                    _graphics.ApplyChanges();
+                }
+                Window.Position = new Point(workArea.X, workArea.Y);
+            }
+            catch { /* ignore */ }
             GraphicsDevice.Viewport = new Viewport(0, 0, Window.ClientBounds.Width, Window.ClientBounds.Height);
             Log($"Main: Updated GraphicsDevice viewport to {Window.ClientBounds.Width}x{Window.ClientBounds.Height}");
 
@@ -436,8 +459,24 @@ public class GameEngine : Game
     {
         try
         {
-            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
-                Exit();
+            var keyboardState = Keyboard.GetState();
+            bool escapePressed = keyboardState.IsKeyDown(Keys.Escape) && !_previousKeyboardState.IsKeyDown(Keys.Escape);
+            bool backPressed = GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed;
+
+            if (escapePressed || backPressed)
+            {
+                var popUp = _activeModules.OfType<PopUp>().FirstOrDefault();
+                if (popUp != null && popUp.HasActivePopUp)
+                {
+                    // PopUp handles Escape internally (e.g. cancels the dialog)
+                }
+                else
+                {
+                    PopUp.ShowConfirmCloseEngine();
+                }
+            }
+
+            _previousKeyboardState = keyboardState;
 
             // Reset TopBar click handling flag at the beginning of each update cycle
             _topBarHandledClick = false;
@@ -767,12 +806,22 @@ public class GameEngine : Game
                 }
             }
 
-            // Draw FlashMessage absolutely last to ensure it's always on top of everything
+            // Draw FlashMessage
             foreach (var module in _activeModules)
             {
                 if (module is MarySGameEngine.Modules.FlashMessage_essential.FlashMessage flashMessage)
                 {
                     flashMessage.Draw(_spriteBatch);
+                    break;
+                }
+            }
+
+            // Draw PopUp absolutely last to ensure it's always on top of everything (including FlashMessage)
+            foreach (var module in _activeModules)
+            {
+                if (module is PopUp popUp)
+                {
+                    popUp.Draw(_spriteBatch);
                     break;
                 }
             }

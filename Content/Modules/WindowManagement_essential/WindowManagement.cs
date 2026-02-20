@@ -79,6 +79,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private Color _pinnedTitleBarColor = new Color(100, 75, 150); // Darker purple for pinned windows
         private Color _hoverColor = new Color(60, 60, 60);
         private Color _buttonHoverColor = new Color(180, 145, 250); // Lighter purple for button hover
+        private Color _buttonDisabledColor = new Color(100, 80, 130); // Dimmed purple for disabled buttons
         private Color _closeButtonHoverColor = new Color(232, 17, 35);
         private Color ACTIVE_INDICATOR_COLOR = new Color(147, 112, 219); // Purple color for highlight
         private Color WINDOW_BORDER_COLOR = Color.Black; // Black border color
@@ -212,11 +213,51 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
 
                 if (_isMaximized)
                 {
+                    // Calculate available space accounting for taskbar on all sides
+                    int startX = 0;
+                    int startY = TOP_BAR_HEIGHT;
+                    int availableWidth = gameWindowWidth;
+                    int availableHeight = gameWindowHeight - TOP_BAR_HEIGHT;
+                    
+                    if (_taskBar != null)
+                    {
+                        Rectangle taskBarBounds = _taskBar.GetTaskBarBounds();
+                        TaskBarPosition taskBarPosition = _taskBar.GetCurrentPosition();
+                        
+                        switch (taskBarPosition)
+                        {
+                            case TaskBarPosition.Left:
+                                startX = taskBarBounds.Right;
+                                availableWidth = gameWindowWidth - taskBarBounds.Right;
+                                break;
+                            case TaskBarPosition.Right:
+                                startX = 0;
+                                availableWidth = taskBarBounds.Left;
+                                break;
+                            case TaskBarPosition.Top:
+                                startY = taskBarBounds.Bottom;
+                                availableHeight = gameWindowHeight - taskBarBounds.Bottom;
+                                break;
+                            case TaskBarPosition.Bottom:
+                                startY = TOP_BAR_HEIGHT;
+                                availableHeight = taskBarBounds.Top - TOP_BAR_HEIGHT;
+                                break;
+                        }
+                    }
+                    
+                    // Ensure the window doesn't exceed viewport bounds
+                    availableWidth = Math.Min(availableWidth, gameWindowWidth - startX);
+                    availableHeight = Math.Min(availableHeight, gameWindowHeight - startY);
+                    
+                    // Ensure minimum dimensions
+                    availableWidth = Math.Max(availableWidth, minWidth);
+                    availableHeight = Math.Max(availableHeight, MIN_WINDOW_HEIGHT);
+                    
                     _windowBounds = new Rectangle(
-                        0,
-                        _taskBar != null && _taskBar.GetCurrentPosition() == TaskBarPosition.Top ? _taskBar.GetTaskBarBounds().Height : TOP_BAR_HEIGHT,
-                        Math.Max(minWidth, Math.Min(_defaultWidth, gameWindowWidth)),
-                        Math.Min(gameWindowHeight - TOP_BAR_HEIGHT, gameWindowHeight)
+                        startX,
+                        startY,
+                        availableWidth,
+                        availableHeight
                     );
                 }
                 else
@@ -249,8 +290,8 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     );
                 }
 
-                // Adjust window position if it overlaps with TaskBar
-                if (_taskBar != null)
+                // Adjust window position if it overlaps with TaskBar (skip for maximized windows as we already accounted for it)
+                if (_taskBar != null && !_isMaximized)
                 {
                     Rectangle taskBarBounds = _taskBar.GetTaskBarBounds();
                     TaskBarPosition taskBarPosition = _taskBar.GetCurrentPosition();
@@ -740,7 +781,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             // Check for interactive elements (only buttons and resize handle, not entire title bar)
             if (isMouseOverWindow && IsTopmostWindowUnderMouse(this, _currentMouseState.Position))
             {
-                if (maximizeButtonBounds.Contains(_currentMouseState.Position) ||
+                if ((_properties.IsResizable && maximizeButtonBounds.Contains(_currentMouseState.Position)) ||
                     minimizeButtonBounds.Contains(_currentMouseState.Position) ||
                     closeButtonBounds.Contains(_currentMouseState.Position) ||
                     pinButtonBounds.Contains(_currentMouseState.Position) ||
@@ -795,7 +836,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                         );
                         _isUnsticking = false;
                     }
-                    else if (maximizeButtonBounds.Contains(_currentMouseState.Position))
+                    else if (maximizeButtonBounds.Contains(_currentMouseState.Position) && _properties.IsResizable)
                     {
                         ToggleMaximize();
                     }
@@ -1271,10 +1312,12 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             Rectangle maximizeButtonBounds = GetMaximizeButtonBounds(scaledBounds);
             if (maximizeButtonBounds != Rectangle.Empty)
             {
-                bool isMaximizeHovered = IsTopmostWindowUnderMouse(this, _currentMouseState.Position) && scaledBounds.Contains(_currentMouseState.Position) && maximizeButtonBounds.Contains(_currentMouseState.Position);
-                Color buttonColor = isMaximizeHovered ? _buttonHoverColor : titleBarColor;
+                bool isMaximizeEnabled = _properties.IsResizable;
+                bool isMaximizeHovered = isMaximizeEnabled && IsTopmostWindowUnderMouse(this, _currentMouseState.Position) && scaledBounds.Contains(_currentMouseState.Position) && maximizeButtonBounds.Contains(_currentMouseState.Position);
+                Color buttonColor = !isMaximizeEnabled ? _buttonDisabledColor : (isMaximizeHovered ? _buttonHoverColor : titleBarColor);
+                Color iconTint = isMaximizeEnabled ? Color.White : new Color(180, 180, 180); // Grayed out when disabled
                 spriteBatch.Draw(_pixel, maximizeButtonBounds, buttonColor);
-                spriteBatch.Draw(_isMaximized ? _restoreIcon : _maximiseIcon, maximizeButtonBounds, Color.White);
+                spriteBatch.Draw(_isMaximized ? _restoreIcon : _maximiseIcon, maximizeButtonBounds, iconTint);
             }
 
             // Draw minimize button
