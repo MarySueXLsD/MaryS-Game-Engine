@@ -1366,13 +1366,45 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 }
             }
 
+            // Resize handle and border are drawn in DrawOverlay() so they appear on top of content
+
+            // Tooltip is now drawn in DrawTooltips method called from Main.cs
+        }
+
+        /// <summary>
+        /// Draws elements that must appear on top of window content (resize handle, border).
+        /// Call this AFTER drawing your module's content.
+        /// </summary>
+        public void DrawOverlay(SpriteBatch spriteBatch)
+        {
+            if (!_properties.IsVisible || (_isMinimized && !_isAnimating)) return;
+            if (_isMinimized && _isAnimating && _animationProgress > 0.85f) return;
+            if (_isClosing && _closeAnimationScale <= 0f) return;
+
+            Rectangle scaledBounds = _windowBounds;
+            if (_isClosing)
+            {
+                int scaledWidth = (int)(_windowBounds.Width * _closeAnimationScale);
+                int scaledHeight = (int)(_windowBounds.Height * _closeAnimationScale);
+                int scaledX = (int)(_closeAnimationCenter.X - scaledWidth / 2);
+                int scaledY = (int)(_closeAnimationCenter.Y - scaledHeight / 2);
+                scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+            }
+            else if (_isOpening)
+            {
+                int scaledWidth = (int)(_windowBounds.Width * _openAnimationScale);
+                int scaledHeight = (int)(_windowBounds.Height * _openAnimationScale);
+                int scaledX = (int)(_openAnimationCenter.X - scaledWidth / 2);
+                int scaledY = (int)(_openAnimationCenter.Y - scaledHeight / 2);
+                scaledBounds = new Rectangle(scaledX, scaledY, scaledWidth, scaledHeight);
+            }
+
             // Draw resize handle if not maximized and resizable
             if (!_isMaximized && _properties.IsResizable)
             {
                 Rectangle resizeHandleBounds = GetResizeHandleBounds(scaledBounds);
                 if (resizeHandleBounds != Rectangle.Empty)
                 {
-                    // Removed hover effect, just draw the pattern
                     int patternSize = 6;
                     for (int i = 0; i < 4; i++)
                     {
@@ -1394,20 +1426,14 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
 
             // Draw window border (black border)
-            // Top border
             spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
                 scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), WINDOW_BORDER_COLOR);
-            // Bottom border
             spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Bottom, 
                 scaledBounds.Width + (WINDOW_BORDER_THICKNESS * 2), WINDOW_BORDER_THICKNESS), WINDOW_BORDER_COLOR);
-            // Left border
             spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.X - WINDOW_BORDER_THICKNESS, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
                 WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), WINDOW_BORDER_COLOR);
-            // Right border
             spriteBatch.Draw(_pixel, new Rectangle(scaledBounds.Right, scaledBounds.Y - WINDOW_BORDER_THICKNESS, 
                 WINDOW_BORDER_THICKNESS, scaledBounds.Height + (WINDOW_BORDER_THICKNESS * 2)), WINDOW_BORDER_COLOR);
-
-            // Tooltip is now drawn in DrawTooltips method called from Main.cs
         }
         
         public void DrawTooltips(SpriteBatch spriteBatch)

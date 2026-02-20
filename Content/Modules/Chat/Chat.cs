@@ -1799,6 +1799,8 @@ namespace MarySGameEngine.Modules.Chat
 
                 // Draw right panel (chat area)
                 DrawRightPanel(spriteBatch);
+
+                _windowManagement.DrawOverlay(spriteBatch);
             }
             catch (Exception ex)
             {

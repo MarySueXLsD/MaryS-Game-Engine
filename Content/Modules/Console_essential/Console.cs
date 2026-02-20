@@ -1724,6 +1724,8 @@ namespace MarySGameEngine.Modules.Console_essential
             {
                 DrawCopyAnimation(spriteBatch);
             }
+
+            _windowManagement.DrawOverlay(spriteBatch);
         }
 
         private void DrawBorder(SpriteBatch spriteBatch, Rectangle bounds, Color color)
