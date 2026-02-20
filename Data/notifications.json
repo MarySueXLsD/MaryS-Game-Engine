@@ -1,6 +1,16 @@
 {
   "notifications": [
     {
+      "message": "Workspace changed to Fallout (Isometric)",
+      "timestamp": "2026-02-17T19:53:41.2849682+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Final F (JRPG)",
+      "timestamp": "2026-01-21T17:38:26.0130647+01:00",
+      "type": "workspace"
+    },
+    {
       "message": "Workspace changed to Hotline (Top Down)",
       "timestamp": "2026-01-20T22:21:12.1763364+01:00",
       "type": "workspace"
