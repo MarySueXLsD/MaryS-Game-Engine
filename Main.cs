@@ -86,6 +86,9 @@ public class GameEngine : Game
     private const int InitialWindowWidth = 800;
     private const int InitialWindowHeight = 600;
 
+    // Deferred window dimension refresh - ApplyChanges() can be async, so ClientBounds may be wrong during LoadContent
+    private bool _hasRefreshedWindowDimensions = false;
+
     public GameEngine()
     {
         Instance = this;
@@ -155,7 +158,28 @@ public class GameEngine : Game
         }
     }
 
-    private void LoadModules()
+    private void LogWindowBounds(string context)
+    {
+        try
+        {
+            Log($"{context} - GraphicsDevice.Viewport={GraphicsDevice.Viewport.Width}x{GraphicsDevice.Viewport.Height}, Window.ClientBounds={Window.ClientBounds.Width}x{Window.ClientBounds.Height}");
+            foreach (var module in _activeModules)
+            {
+                var wmField = module.GetType().GetField("_windowManagement", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (wmField != null && wmField.GetValue(module) is WindowManagement wm)
+                {
+                    var bounds = wm.GetWindowBounds();
+                    Log($"  Window '{wm.GetWindowTitle()}': bounds={bounds.Width}x{bounds.Height} at ({bounds.X},{bounds.Y}), visible={wm.IsVisible()}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"  LogWindowBounds error: {ex.Message}");
+        }
+    }
+
+    private void LoadModules(int windowWidth)
     {
         try
         {
@@ -244,12 +268,12 @@ public class GameEngine : Game
                     if (moduleName == "TopBar_essential" || moduleName == "NotificationCenter_essential")
                     {
                         module = (IModule)Activator.CreateInstance(moduleType, 
-                            GraphicsDevice, _menuFont, _dropdownFont, GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width);
+                            GraphicsDevice, _menuFont, _dropdownFont, windowWidth);
                     }
                     else
                     {
                         module = (IModule)Activator.CreateInstance(moduleType, 
-                            GraphicsDevice, _menuFont, GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width);
+                            GraphicsDevice, _menuFont, windowWidth);
                     }
                     
                     _activeModules.Add(module);
@@ -340,12 +364,15 @@ public class GameEngine : Game
             _graphics.ApplyChanges();
             Window.Position = new Point(workArea.X, workArea.Y);
 
-            // Handle window size changes
+            // Handle window size changes - viewport must match actual window/back buffer
             Window.ClientSizeChanged += (s, e) =>
             {
-                foreach (var module in _activeModules)
+                int w = Window.ClientBounds.Width, h = Window.ClientBounds.Height;
+                if (w > 0 && h > 0)
                 {
-                    module.UpdateWindowWidth(Window.ClientBounds.Width);
+                    GraphicsDevice.Viewport = new Viewport(0, 0, w, h);
+                    foreach (var module in _activeModules)
+                        module.UpdateWindowWidth(w);
                 }
             };
 
@@ -378,25 +405,38 @@ public class GameEngine : Game
             Log("Main: Loaded dropdown font (using pixel_font)");
 
             // Re-apply working area size/position now that the window is fully created (fixes right-edge overflow on startup)
+            int viewportWidth, viewportHeight;
             try
             {
                 WindowsTaskbar.ClearCache();
                 Rectangle workArea = WindowsTaskbar.GetWorkArea();
                 int cw = Window.ClientBounds.Width, ch = Window.ClientBounds.Height;
+                Log($"Main: Window dimensions - WorkArea={workArea.Width}x{workArea.Height} (X:{workArea.X},Y:{workArea.Y}), ClientBounds={cw}x{ch}");
                 if (cw != workArea.Width || ch != workArea.Height)
                 {
                     _graphics.PreferredBackBufferWidth = workArea.Width;
                     _graphics.PreferredBackBufferHeight = workArea.Height;
                     _graphics.ApplyChanges();
+                    cw = Window.ClientBounds.Width;
+                    ch = Window.ClientBounds.Height;
+                    Log($"Main: Applied work area size, ClientBounds now={cw}x{ch}");
                 }
                 Window.Position = new Point(workArea.X, workArea.Y);
+                // Use actual ClientBounds for viewport - must match render target or windows appear wrong size
+                viewportWidth = cw;
+                viewportHeight = ch;
             }
-            catch { /* ignore */ }
-            GraphicsDevice.Viewport = new Viewport(0, 0, Window.ClientBounds.Width, Window.ClientBounds.Height);
-            Log($"Main: Updated GraphicsDevice viewport to {Window.ClientBounds.Width}x{Window.ClientBounds.Height}");
+            catch (Exception ex)
+            {
+                viewportWidth = Window.ClientBounds.Width;
+                viewportHeight = Window.ClientBounds.Height;
+                Log($"Main: Work area failed ({ex.Message}), using ClientBounds={viewportWidth}x{viewportHeight}");
+            }
+            GraphicsDevice.Viewport = new Viewport(0, 0, viewportWidth, viewportHeight);
+            Log($"Main: Viewport set to {viewportWidth}x{viewportHeight}");
 
-            // Load all modules
-            LoadModules();
+            // Load all modules - pass actual window width so inner windows (Game Manager, Character Creation, etc.) keep correct size
+            LoadModules(viewportWidth);
             Log($"Main: Loaded {_activeModules.Count} modules");
 
             // First load TaskBar content
@@ -435,18 +475,20 @@ public class GameEngine : Game
             }
 
             // Force all modules to update their window dimensions after everything is loaded
-            Log("Main: Forcing all modules to update window dimensions");
+            // Use viewport dimensions (work area) - ClientBounds may be stale
+            Log($"Main: Forcing all modules to update window dimensions (viewport={viewportWidth}x{viewportHeight})");
             foreach (var module in _activeModules)
             {
                 try
                 {
-                    module.UpdateWindowWidth(Window.ClientBounds.Width);
+                    module.UpdateWindowWidth(viewportWidth);
                 }
                 catch (Exception ex)
                 {
                     Log($"Main: ERROR updating window width for {module.GetType().Name}: {ex.Message}");
                 }
             }
+            LogWindowBounds("Main: After LoadContent");
         }
         catch (Exception ex)
         {
@@ -481,6 +523,29 @@ public class GameEngine : Game
             // Reset TopBar click handling flag at the beginning of each update cycle
             _topBarHandledClick = false;
             _anyWindowHandledClick = false;
+
+            // Deferred window dimension refresh - ApplyChanges can be async, viewport may get reset by MonoGame
+            if (!_hasRefreshedWindowDimensions)
+            {
+                try
+                {
+                    int cw = Window.ClientBounds.Width, ch = Window.ClientBounds.Height;
+                    if (gameTime.TotalGameTime.TotalSeconds < 0.02)
+                        Log($"Main: Deferred refresh - ClientBounds={cw}x{ch}, Viewport={GraphicsDevice.Viewport.Width}x{GraphicsDevice.Viewport.Height}");
+                    if (cw > 0 && ch > 0 && (GraphicsDevice.Viewport.Width != cw || GraphicsDevice.Viewport.Height != ch))
+                    {
+                        GraphicsDevice.Viewport = new Viewport(0, 0, cw, ch);
+                        foreach (var module in _activeModules)
+                            module.UpdateWindowWidth(cw);
+                    }
+                }
+                catch (Exception ex) { Log($"Main: Deferred refresh error: {ex.Message}"); }
+                if (gameTime.TotalGameTime.TotalSeconds > 0.1)
+                {
+                    _hasRefreshedWindowDimensions = true;
+                    LogWindowBounds("Main: After deferred refresh (final)");
+                }
+            }
 
             // Get mouse state
             var mouseState = Mouse.GetState();
@@ -661,6 +726,15 @@ public class GameEngine : Game
     {
         try
         {
+            // Ensure viewport matches actual window - MonoGame may reset it when back buffer resizes
+            int cw = Window.ClientBounds.Width, ch = Window.ClientBounds.Height;
+            if (cw > 0 && ch > 0 && (GraphicsDevice.Viewport.Width != cw || GraphicsDevice.Viewport.Height != ch))
+            {
+                GraphicsDevice.Viewport = new Viewport(0, 0, cw, ch);
+                foreach (var module in _activeModules)
+                    module.UpdateWindowWidth(cw);
+            }
+
             // Get background color from Desktop module if available, otherwise use default
             Color backgroundColor = _desktop?.GetBackgroundColor() ?? _backgroundColor;
             GraphicsDevice.Clear(backgroundColor);

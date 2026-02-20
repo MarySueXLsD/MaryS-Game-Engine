@@ -232,16 +232,16 @@ namespace MarySGameEngine.Modules.GameManager_essential
                 {
                     IsVisible = true,
                     IsMovable = true,
-                    IsResizable = false
+                    IsResizable = true  // Allow resize so user can adjust if default is too small
                 };
 
                 _windowManagement = new WindowManagement(graphicsDevice, menuFont, windowWidth, windowProperties);
                 _windowManagement.SetWindowTitle("Game Manager");
                 _windowManagement.SetVisible(true);  // Explicitly set visible by default
                 
-                // Set custom dimensions (1/4 of default height - 400/4 = 100, but make it a bit larger for usability)
-                _windowManagement.SetDefaultSize(1000, 200); // Increased width from 800 to 1000
-                _windowManagement.SetCustomMinimumSize(800, 150); // Increased minimum width from 600 to 800
+                // Use larger default height - 200 was too small on typical screens
+                _windowManagement.SetDefaultSize(1000, 550);
+                _windowManagement.SetCustomMinimumSize(800, 250);
                 _windowManagement.SetPosition(new Vector2(100, 50)); // Set initial position
 
                 System.Diagnostics.Debug.WriteLine("GameManager: Window management created");
