@@ -181,9 +181,10 @@ namespace MarySGameEngine.Modules.TaskBar_essential
         {
             try
             {
-                // Store manually added icons before clearing
-                var manuallyAddedIcons = _moduleIcons.Where(icon => 
-                    icon.Name == "Console" || icon.Name == "Module Settings" || icon.Name == "Chat").ToList();
+                // Store manually added icons before clearing (modules that are added when their window is opened)
+                var manuallyAddedIcons = _moduleIcons.Where(icon =>
+                    icon.Name == "Console" || icon.Name == "Module Settings" || icon.Name == "Chat"
+                    || icon.Name == "Character Creation" || icon.Name == "Hierarchy Tree" || icon.Name == "Asset Browser").ToList();
                 
                 _moduleIcons.Clear();
                 int currentX = _taskBarBounds.X;
@@ -1540,8 +1541,12 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                         string moduleNameForPath = moduleName.Replace(" ", "");
                         string logoPath;
                         
-                        // Special case for Chat module which doesn't follow _essential naming
+                        // Modules that don't use _essential folder naming
                         if (moduleNameForPath == "Chat")
+                        {
+                            logoPath = $"Modules/{moduleNameForPath}/logo";
+                        }
+                        else if (moduleNameForPath == "CharacterCreation" || moduleNameForPath == "HierarchyTree" || moduleNameForPath == "AssetBrowser")
                         {
                             logoPath = $"Modules/{moduleNameForPath}/logo";
                         }

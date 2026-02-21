@@ -108,6 +108,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private Texture2D _titleBarGradient;
         private Texture2D _titleBarGradientLine; // Single horizontal line extracted from gradient
         private bool _useGradientForTitleBar = true; // Toggle between gradient and solid color
+        private Texture2D _windowLogo; // Optional logo drawn in title bar (e.g. Character Creation)
         private MouseState _currentMouseState;
         private MouseState _previousMouseState;
         private GraphicsDevice _graphicsDevice;
@@ -1301,9 +1302,19 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 spriteBatch.Draw(_pixel, titleBarBounds, titleBarColor);
             }
 
-            // Draw title text with the title font
+            // Draw optional window logo then title text
+            int titleLeft = scaledBounds.X + TITLE_LEFT_PADDING;
+            const int TITLE_BAR_LOGO_SIZE = 24;
+            const int TITLE_BAR_LOGO_RIGHT_PADDING = 8;
+            if (_windowLogo != null && _windowLogo.Bounds.Width > 0 && _windowLogo.Bounds.Height > 0)
+            {
+                int logoY = scaledBounds.Y + (_titleBarHeight - TITLE_BAR_LOGO_SIZE) / 2;
+                var logoDest = new Rectangle(titleLeft, logoY, TITLE_BAR_LOGO_SIZE, TITLE_BAR_LOGO_SIZE);
+                spriteBatch.Draw(_windowLogo, logoDest, Color.White);
+                titleLeft += TITLE_BAR_LOGO_SIZE + TITLE_BAR_LOGO_RIGHT_PADDING;
+            }
             Vector2 titleTextPos = new Vector2(
-                scaledBounds.X + TITLE_LEFT_PADDING,
+                titleLeft,
                 scaledBounds.Y + (_titleBarHeight - _titleFont.LineSpacing * TITLE_FONT_SCALE) / 2
             );
             spriteBatch.DrawString(_titleFont, title, titleTextPos, Color.White, 0f, Vector2.Zero, TITLE_FONT_SCALE, SpriteEffects.None, 0f);
@@ -1586,6 +1597,12 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _windowTitle = title;
         }
 
+        /// <summary>Set an optional logo texture to draw in the title bar (left of the title text). Pass null to clear.</summary>
+        public void SetWindowLogo(Texture2D logo)
+        {
+            _windowLogo = logo;
+        }
+
         public void SetCustomMinimumSize(int minWidth, int minHeight)
         {
             _customMinWidth = minWidth;
@@ -1733,6 +1750,14 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         public int GetZOrder()
         {
             return _zOrder;
+        }
+
+        /// <summary>
+        /// Returns true if this window is the topmost window under the given mouse position (used for hover/input so only the front window shows hover).
+        /// </summary>
+        public bool IsThisWindowTopmostUnderMouse(Point mousePosition)
+        {
+            return IsTopmostWindowUnderMouse(this, mousePosition);
         }
 
         public void BringToFront()

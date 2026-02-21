@@ -66,6 +66,12 @@ namespace MarySGameEngine.Modules.HierarchyTree_essential
         public void LoadContent(ContentManager content)
         {
             _windowManagement.LoadContent(content);
+            try
+            {
+                var logo = content.Load<Texture2D>("Modules/HierarchyTree_essential/logo");
+                _windowManagement.SetWindowLogo(logo);
+            }
+            catch (Exception) { /* optional logo */ }
         }
 
         public void Dispose()
