@@ -26,6 +26,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private ContentManager _content;
         private MouseState _currentMouseState;
         private MouseState _previousMouseState;
+        private Point _hoverMousePosition; // When a popup is active, set off-screen so no hover on list/buttons
         private GameEngine _engine;
         private bool _hasShownError = false; // Prevent showing error messages repeatedly
 
@@ -189,8 +190,10 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private Keys _editLastRepeatedKey = Keys.None;
         private float _editKeyRepeatTimer = 0f;
 
-        // Skip one frame of input when window just opened so the click that opened the window is not treated as a click inside (e.g. Create Character)
-        private bool _skipInputOneFrame = false;
+        // Skip input when window just opened so the click that opened the window is not treated as a click inside (e.g. Create Character).
+        // Use last frame's visibility because TaskBar runs before us and sets window visible in the same frame.
+        private bool _wasWindowVisibleLastFrame = false;
+        private bool _ignoreInputUntilMouseReleased = false;
 
         // Helper classes
         private class TraitItem
@@ -309,14 +312,28 @@ namespace MarySGameEngine.Modules.CharacterCreation
         
         private void HandleInput()
         {
-            if (_skipInputOneFrame)
+            if (_ignoreInputUntilMouseReleased)
             {
-                _skipInputOneFrame = false;
+                if (_currentMouseState.LeftButton == ButtonState.Released)
+                    _ignoreInputUntilMouseReleased = false;
                 return;
             }
-            if (_currentMouseState.LeftButton == ButtonState.Pressed && 
+            // Do not process clicks when a popup (e.g. confirm dialog) is open - prevents click-through
+            if (MarySGameEngine.Modules.PopUp_essential.PopUp.Instance != null &&
+                MarySGameEngine.Modules.PopUp_essential.PopUp.Instance.HasActivePopUp)
+                return;
+            // PopUp may have run before us and consumed the click (Confirm/Cancel); don't process it again
+            if (MarySGameEngine.Modules.PopUp_essential.PopUp.ConsumedClickThisFrame)
+                return;
+
+            if (_currentMouseState.LeftButton == ButtonState.Pressed &&
                 _previousMouseState.LeftButton == ButtonState.Released)
             {
+                // Mark that this window handled the click so Desktop/TaskBar/other modules don't process it (prevents click-through)
+                Point p = _currentMouseState.Position;
+                if (_leftPanelBounds.Contains(p) || _centerPanelBounds.Contains(p) || _rightPanelBounds.Contains(p))
+                    _engine?.SetAnyWindowHandledClick(true);
+
                 // Handle category button clicks
                 for (int i = 0; i < _categoryButtonBounds.Count && i < _assetCategories.Count; i++)
                 {
@@ -1315,37 +1332,27 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 _currentMouseState = Mouse.GetState();
                 _previousKeyboardState = _currentKeyboardState;
                 _currentKeyboardState = Keyboard.GetState();
+                // When a popup is open, use off-screen position so list/buttons don't show hover
+                _hoverMousePosition = (MarySGameEngine.Modules.PopUp_essential.PopUp.Instance != null &&
+                    MarySGameEngine.Modules.PopUp_essential.PopUp.Instance.HasActivePopUp)
+                    ? new Point(-10000, -10000)
+                    : _currentMouseState.Position;
 
-                bool wasVisible = _windowManagement?.IsVisible() ?? false;
+                bool wasVisible = _wasWindowVisibleLastFrame;
                 _windowManagement?.Update();
                 bool isVisible = _windowManagement?.IsVisible() ?? false;
+                _wasWindowVisibleLastFrame = isVisible;
 
-                // If window just became visible, reset size and position to defaults and skip next input so the open-click is not treated as in-window click
+                // If window just became visible, ignore input until mouse is released so the open-click is not treated as in-window click
                 if (!wasVisible && isVisible)
                 {
-                    _skipInputOneFrame = true;
-                    // Force reset to default size
-                    var defaultWidthField = _windowManagement.GetType().GetField("_defaultWidth", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    var defaultHeightField = _windowManagement.GetType().GetField("_defaultHeight", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    
-                    if (defaultWidthField != null)
-                        defaultWidthField.SetValue(_windowManagement, 1400);
-                    if (defaultHeightField != null)
-                        defaultHeightField.SetValue(_windowManagement, 350);
-                    
-                    _windowManagement.SetDefaultSize(1400, 350);
-                    _windowManagement.SetCustomMinimumSize(1400, 600);
-                    _windowManagement.SetPosition(new Vector2(100, 50));
-                    
-                    // Reset to "All" tab when opening
+                    _ignoreInputUntilMouseReleased = true;
+                    // Reset to "All" tab when opening (keep last position/size so window stays where user left it)
                     _selectedCategoryIndex = 0;
                     _currentView = "All";
                     _previousView = "All";
                     _isInspectingCharacter = false;
                     _rightPanelScrollY = 0;
-                    
                     LoadCharacters();
                     UpdateBounds();
                 }
@@ -1504,17 +1511,15 @@ namespace MarySGameEngine.Modules.CharacterCreation
             if (_windowManagement == null || !_windowManagement.IsVisible())
                 return;
 
-            // Only enable scrolling for character inspection view
-            if (!_isInspectingCharacter)
-            {
-                _scrollY = 0;
-                _needsScrollbar = false;
-                _scrollbarBounds = Rectangle.Empty;
-                return;
-            }
-
+            // Enable scrolling for both character inspection view and list/grid view
             // Calculate content height (approximate based on center panel content)
             _contentHeight = CalculateContentHeight();
+
+            if (!_isInspectingCharacter)
+            {
+                // List/grid view: allow scroll when content exceeds panel
+                // _scrollY is already clamped below when _needsScrollbar is set
+            }
             
             // Reserve space for resize handle
             int resizeHandleSize = 24;
@@ -1688,9 +1693,142 @@ namespace MarySGameEngine.Modules.CharacterCreation
             }
             else
             {
-                // Tab view - minimal height needed
-                return _centerPanelBounds.Height;
+                // List/grid tab view - compute total content height
+                return CalculateListGridContentHeight();
             }
+        }
+
+        /// <summary>Computes total content height for the list/grid view (All, Characters, Traits, etc.) for scrolling.</summary>
+        private int CalculateListGridContentHeight()
+        {
+            const int sectionHeaderHeight = 32; // headerBoldScale * font height + 8
+            const int buttonWidth = 180;
+            const int buttonHeight = 35;
+            const int buttonSpacing = 15;
+            const int cardHeight = 72;
+            const int cardSpacingY = 12;
+            const int listRowHeight = 44; // 40 + 4
+            int padding = PANEL_PADDING;
+            int centerWidth = Math.Max(1, _centerPanelBounds.Width - padding * 2);
+            int slotWidth = 220 + 12;
+            int cardsPerRow = Math.Max(1, centerWidth / slotWidth);
+
+            if (_currentView == "All")
+            {
+                bool hasCharacters = _characters.Count > 0;
+                bool hasAnyEntities = hasCharacters || _traits.Count > 0 || _skills.Count > 0 || _effects.Count > 0 || _stats.Count > 0 || _tags.Count > 0;
+                if (!hasAnyEntities)
+                {
+                    // "Nothing is there" message + buttons
+                    return _centerPanelBounds.Height;
+                }
+                int gridStartY = _centerPanelBounds.Y + padding;
+                int buttonsHeight = 2 * (buttonHeight + buttonSpacing) - buttonSpacing; // 2 rows
+                int viewBarY = gridStartY + buttonsHeight + padding;
+                int sectionsStartY = viewBarY + VIEW_BAR_HEIGHT + padding;
+                int contentBottom = sectionsStartY;
+
+                if (hasCharacters)
+                {
+                    int listY = sectionsStartY + sectionHeaderHeight + padding;
+                    if (_allTabViewIsGrid)
+                    {
+                        int rows = (_characters.Count + cardsPerRow - 1) / cardsPerRow;
+                        contentBottom = listY + (rows > 0 ? rows * (cardHeight + cardSpacingY) : 0) + padding;
+                    }
+                    else
+                        contentBottom = listY + _characters.Count * listRowHeight + padding;
+                    sectionsStartY = contentBottom;
+                }
+                if (_traits.Count > 0)
+                {
+                    int listY = sectionsStartY + sectionHeaderHeight + padding;
+                    if (_allTabViewIsGrid)
+                    {
+                        int rows = (_traits.Count + cardsPerRow - 1) / cardsPerRow;
+                        contentBottom = listY + rows * (cardHeight + cardSpacingY) + padding;
+                    }
+                    else
+                        contentBottom = listY + _traits.Count * listRowHeight + padding;
+                    sectionsStartY = contentBottom;
+                }
+                if (_skills.Count > 0)
+                {
+                    int listY = sectionsStartY + sectionHeaderHeight + padding;
+                    if (_allTabViewIsGrid)
+                    {
+                        int rows = (_skills.Count + cardsPerRow - 1) / cardsPerRow;
+                        contentBottom = listY + rows * (cardHeight + cardSpacingY) + padding;
+                    }
+                    else
+                        contentBottom = listY + _skills.Count * listRowHeight + padding;
+                    sectionsStartY = contentBottom;
+                }
+                if (_effects.Count > 0)
+                {
+                    int listY = sectionsStartY + sectionHeaderHeight + padding;
+                    if (_allTabViewIsGrid)
+                    {
+                        int rows = (_effects.Count + cardsPerRow - 1) / cardsPerRow;
+                        contentBottom = listY + rows * (cardHeight + cardSpacingY) + padding;
+                    }
+                    else
+                        contentBottom = listY + _effects.Count * listRowHeight + padding;
+                    sectionsStartY = contentBottom;
+                }
+                if (_stats.Count > 0)
+                {
+                    int listY = sectionsStartY + sectionHeaderHeight + padding;
+                    if (_allTabViewIsGrid)
+                    {
+                        int rows = (_stats.Count + cardsPerRow - 1) / cardsPerRow;
+                        contentBottom = listY + rows * (cardHeight + cardSpacingY) + padding;
+                    }
+                    else
+                        contentBottom = listY + _stats.Count * listRowHeight + padding;
+                    sectionsStartY = contentBottom;
+                }
+                if (_tags.Count > 0)
+                {
+                    int listY = sectionsStartY + sectionHeaderHeight + padding;
+                    if (_allTabViewIsGrid)
+                    {
+                        int rows = (_tags.Count + cardsPerRow - 1) / cardsPerRow;
+                        contentBottom = listY + rows * (cardHeight + cardSpacingY) + padding;
+                    }
+                    else
+                        contentBottom = listY + _tags.Count * listRowHeight + padding;
+                }
+                return contentBottom - _centerPanelBounds.Y + padding;
+            }
+
+            if (_currentView == "Characters" && _characters.Count > 0)
+            {
+                int listStartY = _centerPanelBounds.Y + TOOLBAR_HEIGHT + padding + VIEW_BAR_HEIGHT + padding;
+                if (_allTabViewIsGrid)
+                {
+                    int rows = (_characters.Count + cardsPerRow - 1) / cardsPerRow;
+                    return listStartY - _centerPanelBounds.Y + rows * (cardHeight + cardSpacingY) + padding;
+                }
+                return listStartY - _centerPanelBounds.Y + _characters.Count * listRowHeight + padding;
+            }
+
+            if ((_currentView == "Traits" && _traits.Count > 0) || (_currentView == "Skills" && _skills.Count > 0) ||
+                (_currentView == "Effects" && _effects.Count > 0) || (_currentView == "Stats" && _stats.Count > 0) || (_currentView == "Tags" && _tags.Count > 0))
+            {
+                int sectionStartY = _centerPanelBounds.Y + TOOLBAR_HEIGHT + padding + VIEW_BAR_HEIGHT + padding;
+                int count = _currentView == "Traits" ? _traits.Count : _currentView == "Skills" ? _skills.Count :
+                    _currentView == "Effects" ? _effects.Count : _currentView == "Stats" ? _stats.Count : _tags.Count;
+                int listY = sectionStartY + sectionHeaderHeight + padding;
+                if (_allTabViewIsGrid)
+                {
+                    int rows = (count + cardsPerRow - 1) / cardsPerRow;
+                    return listY - _centerPanelBounds.Y + rows * (cardHeight + cardSpacingY) + padding;
+                }
+                return listY - _centerPanelBounds.Y + count * listRowHeight + padding;
+            }
+
+            return _centerPanelBounds.Height;
         }
 
         private void HandleScrollbarInteraction()
@@ -1811,10 +1949,34 @@ namespace MarySGameEngine.Modules.CharacterCreation
 
                 // Update bounds before drawing to ensure they match current window size
                 UpdateBounds();
-                
-                // Draw panels (with scroll offset applied to center panel)
+
+                // Draw left panel (will flush with content scissor)
                 DrawLeftPanel(spriteBatch);
-                DrawCenterPanel(spriteBatch, _scrollY, windowBounds);
+
+                // Flush batch and start a new one so center panel draws use center scissor and clip at top (no draw-through title bar)
+                spriteBatch.End();
+                int resizeHandleSizeForScissor = 24;
+                int centerPanelScissorW = _centerPanelBounds.Width - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0);
+                int maxVisibleBottom = windowBounds.Y + windowBounds.Height - resizeHandleSizeForScissor;
+                int centerPanelScissorBottom = Math.Min(_centerPanelBounds.Y + _centerPanelBounds.Height, maxVisibleBottom);
+                int centerPanelScissorH = Math.Max(0, centerPanelScissorBottom - _centerPanelBounds.Y);
+                Rectangle centerPanelScissor = new Rectangle(_centerPanelBounds.X, _centerPanelBounds.Y, centerPanelScissorW, centerPanelScissorH);
+                int csLeft = Math.Max(centerPanelScissor.X, contentScissor.X);
+                int csTop = Math.Max(centerPanelScissor.Y, contentScissor.Y);
+                int csRight = Math.Min(centerPanelScissor.Right, contentScissor.Right);
+                int csBottom = Math.Min(centerPanelScissor.Bottom, contentScissor.Bottom);
+                Rectangle centerScissorFinal = new Rectangle(csLeft, csTop, Math.Max(0, csRight - csLeft), Math.Max(0, csBottom - csTop));
+                spriteBatch.GraphicsDevice.ScissorRectangle = centerScissorFinal;
+                spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState { ScissorTestEnable = true, CullMode = CullMode.None };
+                spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, DepthStencilState.None, spriteBatch.GraphicsDevice.RasterizerState);
+
+                DrawCenterPanel(spriteBatch, _scrollY, windowBounds, restoreScissorAtEnd: false);
+
+                spriteBatch.End();
+                spriteBatch.GraphicsDevice.ScissorRectangle = contentScissor;
+                spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState { ScissorTestEnable = true };
+                spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, DepthStencilState.None, spriteBatch.GraphicsDevice.RasterizerState);
+
                 DrawRightPanel(spriteBatch);
 
                 // Restore scissor test before drawing scrollbar and resize handle
@@ -1901,54 +2063,45 @@ namespace MarySGameEngine.Modules.CharacterCreation
                    bounds.Right > scissorRect.X && bounds.X < scissorRect.Right;
         }
 
-        private void DrawCenterPanel(SpriteBatch spriteBatch, int scrollOffset, Rectangle windowBounds)
+        private void DrawCenterPanel(SpriteBatch spriteBatch, int scrollOffset, Rectangle windowBounds, bool restoreScissorAtEnd = true)
         {
             if (_pixel == null || _menuFont == null) return;
             if (_centerPanelBounds.Width <= 0 || _centerPanelBounds.Height <= 0) return;
-            
+
             SpriteFont uiFont = _uiFont ?? _menuFont; // Use UI font for center panel
-            
-            // Set up scissor rectangle specifically for the center panel using CURRENT window bounds
-            Rectangle originalScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
-            int resizeHandleSize = 24;
-            
-            // Calculate center panel scissor based on ACTUAL current window visible area
-            int centerPanelX = _centerPanelBounds.X;
-            int centerPanelY = _centerPanelBounds.Y;
-            int centerPanelWidth = _centerPanelBounds.Width - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0);
-            
-            int maxVisibleBottom = windowBounds.Y + windowBounds.Height - resizeHandleSize;
-            int centerPanelScissorTop = centerPanelY;
-            int centerPanelScissorBottom = Math.Min(centerPanelY + _centerPanelBounds.Height, maxVisibleBottom);
-            int centerPanelScissorHeight = Math.Max(0, centerPanelScissorBottom - centerPanelScissorTop);
-            
-            Rectangle centerPanelScissor = new Rectangle(
-                centerPanelX,
-                centerPanelScissorTop,
-                centerPanelWidth,
-                centerPanelScissorHeight
-            );
-            
-            int scissorLeft = Math.Max(centerPanelScissor.X, originalScissor.X);
-            int scissorTop = Math.Max(centerPanelScissor.Y, originalScissor.Y);
-            int scissorRight = Math.Min(centerPanelScissor.Right, originalScissor.Right);
-            int scissorBottom = Math.Min(centerPanelScissor.Bottom, originalScissor.Bottom);
-            
-            int scissorWidth = Math.Max(0, scissorRight - scissorLeft);
-            int scissorHeight = Math.Max(0, scissorBottom - scissorTop);
-            
-            Rectangle scissorRect = new Rectangle(scissorLeft, scissorTop, scissorWidth, scissorHeight);
-            spriteBatch.GraphicsDevice.ScissorRectangle = scissorRect;
-            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+
+            Rectangle scissorRect;
+            Rectangle savedScissor = Rectangle.Empty;
+            if (restoreScissorAtEnd)
             {
-                ScissorTestEnable = true,
-                CullMode = CullMode.None
-            };
-            
+                // Set up scissor rectangle specifically for the center panel using CURRENT window bounds
+                Rectangle originalScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
+                savedScissor = originalScissor;
+                int resizeHandleSize = 24;
+                int centerPanelX = _centerPanelBounds.X;
+                int centerPanelY = _centerPanelBounds.Y;
+                int centerPanelWidth = _centerPanelBounds.Width - (_needsScrollbar ? SCROLLBAR_WIDTH + SCROLLBAR_PADDING : 0);
+                int maxVisibleBottom = windowBounds.Y + windowBounds.Height - resizeHandleSize;
+                int centerPanelScissorBottom = Math.Min(centerPanelY + _centerPanelBounds.Height, maxVisibleBottom);
+                int centerPanelScissorHeight = Math.Max(0, centerPanelScissorBottom - centerPanelY);
+                Rectangle centerPanelScissor = new Rectangle(centerPanelX, centerPanelY, centerPanelWidth, centerPanelScissorHeight);
+                int scissorLeft = Math.Max(centerPanelScissor.X, originalScissor.X);
+                int scissorTop = Math.Max(centerPanelScissor.Y, originalScissor.Y);
+                int scissorRight = Math.Min(centerPanelScissor.Right, originalScissor.Right);
+                int scissorBottom = Math.Min(centerPanelScissor.Bottom, originalScissor.Bottom);
+                scissorRect = new Rectangle(scissorLeft, scissorTop, Math.Max(0, scissorRight - scissorLeft), Math.Max(0, scissorBottom - scissorTop));
+                spriteBatch.GraphicsDevice.ScissorRectangle = scissorRect;
+                spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState { ScissorTestEnable = true, CullMode = CullMode.None };
+            }
+            else
+            {
+                scissorRect = spriteBatch.GraphicsDevice.ScissorRectangle;
+            }
+
             // Draw panel background
             spriteBatch.Draw(_pixel, _centerPanelBounds, PANEL_BACKGROUND);
             DrawBorder(spriteBatch, _centerPanelBounds, PANEL_BORDER);
-            
+
             // Draw content based on current view
             if (_isInspectingCharacter)
             {
@@ -1956,32 +2109,31 @@ namespace MarySGameEngine.Modules.CharacterCreation
             }
             else
             {
-                DrawTabView(spriteBatch, scissorRect, uiFont);
+                DrawTabView(spriteBatch, scissorRect, uiFont, scrollOffset);
             }
-            
-            // Restore scissor rectangle
-            spriteBatch.GraphicsDevice.ScissorRectangle = originalScissor;
-            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState
+
+            if (restoreScissorAtEnd && !savedScissor.IsEmpty)
             {
-                ScissorTestEnable = false
-            };
+                spriteBatch.GraphicsDevice.ScissorRectangle = savedScissor;
+                spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState { ScissorTestEnable = false };
+            }
         }
         
-        private void DrawTabView(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont)
+        private void DrawTabView(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont, int scrollOffset)
         {
             if (_currentView == "All")
             {
-                DrawAllTab(spriteBatch, scissorRect, uiFont);
+                DrawAllTab(spriteBatch, scissorRect, uiFont, scrollOffset);
             }
             else if (_currentView == "Characters")
             {
                 if (_characters.Count > 0)
                 {
-                    DrawToolbar(spriteBatch, uiFont, "+ Create Character");
+                    DrawToolbar(spriteBatch, uiFont, "+ Create Character", scrollOffset);
                     int viewBarY = _toolbarBounds.Bottom + PANEL_PADDING;
-                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY);
+                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY - scrollOffset);
                     int listStartY = viewBarY + VIEW_BAR_HEIGHT + PANEL_PADDING;
-                    DrawCharacterList(spriteBatch, scissorRect, uiFont, listStartY, _allTabViewIsGrid);
+                    DrawCharacterList(spriteBatch, scissorRect, uiFont, listStartY, _allTabViewIsGrid, scrollOffset);
                 }
                 else
                 {
@@ -1994,11 +2146,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
             {
                 if (_traits.Count > 0)
                 {
-                    DrawToolbar(spriteBatch, uiFont, "+ Create Trait");
+                    DrawToolbar(spriteBatch, uiFont, "+ Create Trait", scrollOffset);
                     int viewBarY = _toolbarBounds.Bottom + PANEL_PADDING;
-                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY);
+                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY - scrollOffset);
                     int sectionStartY = viewBarY + VIEW_BAR_HEIGHT + PANEL_PADDING;
-                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Traits", _traits, _traitListBounds, _traitDeleteBounds, _allTabViewIsGrid);
+                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Traits", _traits, _traitListBounds, _traitDeleteBounds, _allTabViewIsGrid, scrollOffset);
                 }
                 else
                 {
@@ -2011,11 +2163,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
             {
                 if (_skills.Count > 0)
                 {
-                    DrawToolbar(spriteBatch, uiFont, "+ Create Skill");
+                    DrawToolbar(spriteBatch, uiFont, "+ Create Skill", scrollOffset);
                     int viewBarY = _toolbarBounds.Bottom + PANEL_PADDING;
-                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY);
+                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY - scrollOffset);
                     int sectionStartY = viewBarY + VIEW_BAR_HEIGHT + PANEL_PADDING;
-                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Skills", _skills, _skillListBounds, _skillDeleteBounds, _allTabViewIsGrid);
+                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Skills", _skills, _skillListBounds, _skillDeleteBounds, _allTabViewIsGrid, scrollOffset);
                 }
                 else
                 {
@@ -2028,11 +2180,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
             {
                 if (_effects.Count > 0)
                 {
-                    DrawToolbar(spriteBatch, uiFont, "+ Create Effect");
+                    DrawToolbar(spriteBatch, uiFont, "+ Create Effect", scrollOffset);
                     int viewBarY = _toolbarBounds.Bottom + PANEL_PADDING;
-                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY);
+                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY - scrollOffset);
                     int sectionStartY = viewBarY + VIEW_BAR_HEIGHT + PANEL_PADDING;
-                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Effects", _effects, _effectListBounds, _effectDeleteBounds, _allTabViewIsGrid);
+                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Effects", _effects, _effectListBounds, _effectDeleteBounds, _allTabViewIsGrid, scrollOffset);
                 }
                 else
                 {
@@ -2045,11 +2197,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
             {
                 if (_stats.Count > 0)
                 {
-                    DrawToolbar(spriteBatch, uiFont, "+ Create Stat");
+                    DrawToolbar(spriteBatch, uiFont, "+ Create Stat", scrollOffset);
                     int viewBarY = _toolbarBounds.Bottom + PANEL_PADDING;
-                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY);
+                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY - scrollOffset);
                     int sectionStartY = viewBarY + VIEW_BAR_HEIGHT + PANEL_PADDING;
-                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Stats", _stats, _statListBounds, _statDeleteBounds, _allTabViewIsGrid);
+                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Stats", _stats, _statListBounds, _statDeleteBounds, _allTabViewIsGrid, scrollOffset);
                 }
                 else
                 {
@@ -2062,11 +2214,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
             {
                 if (_tags.Count > 0)
                 {
-                    DrawToolbar(spriteBatch, uiFont, "+ Create Tag");
+                    DrawToolbar(spriteBatch, uiFont, "+ Create Tag", scrollOffset);
                     int viewBarY = _toolbarBounds.Bottom + PANEL_PADDING;
-                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY);
+                    DrawViewStyleBar(spriteBatch, uiFont, viewBarY - scrollOffset);
                     int sectionStartY = viewBarY + VIEW_BAR_HEIGHT + PANEL_PADDING;
-                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Tags", _tags, _tagListBounds, _tagDeleteBounds, _allTabViewIsGrid);
+                    DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionStartY, "Tags", _tags, _tagListBounds, _tagDeleteBounds, _allTabViewIsGrid, scrollOffset);
                 }
                 else
                 {
@@ -2077,7 +2229,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             }
         }
         
-        private void DrawAllTab(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont)
+        private void DrawAllTab(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont, int scrollOffset)
         {
             for (int i = 0; i < _allTabCreateButtonBounds.Length; i++)
                 _allTabCreateButtonBounds[i] = Rectangle.Empty;
@@ -2099,8 +2251,8 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 Vector2 subMessageSize = uiFont.MeasureString(subMessage);
                 Vector2 messagePosition = new Vector2(_centerPanelBounds.X + (_centerPanelBounds.Width - messageSize.X) / 2, _centerPanelBounds.Y + PANEL_PADDING * 2);
                 Vector2 subMessagePosition = new Vector2(_centerPanelBounds.X + (_centerPanelBounds.Width - subMessageSize.X) / 2, messagePosition.Y + messageSize.Y + 20);
-                spriteBatch.DrawString(uiFont, message, messagePosition, TEXT_COLOR);
-                spriteBatch.DrawString(uiFont, subMessage, subMessagePosition, TEXT_SECONDARY);
+                spriteBatch.DrawString(uiFont, message, new Vector2(messagePosition.X, messagePosition.Y - scrollOffset), TEXT_COLOR);
+                spriteBatch.DrawString(uiFont, subMessage, new Vector2(subMessagePosition.X, subMessagePosition.Y - scrollOffset), TEXT_SECONDARY);
                 gridStartY = (int)subMessagePosition.Y + (int)subMessageSize.Y + 40;
             }
 
@@ -2111,15 +2263,14 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int buttonsPerRow = 3;
             int totalWidth = (buttonsPerRow * buttonWidth) + ((buttonsPerRow - 1) * buttonSpacing);
             int startX = _centerPanelBounds.X + (_centerPanelBounds.Width - totalWidth) / 2;
-            string[] entityTypes = { "Character", "Trait", "Skill", "Effect", "Stat", "Tag" };
             string[] buttonLabels = { "Create Character", "Create Trait", "Create Skill", "Create Effect", "Create Stat", "Create Tag" };
-            var mousePos = _currentMouseState.Position;
+            var mousePos = _hoverMousePosition;
             for (int i = 0; i < 6; i++)
             {
                 int row = i / buttonsPerRow;
                 int col = i % buttonsPerRow;
                 int buttonX = startX + col * (buttonWidth + buttonSpacing);
-                int buttonY = gridStartY + row * (buttonHeight + buttonSpacing);
+                int buttonY = gridStartY + row * (buttonHeight + buttonSpacing) - scrollOffset;
                 Rectangle buttonBounds = new Rectangle(buttonX, buttonY, buttonWidth, buttonHeight);
                 _allTabCreateButtonBounds[i] = buttonBounds;
                 if (i == 0 && !hasAnyEntities)
@@ -2137,7 +2288,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
 
             // View style bar: List | Grid (only when we have entities to show)
             if (hasAnyEntities)
-                DrawViewStyleBar(spriteBatch, uiFont, viewBarY);
+                DrawViewStyleBar(spriteBatch, uiFont, viewBarY - scrollOffset);
             else
             {
                 _allTabViewListButtonBounds = Rectangle.Empty;
@@ -2154,7 +2305,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 string sectionHeader = "Characters";
                 Vector2 headerSize = uiFont.MeasureString(sectionHeader) * headerBoldScale;
                 int headerHeight = (int)headerSize.Y + 8;
-                Rectangle headerBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, sectionsStartY, _centerPanelBounds.Width - PANEL_PADDING * 2, headerHeight);
+                Rectangle headerBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, sectionsStartY - scrollOffset, _centerPanelBounds.Width - PANEL_PADDING * 2, headerHeight);
                 if (IsVisible(headerBounds, scissorRect))
                 {
                     spriteBatch.Draw(_pixel, headerBounds, SECTION_HEADER);
@@ -2163,7 +2314,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     spriteBatch.DrawString(uiFont, sectionHeader, headerPos, TEXT_COLOR, 0f, Vector2.Zero, headerBoldScale, SpriteEffects.None, 0f);
                 }
                 int listY = sectionsStartY + headerHeight + PANEL_PADDING;
-                DrawCharacterList(spriteBatch, scissorRect, uiFont, listY, _allTabViewIsGrid);
+                DrawCharacterList(spriteBatch, scissorRect, uiFont, listY, _allTabViewIsGrid, scrollOffset);
                 if (_allTabViewIsGrid)
                 {
                     const int cardHeight = 72;
@@ -2180,11 +2331,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     sectionsStartY = listY + _characters.Count * (rowHeight + 4) + PANEL_PADDING;
                 }
             }
-            if (_traits.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Traits", _traits, _traitListBounds, _traitDeleteBounds, _allTabViewIsGrid);
-            if (_skills.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Skills", _skills, _skillListBounds, _skillDeleteBounds, _allTabViewIsGrid);
-            if (_effects.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Effects", _effects, _effectListBounds, _effectDeleteBounds, _allTabViewIsGrid);
-            if (_stats.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Stats", _stats, _statListBounds, _statDeleteBounds, _allTabViewIsGrid);
-            if (_tags.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Tags", _tags, _tagListBounds, _tagDeleteBounds, _allTabViewIsGrid);
+            if (_traits.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Traits", _traits, _traitListBounds, _traitDeleteBounds, _allTabViewIsGrid, scrollOffset);
+            if (_skills.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Skills", _skills, _skillListBounds, _skillDeleteBounds, _allTabViewIsGrid, scrollOffset);
+            if (_effects.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Effects", _effects, _effectListBounds, _effectDeleteBounds, _allTabViewIsGrid, scrollOffset);
+            if (_stats.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Stats", _stats, _statListBounds, _statDeleteBounds, _allTabViewIsGrid, scrollOffset);
+            if (_tags.Count > 0) DrawEntityListSection(spriteBatch, scissorRect, uiFont, ref sectionsStartY, "Tags", _tags, _tagListBounds, _tagDeleteBounds, _allTabViewIsGrid, scrollOffset);
         }
         
         /// <summary>Draws the List/Grid view style bar at the given Y. Sets _allTabViewListButtonBounds and _allTabViewGridButtonBounds. Returns the bar height.</summary>
@@ -2202,7 +2353,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int viewBtnX = barLeft + 12;
             _allTabViewListButtonBounds = new Rectangle(viewBtnX, barY + 4, listBtnWidth, VIEW_BAR_HEIGHT - 8);
             _allTabViewGridButtonBounds = new Rectangle(viewBtnX + listBtnWidth + viewBtnSpacing, barY + 4, gridBtnWidth, VIEW_BAR_HEIGHT - 8);
-            var mousePos = _currentMouseState.Position;
+            var mousePos = _hoverMousePosition;
             Color listBg = _allTabViewIsGrid ? BUTTON_COLOR : BUTTON_ACTIVE;
             Color gridBg = _allTabViewIsGrid ? BUTTON_ACTIVE : BUTTON_COLOR;
             if (_allTabViewListButtonBounds.Contains(mousePos) && _allTabViewIsGrid) listBg = BUTTON_HOVER;
@@ -2272,7 +2423,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             if (enableCreateButton)
             {
                 _emptyTabCreateButtonBounds = new Rectangle(buttonX, buttonY, 200, 35);
-                var mousePos = _currentMouseState.Position;
+                var mousePos = _hoverMousePosition;
                 bool isHovered = _emptyTabCreateButtonBounds.Contains(mousePos);
                 Color btnColor = isHovered ? new Color(120, 90, 200) : BUTTON_ACTIVE;
                 spriteBatch.Draw(_pixel, _emptyTabCreateButtonBounds, btnColor);
@@ -2292,27 +2443,33 @@ namespace MarySGameEngine.Modules.CharacterCreation
             }
         }
 
-        private void DrawToolbar(SpriteBatch spriteBatch, SpriteFont uiFont, string buttonLabel)
+        private void DrawToolbar(SpriteBatch spriteBatch, SpriteFont uiFont, string buttonLabel, int scrollOffset = 0)
         {
-            spriteBatch.Draw(_pixel, _toolbarBounds, new Color(35, 35, 35));
+            int drawY = _toolbarBounds.Y - scrollOffset;
+            var toolbarDrawBounds = new Rectangle(_toolbarBounds.X, drawY, _toolbarBounds.Width, _toolbarBounds.Height);
+            spriteBatch.Draw(_pixel, toolbarDrawBounds, new Color(35, 35, 35));
 
             // Bottom separator line
             spriteBatch.Draw(_pixel, new Rectangle(
-                _toolbarBounds.X, _toolbarBounds.Bottom - 1,
+                _toolbarBounds.X, drawY + _toolbarBounds.Height - 1,
                 _toolbarBounds.Width, 1
             ), PANEL_BORDER);
 
-            // Create button
-            var mousePos = _currentMouseState.Position;
-            bool isHovered = _createCharacterButtonBounds.Contains(mousePos);
+            int createBtnHeight = 30;
+            int createBtnY = drawY + (TOOLBAR_HEIGHT - createBtnHeight) / 2;
+            var createButtonDrawBounds = new Rectangle(_toolbarBounds.X + PANEL_PADDING, createBtnY, 200, createBtnHeight);
+            _createCharacterButtonBounds = createButtonDrawBounds; // screen-space for hit-test
+
+            var mousePos = _hoverMousePosition;
+            bool isHovered = createButtonDrawBounds.Contains(mousePos);
             Color btnColor = isHovered ? new Color(120, 90, 200) : BUTTON_ACTIVE;
-            spriteBatch.Draw(_pixel, _createCharacterButtonBounds, btnColor);
-            DrawBorder(spriteBatch, _createCharacterButtonBounds, new Color(btnColor.R + 30, btnColor.G + 30, btnColor.B + 30));
+            spriteBatch.Draw(_pixel, createButtonDrawBounds, btnColor);
+            DrawBorder(spriteBatch, createButtonDrawBounds, new Color(btnColor.R + 30, btnColor.G + 30, btnColor.B + 30));
 
             Vector2 labelSize = uiFont.MeasureString(buttonLabel);
             Vector2 labelPos = new Vector2(
-                _createCharacterButtonBounds.X + (_createCharacterButtonBounds.Width - labelSize.X) / 2,
-                _createCharacterButtonBounds.Y + (_createCharacterButtonBounds.Height - labelSize.Y) / 2
+                createButtonDrawBounds.X + (createButtonDrawBounds.Width - labelSize.X) / 2,
+                createButtonDrawBounds.Y + (createButtonDrawBounds.Height - labelSize.Y) / 2
             );
             spriteBatch.DrawString(uiFont, buttonLabel, labelPos, Color.White);
         }
@@ -2321,12 +2478,13 @@ namespace MarySGameEngine.Modules.CharacterCreation
         /// Draws the character list and populates _characterListBounds and _characterDeleteButtonBounds.
         /// Used by both Characters tab and All tab (when there are characters). When asGrid is true, draws as card grid (All tab only).
         /// </summary>
-        private void DrawCharacterList(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont, int startY, bool asGrid = false)
+        private void DrawCharacterList(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont, int startY, bool asGrid = false, int scrollOffset = 0)
         {
             _characterListBounds.Clear();
             _characterDeleteButtonBounds.Clear();
             int padding = PANEL_PADDING;
-            var mousePos = _currentMouseState.Position;
+            var mousePos = _hoverMousePosition;
+            int drawY = startY - scrollOffset;
 
             if (asGrid)
             {
@@ -2339,7 +2497,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 int slotWidth = cardWidth + cardSpacingX;
                 int cardsPerRow = Math.Max(1, availableWidth / slotWidth);
                 int x = _centerPanelBounds.X + padding;
-                int y = startY;
+                int y = drawY;
                 int col = 0;
                 foreach (string id in _characters)
                 {
@@ -2383,7 +2541,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int rowHeight = 40;
             int deleteBtnWidth = 80;
             int deleteBtnMargin = 8;
-            int yPos = startY;
+            int yPos = drawY;
             foreach (string id in _characters)
             {
                 string name = _characterNames.TryGetValue(id, out string n) ? n : id;
@@ -2433,7 +2591,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
         }
 
         /// <summary>Draws a section header and list/grid of entity names with Delete buttons; populates rowBounds and deleteBounds.</summary>
-        private void DrawEntityListSection(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont, ref int startY, string sectionTitle, List<string> items, List<Rectangle> rowBounds, List<Rectangle> deleteBounds, bool asGrid = false)
+        private void DrawEntityListSection(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont, ref int startY, string sectionTitle, List<string> items, List<Rectangle> rowBounds, List<Rectangle> deleteBounds, bool asGrid = false, int scrollOffset = 0)
         {
             rowBounds.Clear();
             deleteBounds.Clear();
@@ -2441,7 +2599,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int padding = PANEL_PADDING;
             Vector2 headerSize = uiFont.MeasureString(sectionTitle) * headerBoldScale;
             int headerHeight = (int)headerSize.Y + 8;
-            Rectangle headerBounds = new Rectangle(_centerPanelBounds.X + padding, startY, _centerPanelBounds.Width - padding * 2, headerHeight);
+            Rectangle headerBounds = new Rectangle(_centerPanelBounds.X + padding, startY - scrollOffset, _centerPanelBounds.Width - padding * 2, headerHeight);
             if (IsVisible(headerBounds, scissorRect))
             {
                 spriteBatch.Draw(_pixel, headerBounds, SECTION_HEADER);
@@ -2450,7 +2608,8 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 spriteBatch.DrawString(uiFont, sectionTitle, headerPos, TEXT_COLOR, 0f, Vector2.Zero, headerBoldScale, SpriteEffects.None, 0f);
             }
             startY += headerHeight + padding;
-            var mousePos = _currentMouseState.Position;
+            var mousePos = _hoverMousePosition;
+            int drawY = startY - scrollOffset;
 
             if (asGrid)
             {
@@ -2463,7 +2622,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 int slotWidth = cardWidth + cardSpacingX;
                 int cardsPerRow = Math.Max(1, availableWidth / slotWidth);
                 int x = _centerPanelBounds.X + padding;
-                int y = startY;
+                int y = drawY;
                 int col = 0;
                 foreach (string name in items)
                 {
@@ -2499,16 +2658,20 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     }
                 }
                 if (items.Count > 0)
-                    startY = y + cardHeight + cardSpacingY + padding;
+                {
+                    int rows = (items.Count + cardsPerRow - 1) / cardsPerRow;
+                    startY += rows * (cardHeight + cardSpacingY) + padding;
+                }
                 return;
             }
 
             int rowHeight = 40;
             int deleteBtnWidth = 80;
             int deleteBtnMargin = 8;
+            int yPos = drawY;
             foreach (string name in items)
             {
-                Rectangle rowRect = new Rectangle(_centerPanelBounds.X + padding, startY, _centerPanelBounds.Width - padding * 2, rowHeight);
+                Rectangle rowRect = new Rectangle(_centerPanelBounds.X + padding, yPos, _centerPanelBounds.Width - padding * 2, rowHeight);
                 rowBounds.Add(rowRect);
                 Rectangle delRect = new Rectangle(rowRect.Right - deleteBtnWidth - deleteBtnMargin, rowRect.Y + (rowHeight - 28) / 2, deleteBtnWidth, 28);
                 deleteBounds.Add(delRect);
@@ -2528,6 +2691,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     Vector2 deleteTextPos = new Vector2(delRect.X + (delRect.Width - uiFont.MeasureString(deleteLabel).X) / 2, delRect.Y + (delRect.Height - uiFont.MeasureString(deleteLabel).Y) / 2);
                     spriteBatch.DrawString(uiFont, deleteLabel, deleteTextPos, TEXT_COLOR);
                 }
+                yPos += rowHeight + 4;
                 startY += rowHeight + 4;
             }
             startY += padding;
@@ -2574,7 +2738,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 int backBtnY = rowY + (rowH - backBtnH) / 2;
                 Rectangle backBtnRect = new Rectangle(backBtnX, backBtnY, backBtnW, backBtnH);
                 _backButtonBounds = backBtnRect;
-                bool backHover = backBtnRect.Contains(_currentMouseState.Position);
+                bool backHover = backBtnRect.Contains(_hoverMousePosition);
                 spriteBatch.Draw(_pixel, backBtnRect, backHover ? BUTTON_HOVER : BUTTON_COLOR);
                 DrawBorder(spriteBatch, backBtnRect, SEARCH_BORDER);
                 spriteBatch.DrawString(uiFont, backLabel, new Vector2(backBtnRect.X + (backBtnW - backLabelSize.X) / 2, backBtnRect.Y + (backBtnH - backLabelSize.Y) / 2), TEXT_COLOR);
@@ -2616,7 +2780,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     Rectangle editBtnRect = new Rectangle(editBtnX, editBtnY, editBtnW, editBtnH);
                     _idEditButtonBounds = editBtnRect;
                     bool idEditDisabled = _isEditingName;
-                    bool editHover = !idEditDisabled && editBtnRect.Contains(_currentMouseState.Position);
+                    bool editHover = !idEditDisabled && editBtnRect.Contains(_hoverMousePosition);
                     Color idEditBg = idEditDisabled ? new Color(BUTTON_COLOR.R / 2, BUTTON_COLOR.G / 2, BUTTON_COLOR.B / 2) : (editHover ? BUTTON_HOVER : BUTTON_COLOR);
                     Color idEditBorder = idEditDisabled ? new Color(SEARCH_BORDER.R / 2, SEARCH_BORDER.G / 2, SEARCH_BORDER.B / 2) : SEARCH_BORDER;
                     Color idEditText = idEditDisabled ? TEXT_SECONDARY : TEXT_COLOR;
@@ -2677,7 +2841,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     Rectangle confirmBtnRect = new Rectangle(confirmBtnX, confirmBtnY, confirmBtnW, confirmBtnH);
                     _idConfirmButtonBounds = confirmBtnRect;
                     bool idConfirmDisabled = IsIdEditConfirmDisabled();
-                    bool confirmHover = !idConfirmDisabled && confirmBtnRect.Contains(_currentMouseState.Position);
+                    bool confirmHover = !idConfirmDisabled && confirmBtnRect.Contains(_hoverMousePosition);
                     Color confirmBg = idConfirmDisabled ? new Color(50, 50, 50) : (confirmHover ? new Color(60, 160, 60) : new Color(45, 130, 45));
                     Color confirmBorder = idConfirmDisabled ? SEARCH_BORDER : new Color(70, 180, 70);
                     Color confirmTextColor = idConfirmDisabled ? TEXT_SECONDARY : TEXT_COLOR;
@@ -2710,7 +2874,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     Rectangle editBtnRect = new Rectangle(editBtnX, editBtnY, editBtnW, editBtnH);
                     _nameEditButtonBounds = editBtnRect;
                     bool nameEditDisabled = _isEditingId;
-                    bool nameEditHover = !nameEditDisabled && editBtnRect.Contains(_currentMouseState.Position);
+                    bool nameEditHover = !nameEditDisabled && editBtnRect.Contains(_hoverMousePosition);
                     Color nameEditBg = nameEditDisabled ? new Color(BUTTON_COLOR.R / 2, BUTTON_COLOR.G / 2, BUTTON_COLOR.B / 2) : (nameEditHover ? BUTTON_HOVER : BUTTON_COLOR);
                     Color nameEditBorder = nameEditDisabled ? new Color(SEARCH_BORDER.R / 2, SEARCH_BORDER.G / 2, SEARCH_BORDER.B / 2) : SEARCH_BORDER;
                     Color nameEditText = nameEditDisabled ? TEXT_SECONDARY : TEXT_COLOR;
@@ -2759,7 +2923,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     }
                     Rectangle confirmBtnRect = new Rectangle(confirmBtnX, confirmBtnY, confirmBtnW, confirmBtnH);
                     _nameConfirmButtonBounds = confirmBtnRect;
-                    bool confirmHover = confirmBtnRect.Contains(_currentMouseState.Position);
+                    bool confirmHover = confirmBtnRect.Contains(_hoverMousePosition);
                     spriteBatch.Draw(_pixel, confirmBtnRect, confirmHover ? new Color(60, 160, 60) : new Color(45, 130, 45));
                     DrawBorder(spriteBatch, confirmBtnRect, new Color(70, 180, 70));
                     spriteBatch.DrawString(uiFont, confirmLabel, new Vector2(confirmBtnRect.X + (confirmBtnW - confirmSize.X) / 2, confirmBtnRect.Y + (confirmBtnH - confirmSize.Y) / 2), TEXT_COLOR);
@@ -3456,7 +3620,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int thumbY = _rightPanelScrollbarBounds.Y + (int)((_rightPanelScrollbarBounds.Height - thumbHeight) * (_rightPanelScrollY / (float)maxScroll));
             
             var thumbBounds = new Rectangle(_rightPanelScrollbarBounds.X + 2, thumbY + 2, _rightPanelScrollbarBounds.Width - 4, thumbHeight - 4);
-            bool isThumbHovered = thumbBounds.Contains(_currentMouseState.Position) || _isDraggingRightPanelScrollbar;
+            bool isThumbHovered = thumbBounds.Contains(_hoverMousePosition) || _isDraggingRightPanelScrollbar;
             Color thumbColor = isThumbHovered ? BUTTON_HOVER : BUTTON_COLOR;
             
             spriteBatch.Draw(_pixel, thumbBounds, thumbColor);
@@ -3535,7 +3699,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int thumbY = _scrollbarBounds.Y + (int)((_scrollbarBounds.Height - thumbHeight) * (_scrollY / (float)maxScroll));
 
             var thumbBounds = new Rectangle(_scrollbarBounds.X + 2, thumbY + 2, _scrollbarBounds.Width - 4, thumbHeight - 4);
-            bool isThumbHovered = thumbBounds.Contains(_currentMouseState.Position) || _isDraggingScrollbar;
+            bool isThumbHovered = thumbBounds.Contains(_hoverMousePosition) || _isDraggingScrollbar;
             Color thumbColor = isThumbHovered ? BUTTON_HOVER : BUTTON_COLOR;
 
             spriteBatch.Draw(_pixel, thumbBounds, thumbColor);

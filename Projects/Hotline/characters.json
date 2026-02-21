@@ -1,17 +1,14 @@
 {
   "ids": [
     "Building_01",
-    "Enemy_01",
-    "Enemy_02"
+    "Enemy_01"
   ],
   "names": {
     "Building_01": "Farm",
-    "Enemy_01": "Barbarian",
-    "Enemy_02": "Mage"
+    "Enemy_01": "Witch"
   },
   "tags": {
     "Building_01": "",
-    "Enemy_01": "",
-    "Enemy_02": ""
+    "Enemy_01": ""
   }
 }

@@ -501,6 +501,8 @@ public class GameEngine : Game
     {
         try
         {
+            PopUp.ConsumedClickThisFrame = false;
+
             var keyboardState = Keyboard.GetState();
             bool escapePressed = keyboardState.IsKeyDown(Keys.Escape) && !_previousKeyboardState.IsKeyDown(Keys.Escape);
             bool backPressed = GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed;
@@ -568,6 +570,71 @@ public class GameEngine : Game
             // Update cursor state
             UpdateCursor();
 
+            // Find top-most window under the mouse (and its owner module) so we can run it before Desktop to prevent click-through
+            WindowManagement topMostWindow = null;
+            IModule topMostWindowModule = null;
+            int highestZOrder = -1;
+            bool isAnyWindowDragging = false;
+
+            foreach (var module in _activeModules)
+            {
+                if (module is IModule moduleWithWindow)
+                {
+                    var windowManagementField = moduleWithWindow.GetType().GetField("_windowManagement", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (windowManagementField != null)
+                    {
+                        var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
+                        if (windowManagement != null && windowManagement.IsVisible())
+                        {
+                            if (windowManagement.IsDragging() || windowManagement.IsResizing() || windowManagement.IsAnimating())
+                            {
+                                isAnyWindowDragging = true;
+                                topMostWindow = windowManagement;
+                                topMostWindowModule = module as IModule;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (!isAnyWindowDragging)
+            {
+                foreach (var module in _activeModules)
+                {
+                    if (module is IModule moduleWithWindow)
+                    {
+                        var windowManagementField = moduleWithWindow.GetType().GetField("_windowManagement", 
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (windowManagementField != null)
+                        {
+                            var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
+                            if (windowManagement != null && windowManagement.IsVisible())
+                            {
+                                var windowBounds = windowManagement.GetWindowBounds();
+                                if (windowBounds.Contains(mousePosition))
+                                {
+                                    int zOrder = windowManagement.GetZOrder();
+                                    if (zOrder > highestZOrder)
+                                    {
+                                        highestZOrder = zOrder;
+                                        topMostWindow = windowManagement;
+                                        topMostWindowModule = module as IModule;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Update the top-most window's module first so it can set HasAnyWindowHandledClick when it handles the click (prevents click-through to Desktop/TaskBar)
+            if (topMostWindowModule != null && topMostWindow != null && 
+                !(topMostWindowModule is TaskBar) && !(topMostWindowModule is TopBar) && !(topMostWindowModule is Desktop))
+            {
+                topMostWindowModule.Update();
+            }
+
             // First find TaskBar and TopBar
             TaskBar taskBar = null;
             TopBar topBar = null;
@@ -608,77 +675,17 @@ public class GameEngine : Game
                 }
             }
 
-            // Handle window interactions
-            WindowManagement topMostWindow = null;
-            int highestZOrder = -1;
-            bool isAnyWindowDragging = false;
-
-            // First pass: check for dragging windows or animating windows
+            // Always update all modules to ensure animations continue running (skip the one we already updated as topmost window)
             foreach (var module in _activeModules)
             {
-                if (module is IModule moduleWithWindow)
-                {
-                    var windowManagementField = moduleWithWindow.GetType().GetField("_windowManagement", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    
-                    if (windowManagementField != null)
-                    {
-                        var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
-                        if (windowManagement != null && windowManagement.IsVisible())
-                        {
-                            // Check if window is dragging, resizing, or animating
-                            if (windowManagement.IsDragging() || windowManagement.IsResizing() || windowManagement.IsAnimating())
-                            {
-                                isAnyWindowDragging = true;
-                                topMostWindow = windowManagement;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // If no window is being dragged, find the top-most window under the mouse
-            if (!isAnyWindowDragging)
-            {
-                foreach (var module in _activeModules)
-                {
-                    if (module is IModule moduleWithWindow)
-                    {
-                        var windowManagementField = moduleWithWindow.GetType().GetField("_windowManagement", 
-                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        
-                        if (windowManagementField != null)
-                        {
-                            var windowManagement = windowManagementField.GetValue(moduleWithWindow) as WindowManagement;
-                            if (windowManagement != null && windowManagement.IsVisible())
-                            {
-                                var windowBounds = windowManagement.GetWindowBounds();
-                                if (windowBounds.Contains(mousePosition))
-                                {
-                                    int zOrder = windowManagement.GetZOrder();
-                                    if (zOrder > highestZOrder)
-                                    {
-                                        highestZOrder = zOrder;
-                                        topMostWindow = windowManagement;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Always update all modules to ensure animations continue running
-            foreach (var module in _activeModules)
-            {
-                // Skip modules that were already updated earlier
                 if (module is TaskBar || module is TopBar || module is Desktop)
                 {
                     continue;
                 }
-                
-                // Update all other modules
+                if (module == topMostWindowModule)
+                {
+                    continue;
+                }
                 module.Update();
             }
 

@@ -387,7 +387,8 @@ logs/
 .env.test.local
 .env.production.local 
 
-# API Keys and sensitive configuration
+# API Keys and sensitive configuration (never commit real keys)
 **/api_key.ini
+Content/Modules/Chat/api_key.ini
 
 .ps1

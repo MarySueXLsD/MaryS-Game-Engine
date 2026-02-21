@@ -60,6 +60,9 @@ namespace MarySGameEngine.Modules.PopUp_essential
         private static PopUp _instance;
         public static PopUp Instance => _instance;
 
+        /// <summary>True when a popup button (Confirm/Cancel/Close) was clicked this frame. Other modules should not process the same click.</summary>
+        public static bool ConsumedClickThisFrame { get; set; }
+
         private readonly Queue<PopUpData> _popUpQueue = new Queue<PopUpData>();
         private PopUpData _currentPopUp;
 
@@ -170,20 +173,24 @@ namespace MarySGameEngine.Modules.PopUp_essential
                         {
                             DismissCurrent(true);
                             confirmPopUp.OnCancel?.Invoke();
+                            ConsumedClickThisFrame = true;
                         }
                         else if (closeButtonBounds.Contains(mouseState.Position))
                         {
                             DismissCurrent(true);
+                            ConsumedClickThisFrame = true;
                         }
                         else if (confirmButtonBounds.Contains(mouseState.Position))
                         {
                             DismissCurrent(false);
                             confirmPopUp.OnConfirm?.Invoke();
+                            ConsumedClickThisFrame = true;
                         }
                         else if (cancelButtonBounds.Contains(mouseState.Position))
                         {
                             DismissCurrent(true);
                             confirmPopUp.OnCancel?.Invoke();
+                            ConsumedClickThisFrame = true;
                         }
                     }
                 }
@@ -312,7 +319,8 @@ namespace MarySGameEngine.Modules.PopUp_essential
         {
             List<string> lines = WrapText(data.Message, POPUP_MAX_WIDTH - PADDING * 2);
             float lineHeight = _contentFont.MeasureString("A").Y * 1.2f;
-            float contentHeight = lines.Count * lineHeight;
+            int lineCount = Math.Max(lines.Count, 1);
+            float contentHeight = lineCount * lineHeight;
             int buttonAreaHeight = BUTTON_HEIGHT + PADDING;
             int totalHeight = TITLE_BAR_HEIGHT + PADDING + (int)contentHeight + PADDING + buttonAreaHeight;
 
@@ -361,26 +369,31 @@ namespace MarySGameEngine.Modules.PopUp_essential
             var lines = new List<string>();
             if (string.IsNullOrEmpty(text)) return lines;
 
-            string[] words = text.Split(' ');
-            string currentLine = "";
-
-            foreach (string word in words)
+            // Split by newlines first so "ID:\nName:" creates separate lines; then wrap each paragraph by width.
+            string[] paragraphs = text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string para in paragraphs)
             {
-                string testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
-                float w = _contentFont.MeasureString(testLine).X;
-                if (w <= maxWidth)
+                string[] words = para.Split(' ');
+                string currentLine = "";
+
+                foreach (string word in words)
                 {
-                    currentLine = testLine;
+                    string testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+                    float w = _contentFont.MeasureString(testLine).X;
+                    if (w <= maxWidth)
+                    {
+                        currentLine = testLine;
+                    }
+                    else
+                    {
+                        if (!string.IsNullOrEmpty(currentLine))
+                            lines.Add(currentLine);
+                        currentLine = _contentFont.MeasureString(word).X > maxWidth ? word : word;
+                    }
                 }
-                else
-                {
-                    if (!string.IsNullOrEmpty(currentLine))
-                        lines.Add(currentLine);
-                    currentLine = _contentFont.MeasureString(word).X > maxWidth ? word : word;
-                }
+                if (!string.IsNullOrEmpty(currentLine))
+                    lines.Add(currentLine);
             }
-            if (!string.IsNullOrEmpty(currentLine))
-                lines.Add(currentLine);
             return lines;
         }
 
