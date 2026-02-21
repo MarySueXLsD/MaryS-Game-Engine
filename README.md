@@ -1,4 +1,5 @@
 <p align="center">
+  <img width="256" height="256" alt="image" src="https://github.com/user-attachments/assets/e79fb357-53e8-4713-9627-10ad7eb72629" />
   <img src="https://github.com/user-attachments/assets/59a258d0-a6f5-4e59-9c82-bf46fb7c0481" alt="MaryS Engine Architecture Diagram" width="350">
 </p>
 
