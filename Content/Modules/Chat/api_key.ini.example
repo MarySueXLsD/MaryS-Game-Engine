@@ -1,0 +1,4 @@
+[OpenAI]
+# Copy this file to api_key.ini and replace with your OpenAI API key.
+# api_key.ini is gitignored and will not be committed.
+api_key=your_openai_api_key_here
