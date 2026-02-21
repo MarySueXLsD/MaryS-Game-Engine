@@ -2473,6 +2473,15 @@ namespace MarySGameEngine.Modules.Chat
         {
             _content = content;
             _windowManagement?.LoadContent(content);
+            try
+            {
+                if (_windowManagement != null)
+                {
+                    var logo = content.Load<Texture2D>("Modules/Chat/logo");
+                    _windowManagement.SetWindowLogo(logo);
+                }
+            }
+            catch (Exception) { /* optional logo */ }
             
             // Load chat font (use a more compatible font for chat)
             try

@@ -1,14 +1,17 @@
 {
   "ids": [
     "Building_01",
-    "Enemy_01"
+    "Enemy_01",
+    "1"
   ],
   "names": {
     "Building_01": "Farm",
-    "Enemy_01": "Witch"
+    "Enemy_01": "Witch",
+    "1": "Character_1"
   },
   "tags": {
     "Building_01": "",
-    "Enemy_01": ""
+    "Enemy_01": "",
+    "1": ""
   }
 }

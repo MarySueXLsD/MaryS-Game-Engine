@@ -342,6 +342,12 @@ namespace MarySGameEngine.Modules.ModuleSettings_essential
         {
             _content = content;
             _windowManagement.LoadContent(content);
+            try
+            {
+                var logo = content.Load<Texture2D>("Modules/ModuleSettings_essential/logo");
+                _windowManagement.SetWindowLogo(logo);
+            }
+            catch (Exception) { /* optional logo */ }
             // Try to load Roboto for UIElements
             try {
                 _uiFont = content.Load<SpriteFont>("Fonts/SpriteFonts/roboto/regular");

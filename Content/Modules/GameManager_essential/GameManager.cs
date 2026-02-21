@@ -2793,6 +2793,12 @@ namespace MarySGameEngine.Modules.GameManager_essential
             {
                 _content = content;
                 _windowManagement.LoadContent(content);
+                try
+                {
+                    var logo = content.Load<Texture2D>("Modules/GameManager_essential/logo");
+                    _windowManagement.SetWindowLogo(logo);
+                }
+                catch (Exception) { /* optional logo */ }
                 
                 // Try to load fonts with detailed error handling - using Roboto
                 try

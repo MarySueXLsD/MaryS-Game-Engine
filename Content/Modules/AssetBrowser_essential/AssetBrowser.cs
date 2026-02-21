@@ -66,6 +66,12 @@ namespace MarySGameEngine.Modules.AssetBrowser_essential
         public void LoadContent(ContentManager content)
         {
             _windowManagement.LoadContent(content);
+            try
+            {
+                var logo = content.Load<Texture2D>("Modules/AssetBrowser_essential/logo");
+                _windowManagement.SetWindowLogo(logo);
+            }
+            catch (Exception) { /* optional logo */ }
         }
 
         public void Dispose()

@@ -1948,6 +1948,15 @@ namespace MarySGameEngine.Modules.Console_essential
             _lineHeight = (int)(_consoleFont.MeasureString("A").Y);
             
             _windowManagement?.LoadContent(content);
+            try
+            {
+                if (_windowManagement != null)
+                {
+                    var logo = content.Load<Texture2D>("Modules/Console_essential/logo");
+                    _windowManagement.SetWindowLogo(logo);
+                }
+            }
+            catch (Exception) { /* optional logo */ }
             
             // Don't add TaskBar icon by default - it will be added when the window is opened
         }
