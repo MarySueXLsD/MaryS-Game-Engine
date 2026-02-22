@@ -10,6 +10,41 @@ namespace MarySGameEngine.Modules.CharacterCreation
     {
         private const int VIEW_BAR_HEIGHT = 32;
 
+        /// <summary>Returns a 0..1 pulse factor for list/grid item at index (staggered per item for a livelier look).</summary>
+        private float GetListViewPulse(int itemIndex)
+        {
+            double elapsed = (DateTime.UtcNow - _listViewAnimStart).TotalSeconds;
+            float t = (float)(elapsed * 1.4) + itemIndex * 0.35f;
+            return 0.5f + 0.5f * (float)Math.Sin(t);
+        }
+
+        /// <summary>Returns a 0..1 pulse for section headers (all in sync, subtle "breathe").</summary>
+        private float GetListViewHeaderPulse()
+        {
+            double elapsed = (DateTime.UtcNow - _listViewAnimStart).TotalSeconds;
+            return 0.5f + 0.5f * (float)Math.Sin(elapsed * 1.2);
+        }
+
+        private const int CATEGORY_BAR_ACCENT_WIDTH = 4;
+
+        /// <summary>Draws an enhanced category title bar (gradient, left accent, top highlight, border) for Characters/Traits/Skills etc.</summary>
+        private void DrawCategoryTitleBar(SpriteBatch spriteBatch, Rectangle headerBounds, string title, SpriteFont uiFont, float headerBoldScale = 1.2f)
+        {
+            float pulse = GetListViewHeaderPulse();
+            Color baseTop = Color.Lerp(SECTION_HEADER, new Color(50, 48, 58), 0.3f);
+            Color baseBottom = Color.Lerp(SECTION_HEADER, new Color(75, 65, 95), pulse * 0.25f);
+            int splitY = headerBounds.Y + headerBounds.Height * 55 / 100;
+            spriteBatch.Draw(_pixel, new Rectangle(headerBounds.X, headerBounds.Y, headerBounds.Width, splitY - headerBounds.Y), baseTop);
+            spriteBatch.Draw(_pixel, new Rectangle(headerBounds.X, splitY, headerBounds.Width, headerBounds.Bottom - splitY), baseBottom);
+            Rectangle accentBar = new Rectangle(headerBounds.X, headerBounds.Y, CATEGORY_BAR_ACCENT_WIDTH, headerBounds.Height);
+            spriteBatch.Draw(_pixel, accentBar, Color.Lerp(BUTTON_ACTIVE, new Color(180, 150, 255), pulse * 0.2f));
+            spriteBatch.Draw(_pixel, new Rectangle(headerBounds.X, headerBounds.Y, headerBounds.Width, 1), new Color(90, 85, 110));
+            DrawBorder(spriteBatch, headerBounds, Color.Lerp(PANEL_BORDER, new Color(120, 100, 160), pulse * 0.15f));
+            Vector2 headerSize = uiFont.MeasureString(title) * headerBoldScale;
+            Vector2 headerPos = new Vector2(headerBounds.X + 10 + CATEGORY_BAR_ACCENT_WIDTH, headerBounds.Y + (headerBounds.Height - headerSize.Y) / 2);
+            spriteBatch.DrawString(uiFont, title, headerPos, TEXT_COLOR, 0f, Vector2.Zero, headerBoldScale, SpriteEffects.None, 0f);
+        }
+
         private void DrawTabView(SpriteBatch spriteBatch, Rectangle scissorRect, SpriteFont uiFont, int scrollOffset)
         {
             if (_currentView == "All")
@@ -156,6 +191,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int startX = _centerPanelBounds.X + (_centerPanelBounds.Width - totalWidth) / 2;
             string[] buttonLabels = { "Create Character", "Create Trait", "Create Skill", "Create Effect", "Create Stat", "Create Tag" };
             var mousePos = _hoverMousePosition;
+            float createBtnPulse = GetListViewHeaderPulse();
             for (int i = 0; i < 6; i++)
             {
                 int row = i / buttonsPerRow;
@@ -167,9 +203,10 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 if (i == 0 && !hasAnyEntities)
                     _emptyTabCreateButtonBounds = buttonBounds;
                 bool isHovered = buttonBounds.Contains(mousePos);
-                Color btnColor = isHovered ? new Color(120, 90, 200) : BUTTON_ACTIVE;
+                Color baseBtn = isHovered ? new Color(120, 90, 200) : BUTTON_ACTIVE;
+                Color btnColor = Color.Lerp(baseBtn, new Color(165, 130, 230), createBtnPulse * 0.12f);
                 spriteBatch.Draw(_pixel, buttonBounds, btnColor);
-                DrawBorder(spriteBatch, buttonBounds, new Color(btnColor.R + 30, btnColor.G + 30, btnColor.B + 30));
+                DrawBorder(spriteBatch, buttonBounds, Color.Lerp(new Color(btnColor.R + 30, btnColor.G + 30, btnColor.B + 30), new Color(200, 180, 255), createBtnPulse * 0.2f));
                 Vector2 labelSize = uiFont.MeasureString(buttonLabels[i]);
                 Vector2 labelPos = new Vector2(buttonBounds.X + (buttonBounds.Width - labelSize.X) / 2, buttonBounds.Y + (buttonBounds.Height - labelSize.Y) / 2);
                 spriteBatch.DrawString(uiFont, buttonLabels[i], labelPos, Color.White);
@@ -198,12 +235,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 int headerHeight = (int)headerSize.Y + 8;
                 Rectangle headerBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, sectionsStartY - scrollOffset, _centerPanelBounds.Width - PANEL_PADDING * 2, headerHeight);
                 if (IsVisible(headerBounds, scissorRect))
-                {
-                    spriteBatch.Draw(_pixel, headerBounds, SECTION_HEADER);
-                    DrawBorder(spriteBatch, headerBounds, PANEL_BORDER);
-                    Vector2 headerPos = new Vector2(headerBounds.X + 10, headerBounds.Y + (headerHeight - headerSize.Y) / 2);
-                    spriteBatch.DrawString(uiFont, sectionHeader, headerPos, TEXT_COLOR, 0f, Vector2.Zero, headerBoldScale, SpriteEffects.None, 0f);
-                }
+                    DrawCategoryTitleBar(spriteBatch, headerBounds, sectionHeader, uiFont, headerBoldScale);
                 int listY = sectionsStartY + headerHeight + PANEL_PADDING;
                 DrawCharacterList(spriteBatch, scissorRect, uiFont, listY, _allTabViewIsGrid, scrollOffset);
                 if (_allTabViewIsGrid)
@@ -379,6 +411,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 int x = _centerPanelBounds.X + padding;
                 int y = drawY;
                 int col = 0;
+                int charIndex = 0;
                 foreach (string id in _characters)
                 {
                     string name = _characterNames.TryGetValue(id, out string n) ? n : id;
@@ -392,9 +425,13 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     if (IsVisible(cardBounds, scissorRect))
                     {
                         bool cardHover = cardBounds.Contains(mousePos) && !deleteBounds.Contains(mousePos);
-                        Color bg = cardHover ? BUTTON_HOVER : BUTTON_COLOR;
+                        float pulse = GetListViewPulse(charIndex);
+                        Color baseBg = cardHover ? BUTTON_HOVER : BUTTON_COLOR;
+                        Color pulseTint = new Color(147, 112, 219);
+                        Color bg = cardHover ? baseBg : Color.Lerp(baseBg, pulseTint, pulse * 0.08f);
+                        Color borderColor = Color.Lerp(PANEL_BORDER, new Color(180, 150, 255), pulse * 0.25f);
                         spriteBatch.Draw(_pixel, cardBounds, bg);
-                        DrawBorder(spriteBatch, cardBounds, PANEL_BORDER);
+                        DrawBorder(spriteBatch, cardBounds, borderColor);
                         Vector2 textPos = new Vector2(cardBounds.X + 10, cardBounds.Y + (cardHeight - uiFont.MeasureString(displayLine).Y) / 2);
                         spriteBatch.DrawString(uiFont, displayLine, textPos, TEXT_COLOR);
                         bool delHover = deleteBounds.Contains(mousePos);
@@ -403,6 +440,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                         Vector2 delSize = uiFont.MeasureString("X");
                         spriteBatch.DrawString(uiFont, "X", new Vector2(deleteBounds.X + (deleteBtnSize - delSize.X) / 2, deleteBounds.Y + (deleteBtnSize - delSize.Y) / 2), TEXT_COLOR);
                     }
+                    charIndex++;
                     col++;
                     if (col >= cardsPerRow)
                     {
@@ -422,6 +460,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int deleteBtnWidth = 80;
             int deleteBtnMargin = 8;
             int yPos = drawY;
+            int listIndex = 0;
             foreach (string id in _characters)
             {
                 string name = _characterNames.TryGetValue(id, out string n) ? n : id;
@@ -444,9 +483,13 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 if (IsVisible(rowBounds, scissorRect))
                 {
                     bool rowHover = rowBounds.Contains(mousePos) && !deleteBounds.Contains(mousePos);
-                    Color bg = rowHover ? BUTTON_HOVER : BUTTON_COLOR;
+                    float pulse = GetListViewPulse(listIndex);
+                    Color baseBg = rowHover ? BUTTON_HOVER : BUTTON_COLOR;
+                    Color pulseTint = new Color(147, 112, 219);
+                    Color bg = rowHover ? baseBg : Color.Lerp(baseBg, pulseTint, pulse * 0.08f);
+                    Color borderColor = Color.Lerp(PANEL_BORDER, new Color(180, 150, 255), pulse * 0.25f);
                     spriteBatch.Draw(_pixel, rowBounds, bg);
-                    DrawBorder(spriteBatch, rowBounds, PANEL_BORDER);
+                    DrawBorder(spriteBatch, rowBounds, borderColor);
                     Vector2 textPos = new Vector2(rowBounds.X + 12, rowBounds.Y + (rowHeight - uiFont.MeasureString(displayLine).Y) / 2);
                     spriteBatch.DrawString(uiFont, displayLine, textPos, TEXT_COLOR);
                     bool deleteHover = deleteBounds.Contains(mousePos);
@@ -460,6 +503,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     );
                     spriteBatch.DrawString(uiFont, deleteLabel, deleteTextPos, TEXT_COLOR);
                 }
+                listIndex++;
                 yPos += rowHeight + 4;
             }
         }
@@ -480,12 +524,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int headerHeight = (int)headerSize.Y + 8;
             Rectangle headerBounds = new Rectangle(_centerPanelBounds.X + padding, startY - scrollOffset, _centerPanelBounds.Width - padding * 2, headerHeight);
             if (IsVisible(headerBounds, scissorRect))
-            {
-                spriteBatch.Draw(_pixel, headerBounds, SECTION_HEADER);
-                DrawBorder(spriteBatch, headerBounds, PANEL_BORDER);
-                Vector2 headerPos = new Vector2(headerBounds.X + 10, headerBounds.Y + (headerHeight - headerSize.Y) / 2);
-                spriteBatch.DrawString(uiFont, sectionTitle, headerPos, TEXT_COLOR, 0f, Vector2.Zero, headerBoldScale, SpriteEffects.None, 0f);
-            }
+                DrawCategoryTitleBar(spriteBatch, headerBounds, sectionTitle, uiFont, headerBoldScale);
             startY += headerHeight + padding;
             var mousePos = _hoverMousePosition;
             int drawY = startY - scrollOffset;
@@ -503,6 +542,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 int x = _centerPanelBounds.X + padding;
                 int y = drawY;
                 int col = 0;
+                int entityIndex = 0;
                 foreach (string name in items)
                 {
                     string displayName = name.Length > 24 ? name.Substring(0, 21) + "..." : name;
@@ -513,9 +553,13 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     if (IsVisible(cardBounds, scissorRect))
                     {
                         bool cardHover = cardBounds.Contains(mousePos) && !delRect.Contains(mousePos);
-                        Color bg = cardHover ? BUTTON_HOVER : BUTTON_COLOR;
+                        float pulse = GetListViewPulse(entityIndex);
+                        Color baseBg = cardHover ? BUTTON_HOVER : BUTTON_COLOR;
+                        Color pulseTint = new Color(147, 112, 219);
+                        Color bg = cardHover ? baseBg : Color.Lerp(baseBg, pulseTint, pulse * 0.08f);
+                        Color borderColor = Color.Lerp(PANEL_BORDER, new Color(180, 150, 255), pulse * 0.25f);
                         spriteBatch.Draw(_pixel, cardBounds, bg);
-                        DrawBorder(spriteBatch, cardBounds, PANEL_BORDER);
+                        DrawBorder(spriteBatch, cardBounds, borderColor);
                         Vector2 textPos = new Vector2(cardBounds.X + 10, cardBounds.Y + (cardHeight - uiFont.MeasureString(displayName).Y) / 2);
                         spriteBatch.DrawString(uiFont, displayName, textPos, TEXT_COLOR);
                         bool delHover = delRect.Contains(mousePos);
@@ -524,6 +568,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                         Vector2 delSize = uiFont.MeasureString("X");
                         spriteBatch.DrawString(uiFont, "X", new Vector2(delRect.X + (deleteBtnSize - delSize.X) / 2, delRect.Y + (deleteBtnSize - delSize.Y) / 2), TEXT_COLOR);
                     }
+                    entityIndex++;
                     col++;
                     if (col >= cardsPerRow)
                     {
@@ -548,6 +593,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
             int deleteBtnWidth = 80;
             int deleteBtnMargin = 8;
             int yPos = drawY;
+            int listIdx = 0;
             foreach (string name in items)
             {
                 Rectangle rowRect = new Rectangle(_centerPanelBounds.X + padding, yPos, _centerPanelBounds.Width - padding * 2, rowHeight);
@@ -557,9 +603,13 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 if (IsVisible(rowRect, scissorRect))
                 {
                     bool rowHover = rowRect.Contains(mousePos) && !delRect.Contains(mousePos);
-                    Color bg = rowHover ? BUTTON_HOVER : BUTTON_COLOR;
+                    float pulse = GetListViewPulse(listIdx);
+                    Color baseBg = rowHover ? BUTTON_HOVER : BUTTON_COLOR;
+                    Color pulseTint = new Color(147, 112, 219);
+                    Color bg = rowHover ? baseBg : Color.Lerp(baseBg, pulseTint, pulse * 0.08f);
+                    Color borderColor = Color.Lerp(PANEL_BORDER, new Color(180, 150, 255), pulse * 0.25f);
                     spriteBatch.Draw(_pixel, rowRect, bg);
-                    DrawBorder(spriteBatch, rowRect, PANEL_BORDER);
+                    DrawBorder(spriteBatch, rowRect, borderColor);
                     Vector2 textPos = new Vector2(rowRect.X + 12, rowRect.Y + (rowHeight - uiFont.MeasureString(name).Y) / 2);
                     spriteBatch.DrawString(uiFont, name, textPos, TEXT_COLOR);
                     bool deleteHover = delRect.Contains(mousePos);
@@ -570,6 +620,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     Vector2 deleteTextPos = new Vector2(delRect.X + (delRect.Width - uiFont.MeasureString(deleteLabel).X) / 2, delRect.Y + (delRect.Height - uiFont.MeasureString(deleteLabel).Y) / 2);
                     spriteBatch.DrawString(uiFont, deleteLabel, deleteTextPos, TEXT_COLOR);
                 }
+                listIdx++;
                 yPos += rowHeight + 4;
                 startY += rowHeight + 4;
             }

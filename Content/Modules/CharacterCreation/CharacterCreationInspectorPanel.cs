@@ -398,11 +398,12 @@ namespace MarySGameEngine.Modules.CharacterCreation
             if (!_rightPanelNeedsScrollbar) return;
 
             var mousePosition = _currentMouseState.Position;
+            bool isTopmost = _windowManagement != null && _windowManagement.IsThisWindowTopmostUnderMouse(mousePosition);
 
             if (_currentMouseState.LeftButton == ButtonState.Pressed &&
                 _previousMouseState.LeftButton == ButtonState.Released)
             {
-                if (_rightPanelScrollbarBounds.Contains(mousePosition))
+                if (isTopmost && _rightPanelScrollbarBounds.Contains(mousePosition))
                 {
                     _isDraggingRightPanelScrollbar = true;
                     _rightPanelScrollbarDragStart = new Vector2(mousePosition.X, mousePosition.Y);
@@ -428,7 +429,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 }
             }
 
-            if (_rightPanelBounds.Contains(mousePosition) &&
+            if (isTopmost && _rightPanelBounds.Contains(mousePosition) &&
                 _currentMouseState.ScrollWheelValue != _previousMouseState.ScrollWheelValue)
             {
                 int delta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;

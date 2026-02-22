@@ -512,6 +512,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                         if (windowManagement != null)
                         {
                             _engine.Log($"TaskBar: Found window management for {icon.Name}");
+                            windowManagement.RequestIgnoreNextClick(); // So module does not treat this click as in-window (e.g. Create Character)
                             windowManagement.HandleTaskBarClick();
                             
                             // Ensure the window is brought to front after handling the click
@@ -1743,6 +1744,7 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                 case "Open":
                 case "Show":
                     _engine.Log($"TaskBar: Opening/showing window for {targetIcon.Name}");
+                    windowManagement.RequestIgnoreNextClick(); // So module does not treat the menu click as in-window (e.g. Create Character)
                     windowManagement.HandleTaskBarClick();
                     windowManagement.BringToFront();
                     break;

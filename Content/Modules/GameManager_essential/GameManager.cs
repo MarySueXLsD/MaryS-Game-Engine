@@ -172,7 +172,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private readonly Color SIDEBAR_BACKGROUND = new Color(30, 30, 35); // Dark charcoal
         private readonly Color CONTENT_BACKGROUND = new Color(40, 40, 45); // Slightly lighter charcoal
         private readonly Color CARD_BACKGROUND = new Color(50, 50, 55); // Card background
-        private readonly Color SECTION_HOVER_COLOR = new Color(99, 102, 241, 80); // Indigo with transparency
+        private readonly Color SECTION_HOVER_COLOR = new Color(99, 102, 241, 48); // Indigo, more transparent so clearly distinct from active
         private readonly Color SECTION_ACTIVE_COLOR = new Color(99, 102, 241); // Indigo
         private readonly Color PROJECT_HOVER_COLOR = new Color(60, 60, 65); // Subtle hover
         private readonly Color PROJECT_SELECTED_COLOR = new Color(99, 102, 241, 120); // Indigo with transparency
@@ -182,9 +182,9 @@ namespace MarySGameEngine.Modules.GameManager_essential
         private readonly Color TEXT_SECONDARY = new Color(156, 163, 175); // Gray-400
         private readonly Color TEXT_TERTIARY = new Color(107, 114, 128); // Gray-500
         private readonly Color BUTTON_PRIMARY = new Color(99, 102, 241); // Indigo
-        private readonly Color BUTTON_PRIMARY_HOVER = new Color(79, 70, 229); // Indigo-600
+        private readonly Color BUTTON_PRIMARY_HOVER = new Color(118, 122, 255); // Lighter indigo so hover is clearly visible on Create New Project etc.
         private readonly Color BUTTON_SECONDARY = new Color(55, 65, 81); // Gray-700
-        private readonly Color BUTTON_SECONDARY_HOVER = new Color(75, 85, 99); // Gray-600
+        private readonly Color BUTTON_SECONDARY_HOVER = new Color(68, 76, 90); // Gray-600, slightly softer
         private readonly Color SUCCESS_COLOR = new Color(34, 197, 94); // Green-500
         private readonly Color WARNING_COLOR = new Color(245, 158, 11); // Amber-500
         private readonly Color ERROR_COLOR = new Color(239, 68, 68); // Red-500
@@ -1875,19 +1875,30 @@ namespace MarySGameEngine.Modules.GameManager_essential
             }
         }
 
+        private const int SIDEBAR_ACCENT_WIDTH = 4;
+
         private void DrawSidebar(SpriteBatch spriteBatch)
         {
             try
             {
                 System.Diagnostics.Debug.WriteLine($"GameManager: Drawing sidebar with {_sectionNames.Count} sections, {_sectionButtonBounds.Count} button bounds");
-                
-                // Draw sidebar background with subtle gradient effect
-                spriteBatch.Draw(_pixel, _leftSidebarBounds, SIDEBAR_BACKGROUND);
+
+                // Sidebar background: vertical gradient (darker top, slightly lighter bottom with subtle tint)
+                Color sidebarTop = SIDEBAR_BACKGROUND;
+                Color sidebarBottom = new Color(36, 36, 42);
+                int splitY = _leftSidebarBounds.Y + _leftSidebarBounds.Height * 60 / 100;
+                spriteBatch.Draw(_pixel, new Rectangle(_leftSidebarBounds.X, _leftSidebarBounds.Y, _leftSidebarBounds.Width, splitY - _leftSidebarBounds.Y), sidebarTop);
+                spriteBatch.Draw(_pixel, new Rectangle(_leftSidebarBounds.X, splitY, _leftSidebarBounds.Width, _leftSidebarBounds.Bottom - splitY), sidebarBottom);
+
+                // Right-edge accent (separator between sidebar and content)
+                Rectangle accentBar = new Rectangle(_leftSidebarBounds.Right - 2, _leftSidebarBounds.Y, 2, _leftSidebarBounds.Height);
+                int accentA = 140;
+                spriteBatch.Draw(_pixel, accentBar, new Color((int)SECTION_ACTIVE_COLOR.R, (int)SECTION_ACTIVE_COLOR.G, (int)SECTION_ACTIVE_COLOR.B, accentA));
 
                 // Draw sidebar border
                 DrawBorder(spriteBatch, _leftSidebarBounds, BORDER_COLOR);
 
-                // Draw section buttons with modern styling
+                // Draw section buttons with gradient and left accent when active/hovered
                 for (int i = 0; i < _sectionNames.Count; i++)
                 {
                     if (i >= _sectionButtonBounds.Count)
@@ -1895,32 +1906,37 @@ namespace MarySGameEngine.Modules.GameManager_essential
                         System.Diagnostics.Debug.WriteLine($"GameManager: Warning - Section {i} has no bounds, skipping");
                         continue;
                     }
-                    
+
                     var buttonBounds = _sectionButtonBounds[i];
                     bool isActive = _sectionNames[i] == _currentSection;
-                    bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+                    bool isHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) &&
                                      IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
                                      buttonBounds.Contains(_currentMouseState.Position);
 
-                    // Draw modern button
                     if (isActive || isHovered)
                     {
-                        Color buttonColor = isActive ? SECTION_ACTIVE_COLOR : SECTION_HOVER_COLOR;
-                        DrawRoundedRectangle(spriteBatch, buttonBounds, buttonColor, _borderRadius);
+                        Color baseColor = isActive ? SECTION_ACTIVE_COLOR : SECTION_HOVER_COLOR;
+                        Color topColor = new Color(Math.Max(0, baseColor.R - 15), Math.Max(0, baseColor.G - 12), Math.Max(0, baseColor.B - 10), baseColor.A);
+                        Color bottomColor = new Color(Math.Min(255, baseColor.R + 8), Math.Min(255, baseColor.G + 8), Math.Min(255, baseColor.B + 12), baseColor.A);
+                        int btnSplit = buttonBounds.Y + buttonBounds.Height * 55 / 100;
+                        spriteBatch.Draw(_pixel, new Rectangle(buttonBounds.X, buttonBounds.Y, buttonBounds.Width, btnSplit - buttonBounds.Y), topColor);
+                        spriteBatch.Draw(_pixel, new Rectangle(buttonBounds.X, btnSplit, buttonBounds.Width, buttonBounds.Bottom - btnSplit), bottomColor);
+                        Rectangle leftAccent = new Rectangle(buttonBounds.X, buttonBounds.Y, SIDEBAR_ACCENT_WIDTH, buttonBounds.Height);
+                        spriteBatch.Draw(_pixel, leftAccent, new Color(255, 255, 255, isActive ? 90 : 38));
+                        DrawBorder(spriteBatch, buttonBounds, new Color(baseColor.R + 25, baseColor.G + 25, baseColor.B + 30, baseColor.A));
                     }
 
                     // Draw button text with pixel font for sidebar
                     Vector2 textSize = _pixelFont.MeasureString(_sectionNames[i]) * FONT_SCALE;
+                    int textOffsetX = (isActive || isHovered) ? SIDEBAR_ACCENT_WIDTH : 0;
                     Vector2 textPosition = new Vector2(
-                        buttonBounds.X + (buttonBounds.Width - textSize.X) / 2,
+                        buttonBounds.X + textOffsetX + (buttonBounds.Width - textOffsetX - textSize.X) / 2,
                         buttonBounds.Y + (buttonBounds.Height - textSize.Y) / 2
                     );
 
-                    // Use appropriate text color based on state
                     Color textColor = isActive ? Color.White : TEXT_PRIMARY;
 
-                    // Debug: Log text drawing
-                    if (i == 0) // Only log for first button to avoid spam
+                    if (i == 0)
                     {
                         Console.WriteLine($"[GameManager] Drawing sidebar text '{_sectionNames[i]}' with pixel font at {textPosition}");
                         Console.WriteLine($"[GameManager] Pixel font loaded: {_pixelFont != null}");
@@ -1986,22 +2002,38 @@ namespace MarySGameEngine.Modules.GameManager_essential
             }
         }
 
+        private const int WIZARD_HEADER_BAR_HEIGHT = 52;
+        private const int WIZARD_HEADER_ACCENT_WIDTH = 4;
+
+        private void DrawWizardHeaderBar(SpriteBatch spriteBatch, int barY)
+        {
+            Rectangle barBounds = new Rectangle(_wizardContentBounds.X, barY, _wizardContentBounds.Width, WIZARD_HEADER_BAR_HEIGHT);
+            Color topColor = new Color(45, 45, 52);
+            Color bottomColor = new Color(55, 52, 65);
+            int splitY = barBounds.Y + barBounds.Height * 55 / 100;
+            spriteBatch.Draw(_pixel, new Rectangle(barBounds.X, barBounds.Y, barBounds.Width, splitY - barBounds.Y), topColor);
+            spriteBatch.Draw(_pixel, new Rectangle(barBounds.X, splitY, barBounds.Width, barBounds.Bottom - splitY), bottomColor);
+            Rectangle accentBar = new Rectangle(barBounds.X, barBounds.Y, WIZARD_HEADER_ACCENT_WIDTH, barBounds.Height);
+            int accentAlpha = 200;
+            spriteBatch.Draw(_pixel, accentBar, new Color((int)BUTTON_PRIMARY.R, (int)BUTTON_PRIMARY.G, (int)BUTTON_PRIMARY.B, accentAlpha));
+            spriteBatch.Draw(_pixel, new Rectangle(barBounds.X, barBounds.Y, barBounds.Width, 1), new Color(70, 68, 80));
+            DrawBorder(spriteBatch, barBounds, BORDER_COLOR);
+        }
+
         private void DrawNameStep(SpriteBatch spriteBatch)
         {
-            // Cancel button is now at the bottom, drawn after the Next button
+            DrawWizardHeaderBar(spriteBatch, _wizardContentBounds.Y);
 
-            // Draw title with pixel font
             string title = "Create New Project";
             Vector2 titleSize = _pixelFont.MeasureString(title) * HEADER_FONT_SCALE;
             Vector2 titlePosition = new Vector2(
                 _wizardContentBounds.X + (_wizardContentBounds.Width - titleSize.X) / 2,
                 _wizardContentBounds.Y + 60
             );
-            
-            // Debug: Log which font is being used for title
+
             Console.WriteLine($"[GameManager] Drawing title '{title}' with pixel font");
             Console.WriteLine($"[GameManager] Pixel font loaded: {_pixelFont != null}");
-            
+
             spriteBatch.DrawString(_pixelFont, title, titlePosition, TEXT_PRIMARY, 0f, Vector2.Zero, HEADER_FONT_SCALE, SpriteEffects.None, 0f);
 
             // Draw description
@@ -2063,14 +2095,14 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
         private void DrawGenreStep(SpriteBatch spriteBatch)
         {
-            // Draw Back button with modern styling and pixel font
             var backButtonBounds = GetWizardBackButtonBounds();
-            bool isBackHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) && 
+            bool isBackHovered = !IsMouseOverTopBarDropdown(_currentMouseState.Position) &&
                                  IsTopmostWindowUnderMouse(_windowManagement, _currentMouseState.Position) &&
                                  backButtonBounds.Contains(_currentMouseState.Position);
             DrawModernButton(spriteBatch, backButtonBounds, "Back", isBackHovered, false, true, true);
 
-            // Draw title with pixel font
+            DrawWizardHeaderBar(spriteBatch, _wizardContentBounds.Y);
+
             string title = "Choose Project Genre";
             Vector2 titleSize = _pixelFont.MeasureString(title) * HEADER_FONT_SCALE;
             Vector2 titlePosition = new Vector2(
@@ -2754,28 +2786,39 @@ namespace MarySGameEngine.Modules.GameManager_essential
 
         private void DrawModernButton(SpriteBatch spriteBatch, Rectangle bounds, string text, bool isHovered, bool isActive = false, bool isSecondary = false, bool usePixelFont = false)
         {
-            Color buttonColor = isActive ? BUTTON_PRIMARY : 
-                               isHovered ? (isSecondary ? BUTTON_SECONDARY_HOVER : BUTTON_PRIMARY_HOVER) : 
+            Color buttonColor = isActive ? BUTTON_PRIMARY :
+                               isHovered ? (isSecondary ? BUTTON_SECONDARY_HOVER : BUTTON_PRIMARY_HOVER) :
                                (isSecondary ? BUTTON_SECONDARY : BUTTON_PRIMARY);
-            
-            DrawRoundedRectangle(spriteBatch, bounds, buttonColor, _borderRadius);
-            
-            // Choose font based on parameter
+
+            if (isSecondary)
+            {
+                DrawRoundedRectangle(spriteBatch, bounds, buttonColor, _borderRadius);
+            }
+            else
+            {
+                // Primary buttons (Create New Project, Create Project, etc.): gradient + top highlight + border
+                Color topColor = new Color(Math.Max(0, buttonColor.R - 18), Math.Max(0, buttonColor.G - 15), Math.Max(0, buttonColor.B - 12));
+                Color bottomColor = new Color(Math.Min(255, buttonColor.R + 12), Math.Min(255, buttonColor.G + 10), Math.Min(255, buttonColor.B + 18));
+                int splitY = bounds.Y + bounds.Height * 50 / 100;
+                spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Y, bounds.Width, splitY - bounds.Y), topColor);
+                spriteBatch.Draw(_pixel, new Rectangle(bounds.X, splitY, bounds.Width, bounds.Bottom - splitY), bottomColor);
+                spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Y, bounds.Width, 1), new Color(255, 255, 255, 45));
+                DrawBorder(spriteBatch, bounds, new Color(buttonColor.R + 35, buttonColor.G + 35, buttonColor.B + 45));
+            }
+
             SpriteFont fontToUse = usePixelFont ? _pixelFont : _uiFont;
-            
-            // Debug: Log which font is being used
+
             if (text == "Cancel" || text == "Next" || text == "Back" || text == "Create Project" || text == "Create New Project")
             {
                 Console.WriteLine($"[GameManager] Drawing button '{text}' with {(usePixelFont ? "pixel" : "UI")} font");
             }
-            
-            // Draw button text
+
             Vector2 textSize = fontToUse.MeasureString(text) * FONT_SCALE;
             Vector2 textPosition = new Vector2(
                 bounds.X + (bounds.Width - textSize.X) / 2,
                 bounds.Y + (bounds.Height - textSize.Y) / 2
             );
-            
+
             Color textColor = isSecondary ? TEXT_PRIMARY : Color.White;
             spriteBatch.DrawString(fontToUse, text, textPosition, textColor, 0f, Vector2.Zero, FONT_SCALE, SpriteEffects.None, 0f);
         }
