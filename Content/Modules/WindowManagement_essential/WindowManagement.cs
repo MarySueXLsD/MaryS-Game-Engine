@@ -134,6 +134,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         private float _tooltipTimer = 0f;
         private bool _showTooltip = false;
         private bool _isHoveringOverInteractive = false;
+        private bool _requestIgnoreNextClick = false;
 
         public WindowManagement(GraphicsDevice graphicsDevice, SpriteFont menuFont, int windowWidth, WindowProperties properties)
         {
@@ -1630,6 +1631,25 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
         public bool GetUseGradientForTitleBar()
         {
             return _useGradientForTitleBar;
+        }
+
+        /// <summary>
+        /// Call when the taskbar (or similar) is focusing this window so the module ignores the focusing click.
+        /// The module should call ConsumeShouldIgnoreNextClick() in its next Update and, if true, ignore input until mouse release.
+        /// </summary>
+        public void RequestIgnoreNextClick()
+        {
+            _requestIgnoreNextClick = true;
+        }
+
+        /// <summary>
+        /// Returns true once after RequestIgnoreNextClick() was called; clears the flag. Call from module Update to know whether to ignore the current click.
+        /// </summary>
+        public bool ConsumeShouldIgnoreNextClick()
+        {
+            if (!_requestIgnoreNextClick) return false;
+            _requestIgnoreNextClick = false;
+            return true;
         }
 
         public void HandleTaskBarClick()

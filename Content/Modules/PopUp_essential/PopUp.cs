@@ -77,14 +77,16 @@ namespace MarySGameEngine.Modules.PopUp_essential
         private const int POPUP_MAX_WIDTH = 500;
         private const int POPUP_BORDER_THICKNESS = 2;
 
-        private readonly Color BACKDROP_COLOR = new Color(0, 0, 0, 140);
+        private readonly Color BACKDROP_COLOR = new Color(0, 0, 0, 160);
         private readonly Color POPUP_BG_COLOR = new Color(40, 40, 45);
         private readonly Color TITLE_BAR_COLOR = new Color(147, 112, 219);
-        private readonly Color BORDER_COLOR = new Color(80, 80, 90);
-        private readonly Color BUTTON_COLOR = new Color(80, 80, 90);
-        private readonly Color BUTTON_HOVER_COLOR = new Color(120, 120, 130);
-        private readonly Color CONFIRM_BUTTON_COLOR = new Color(80, 120, 80);
-        private readonly Color CONFIRM_BUTTON_HOVER_COLOR = new Color(100, 150, 100);
+        private readonly Color BORDER_COLOR = new Color(70, 68, 85);
+        private readonly Color BUTTON_COLOR = new Color(55, 58, 68);
+        private readonly Color BUTTON_HOVER_COLOR = new Color(75, 78, 90);
+        private readonly Color CONFIRM_BUTTON_TOP = new Color(60, 110, 60);
+        private readonly Color CONFIRM_BUTTON_BOTTOM = new Color(85, 145, 85);
+        private readonly Color CONFIRM_BUTTON_HOVER_TOP = new Color(75, 140, 75);
+        private readonly Color CONFIRM_BUTTON_HOVER_BOTTOM = new Color(105, 175, 105);
         private readonly Color CLOSE_BUTTON_HOVER_COLOR = new Color(232, 17, 35);
         private readonly Color TEXT_COLOR = Color.White;
 
@@ -232,6 +234,15 @@ namespace MarySGameEngine.Modules.PopUp_essential
             }
         }
 
+        private void DrawPopupBorder(SpriteBatch spriteBatch, Rectangle bounds, Color color)
+        {
+            int t = POPUP_BORDER_THICKNESS;
+            spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Y, bounds.Width, t), color);
+            spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Bottom - t, bounds.Width, t), color);
+            spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Y, t, bounds.Height), color);
+            spriteBatch.Draw(_pixel, new Rectangle(bounds.Right - t, bounds.Y, t, bounds.Height), color);
+        }
+
         private void DrawConfirmPopUp(SpriteBatch spriteBatch, ConfirmPopUpData data)
         {
             Rectangle bounds = GetPopupBounds(data);
@@ -270,23 +281,37 @@ namespace MarySGameEngine.Modules.PopUp_essential
             bool confirmHovered = confirmButtonBounds.Contains(mouseState.Position);
             bool cancelHovered = cancelButtonBounds.Contains(mouseState.Position);
 
-            Color confirmColor = confirmHovered ? CONFIRM_BUTTON_HOVER_COLOR : CONFIRM_BUTTON_COLOR;
-            Color cancelColor = cancelHovered ? BUTTON_HOVER_COLOR : BUTTON_COLOR;
-
-            spriteBatch.Draw(_pixel, confirmButtonBounds, confirmColor);
+            // Confirm button: gradient + border + optional top highlight
+            int confirmSplit = confirmButtonBounds.Y + confirmButtonBounds.Height * 50 / 100;
+            if (confirmHovered)
+            {
+                spriteBatch.Draw(_pixel, new Rectangle(confirmButtonBounds.X, confirmButtonBounds.Y, confirmButtonBounds.Width, confirmSplit - confirmButtonBounds.Y), CONFIRM_BUTTON_HOVER_TOP);
+                spriteBatch.Draw(_pixel, new Rectangle(confirmButtonBounds.X, confirmSplit, confirmButtonBounds.Width, confirmButtonBounds.Bottom - confirmSplit), CONFIRM_BUTTON_HOVER_BOTTOM);
+                spriteBatch.Draw(_pixel, new Rectangle(confirmButtonBounds.X, confirmButtonBounds.Y, confirmButtonBounds.Width, 1), new Color(255, 255, 255, 55));
+            }
+            else
+            {
+                spriteBatch.Draw(_pixel, new Rectangle(confirmButtonBounds.X, confirmButtonBounds.Y, confirmButtonBounds.Width, confirmSplit - confirmButtonBounds.Y), CONFIRM_BUTTON_TOP);
+                spriteBatch.Draw(_pixel, new Rectangle(confirmButtonBounds.X, confirmSplit, confirmButtonBounds.Width, confirmButtonBounds.Bottom - confirmSplit), CONFIRM_BUTTON_BOTTOM);
+                spriteBatch.Draw(_pixel, new Rectangle(confirmButtonBounds.X, confirmButtonBounds.Y, confirmButtonBounds.Width, 1), new Color(255, 255, 255, 40));
+            }
+            DrawPopupBorder(spriteBatch, confirmButtonBounds, new Color(60, 140, 60));
             Vector2 confirmTextSize = _menuFont.MeasureString(data.ConfirmText);
             spriteBatch.DrawString(_menuFont, data.ConfirmText,
                 new Vector2(confirmButtonBounds.Center.X - confirmTextSize.X / 2, confirmButtonBounds.Center.Y - confirmTextSize.Y / 2), TEXT_COLOR);
 
-            spriteBatch.Draw(_pixel, cancelButtonBounds, cancelColor);
+            // Cancel button: gradient + border
+            int cancelSplit = cancelButtonBounds.Y + cancelButtonBounds.Height * 50 / 100;
+            Color cancelTop = cancelHovered ? new Color(68, 72, 85) : new Color(48, 52, 62);
+            Color cancelBottom = cancelHovered ? new Color(85, 88, 100) : new Color(62, 65, 75);
+            spriteBatch.Draw(_pixel, new Rectangle(cancelButtonBounds.X, cancelButtonBounds.Y, cancelButtonBounds.Width, cancelSplit - cancelButtonBounds.Y), cancelTop);
+            spriteBatch.Draw(_pixel, new Rectangle(cancelButtonBounds.X, cancelSplit, cancelButtonBounds.Width, cancelButtonBounds.Bottom - cancelSplit), cancelBottom);
+            DrawPopupBorder(spriteBatch, cancelButtonBounds, BORDER_COLOR);
             Vector2 cancelTextSize = _menuFont.MeasureString(data.CancelText);
             spriteBatch.DrawString(_menuFont, data.CancelText,
                 new Vector2(cancelButtonBounds.Center.X - cancelTextSize.X / 2, cancelButtonBounds.Center.Y - cancelTextSize.Y / 2), TEXT_COLOR);
 
-            spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Y, bounds.Width, POPUP_BORDER_THICKNESS), BORDER_COLOR);
-            spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Bottom - POPUP_BORDER_THICKNESS, bounds.Width, POPUP_BORDER_THICKNESS), BORDER_COLOR);
-            spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Y, POPUP_BORDER_THICKNESS, bounds.Height), BORDER_COLOR);
-            spriteBatch.Draw(_pixel, new Rectangle(bounds.Right - POPUP_BORDER_THICKNESS, bounds.Y, POPUP_BORDER_THICKNESS, bounds.Height), BORDER_COLOR);
+            DrawPopupBorder(spriteBatch, bounds, BORDER_COLOR);
         }
 
         private void DrawCloseIcon(SpriteBatch spriteBatch, Rectangle bounds)

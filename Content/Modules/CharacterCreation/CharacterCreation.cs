@@ -98,6 +98,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private Rectangle _allTabViewListButtonBounds = Rectangle.Empty;
         private Rectangle _allTabViewGridButtonBounds = Rectangle.Empty;
 
+        // List/grid "alive" animation: gentle pulse and border glow
+        private DateTime _listViewAnimStart = DateTime.UtcNow;
+        // Left sidebar light glints (блики света): occasional sweep on category buttons
+        private DateTime _sidebarGlintStart = DateTime.UtcNow;
+
         // Center Panel - Character Details
         private string _characterId = "Knight_Warrior";
         private string _characterName = "Knight_Warrior";
@@ -329,6 +334,10 @@ namespace MarySGameEngine.Modules.CharacterCreation
             if (_currentMouseState.LeftButton == ButtonState.Pressed &&
                 _previousMouseState.LeftButton == ButtonState.Released)
             {
+                // Only process clicks when this window is the topmost under the mouse (prevents click-through to windows underneath)
+                if (_windowManagement == null || !_windowManagement.IsThisWindowTopmostUnderMouse(_currentMouseState.Position))
+                    return;
+
                 // Mark that this window handled the click so Desktop/TaskBar/other modules don't process it (prevents click-through)
                 Point p = _currentMouseState.Position;
                 if (_leftPanelBounds.Contains(p) || _centerPanelBounds.Contains(p) || _rightPanelBounds.Contains(p))
@@ -1361,6 +1370,9 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     LoadCharacters();
                     UpdateBounds();
                 }
+                // If taskbar (or similar) just focused this window, ignore the focusing click so it is not treated as in-window (e.g. Create Character)
+                if (_windowManagement != null && _windowManagement.ConsumeShouldIgnoreNextClick())
+                    _ignoreInputUntilMouseReleased = true;
 
                 if (_windowManagement == null || !isVisible)
                     return;
@@ -1584,12 +1596,13 @@ namespace MarySGameEngine.Modules.CharacterCreation
             if (!_needsScrollbar || !_scrollingEnabled) return;
 
             var mousePosition = _currentMouseState.Position;
+            bool isTopmost = _windowManagement != null && _windowManagement.IsThisWindowTopmostUnderMouse(mousePosition);
 
-            // Handle scrollbar dragging
+            // Handle scrollbar dragging - only start drag when this window is topmost
             if (_currentMouseState.LeftButton == ButtonState.Pressed && 
                 _previousMouseState.LeftButton == ButtonState.Released)
             {
-                if (_scrollbarBounds.Contains(mousePosition))
+                if (isTopmost && _scrollbarBounds.Contains(mousePosition))
                 {
                     _isDraggingScrollbar = true;
                     _scrollbarDragStart = new Vector2(mousePosition.X, mousePosition.Y);
@@ -1617,8 +1630,8 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 }
             }
 
-            // Handle mouse wheel scrolling
-            if (_centerPanelBounds.Contains(mousePosition) && 
+            // Handle mouse wheel scrolling - only when this window is topmost
+            if (isTopmost && _centerPanelBounds.Contains(mousePosition) && 
                 _currentMouseState.ScrollWheelValue != _previousMouseState.ScrollWheelValue)
             {
                 int delta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
@@ -1786,17 +1799,69 @@ namespace MarySGameEngine.Modules.CharacterCreation
             SpriteFont searchFont = _uiFont ?? _menuFont;
             spriteBatch.DrawString(searchFont, _searchText, searchTextPos, searchTextColor);
 
-            // Draw category buttons
+            // Draw category buttons (no tab active when in character inspection - we're not in list/grid view)
             for (int i = 0; i < _assetCategories.Count && i < _categoryButtonBounds.Count; i++)
             {
                 Rectangle bounds = _categoryButtonBounds[i];
-                bool isSelected = i == _selectedCategoryIndex;
-                Color buttonColor = isSelected ? BUTTON_ACTIVE : BUTTON_COLOR;
-                
-                spriteBatch.Draw(_pixel, bounds, buttonColor);
-                if (isSelected)
+                bool isSelected = !_isInspectingCharacter && i == _selectedCategoryIndex;
+                bool isHovered = bounds.Contains(_hoverMousePosition);
+                Color baseColor = isSelected ? BUTTON_ACTIVE : (isHovered ? BUTTON_HOVER : BUTTON_COLOR);
+
+                // Gradient: top slightly darker, bottom slightly lighter (vertical gradient feel)
+                int split = bounds.Y + bounds.Height * 55 / 100;
+                Color topColor = new Color(
+                    Math.Max(0, baseColor.R - 12),
+                    Math.Max(0, baseColor.G - 10),
+                    Math.Max(0, baseColor.B - 8));
+                Color bottomColor = new Color(
+                    Math.Min(255, baseColor.R + 8),
+                    Math.Min(255, baseColor.G + 6),
+                    Math.Min(255, baseColor.B + 6));
+                spriteBatch.Draw(_pixel, new Rectangle(bounds.X, bounds.Y, bounds.Width, split - bounds.Y), topColor);
+                spriteBatch.Draw(_pixel, new Rectangle(bounds.X, split, bounds.Width, bounds.Bottom - split), bottomColor);
+
+                // Border: always visible, stronger when selected or hovered
+                Color borderColor = isSelected ? new Color(180, 150, 255) : (isHovered ? PANEL_BORDER : new Color(55, 55, 60));
+                DrawBorder(spriteBatch, bounds, borderColor);
+
+                // Occasional light glint (блик света): diagonal line, horizontal sweep, on one random sidebar button every 10–15 sec
+                double elapsed = (DateTime.UtcNow - _sidebarGlintStart).TotalSeconds;
+                const double glintIntervalSeconds = 12.5;
+                const double sweepDuration = 1.0;
+                int categoryCount = Math.Min(_assetCategories.Count, _categoryButtonBounds.Count);
+                int intervalIndex = (int)(elapsed / glintIntervalSeconds);
+                int whichButton = categoryCount > 0 ? (intervalIndex * 31 + 17) % categoryCount : -1;
+                double phaseInInterval = (elapsed % glintIntervalSeconds) / glintIntervalSeconds;
+                bool inSweep = whichButton == i && phaseInInterval < (sweepDuration / glintIntervalSeconds);
+                if (inSweep && categoryCount > 0)
                 {
-                    DrawBorder(spriteBatch, bounds, BUTTON_ACTIVE);
+                    Rectangle prevScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
+                    RasterizerState prevRasterizer = spriteBatch.GraphicsDevice.RasterizerState;
+                    Rectangle clip = Rectangle.Intersect(bounds, prevScissor);
+                    if (clip.Width > 0 && clip.Height > 0)
+                    {
+                        spriteBatch.End();
+                        spriteBatch.GraphicsDevice.ScissorRectangle = clip;
+                        var clipRasterizer = new RasterizerState { ScissorTestEnable = true, CullMode = CullMode.None };
+                        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, DepthStencilState.None, clipRasterizer);
+                        float progress = (float)(phaseInInterval / (sweepDuration / glintIntervalSeconds));
+                        float ease = (float)Math.Sin(progress * Math.PI);
+                        float centerX = bounds.X + progress * (bounds.Width + 24f) - 12f;
+                        float centerY = bounds.Y + bounds.Height * 0.5f;
+                        const float length = 28f;
+                        const float thickness = 2.8f;
+                        float rotation = (float)(115.0 * Math.PI / 180.0);
+                        Vector2 origin = new Vector2(0.5f, 0.5f);
+                        Rectangle src = new Rectangle(0, 0, 1, 1);
+                        int outerA = (int)(75 * ease);
+                        spriteBatch.Draw(_pixel, new Vector2(centerX, centerY), src, new Color(255, 255, 255, outerA), rotation, origin, new Vector2(length + 4f, thickness + 0.8f), SpriteEffects.None, 0f);
+                        int coreA = (int)(160 * ease);
+                        spriteBatch.Draw(_pixel, new Vector2(centerX, centerY), src, new Color(255, 255, 255, coreA), rotation, origin, new Vector2(length, thickness), SpriteEffects.None, 0f);
+                        spriteBatch.End();
+                        spriteBatch.GraphicsDevice.ScissorRectangle = prevScissor;
+                        spriteBatch.GraphicsDevice.RasterizerState = prevRasterizer;
+                        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, DepthStencilState.None, prevRasterizer);
+                    }
                 }
 
                 Vector2 textPos = new Vector2(bounds.X + 10, bounds.Y + 5);
