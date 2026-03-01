@@ -1,7 +1,9 @@
 namespace MarySGameEngine.Modules.Music_essential.Audio
 {
     using System;
+    using System.IO;
     using NAudio.Wave;
+    using NAudio.Wave.SampleProviders;
 
     public class AudioPlayback : IDisposable
     {
@@ -10,6 +12,7 @@ namespace MarySGameEngine.Modules.Music_essential.Audio
 
         private IWavePlayer playbackDevice;
         private WaveStream fileStream;
+        private IDisposable _streamOwner;
         private readonly int fftLength;
         private float _volume = 1f;
 
@@ -26,6 +29,26 @@ namespace MarySGameEngine.Modules.Music_essential.Audio
             OpenFile(fileName);
         }
 
+        /// <summary>Load from a stream (e.g. HTTP). Playback can start immediately while data streams. Caller gives ownership of streamOwner; it is disposed when Stop/Load/Dispose is called.</summary>
+        public void Load(Stream stream, IDisposable streamOwner)
+        {
+            Stop();
+            CloseFile();
+            if (stream == null) return;
+            try
+            {
+                _streamOwner = streamOwner;
+                EnsureDeviceCreated();
+                OpenStream(stream);
+            }
+            catch (Exception)
+            {
+                _streamOwner?.Dispose();
+                _streamOwner = null;
+                throw;
+            }
+        }
+
         protected virtual void OnFftCalculated(FftEventArgs e) => FftCalculated?.Invoke(this, e);
         protected virtual void OnMaximumCalculated(MaxSampleEventArgs e) => MaximumCalculated?.Invoke(this, e);
 
@@ -35,6 +58,11 @@ namespace MarySGameEngine.Modules.Music_essential.Audio
             {
                 fileStream.Dispose();
                 fileStream = null;
+            }
+            if (_streamOwner != null)
+            {
+                _streamOwner.Dispose();
+                _streamOwner = null;
             }
         }
 
@@ -47,6 +75,30 @@ namespace MarySGameEngine.Modules.Music_essential.Audio
                 var aggregator = new SampleAggregator(inputStream, fftLength)
                 {
                     NotificationCount = inputStream.WaveFormat.SampleRate / 100,
+                    PerformFFT = true
+                };
+                aggregator.FftCalculated += (s, a) => OnFftCalculated(a);
+                aggregator.MaximumCalculated += (s, a) => OnMaximumCalculated(a);
+                playbackDevice.Init(aggregator);
+            }
+            catch (Exception)
+            {
+                CloseFile();
+                throw;
+            }
+        }
+
+        private void OpenStream(Stream stream)
+        {
+            try
+            {
+                var readFully = new ReadFullyStream(stream);
+                var mp3Reader = new Mp3FileReader(readFully);
+                fileStream = mp3Reader;
+                var sampleProvider = new Pcm16BitToSampleProvider(mp3Reader);
+                var aggregator = new SampleAggregator(sampleProvider, fftLength)
+                {
+                    NotificationCount = mp3Reader.WaveFormat.SampleRate / 100,
                     PerformFFT = true
                 };
                 aggregator.FftCalculated += (s, a) => OnFftCalculated(a);
@@ -126,6 +178,7 @@ namespace MarySGameEngine.Modules.Music_essential.Audio
                 if (fileStream == null) return TimeSpan.Zero;
                 try
                 {
+                    if (!fileStream.CanSeek || fileStream.Length <= 0) return TimeSpan.Zero;
                     return TimeSpan.FromSeconds((double)fileStream.Length / fileStream.WaveFormat.AverageBytesPerSecond);
                 }
                 catch { return TimeSpan.Zero; }
@@ -137,19 +190,20 @@ namespace MarySGameEngine.Modules.Music_essential.Audio
         {
             get
             {
-                if (fileStream == null || fileStream.Length <= 0) return 0f;
+                if (fileStream == null) return 0f;
                 try
                 {
+                    if (!fileStream.CanSeek || fileStream.Length <= 0) return 0f;
                     return (float)fileStream.Position / fileStream.Length;
                 }
                 catch { return 0f; }
             }
         }
 
-        /// <summary>Seek to position by progress 0..1. Call from main thread.</summary>
+        /// <summary>Seek to position by progress 0..1. Call from main thread. No-op for non-seekable streams (e.g. HTTP).</summary>
         public void SeekTo(float progress)
         {
-            if (fileStream == null || fileStream.Length <= 0) return;
+            if (fileStream == null || !fileStream.CanSeek || fileStream.Length <= 0) return;
             progress = Math.Max(0f, Math.Min(1f, progress));
             try
             {

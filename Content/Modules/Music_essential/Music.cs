@@ -3,8 +3,13 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Microsoft.Xna.Framework.Content;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using MarySGameEngine.Modules.Music_essential.Audio;
+using MarySGameEngine.Modules.Music_essential.SoundCloud;
 using MarySGameEngine.Modules.WindowManagement_essential;
 using MarySGameEngine.Modules.TaskBar_essential;
 using MarySGameEngine;
@@ -66,6 +71,48 @@ namespace MarySGameEngine.Modules.Music_essential
         private bool _hasAudioData;
         private readonly object _pendingPathLock = new object();
         private string _pendingFilePath; // Set by STA thread after dialog; consumed in Update
+        private string _currentTrackTitle;
+        private SoundCloudApiClient _soundCloudClient;
+        private bool _soundCloudPickerVisible;
+        private List<SoundCloudTrack> _soundCloudTracks;
+        private string _soundCloudMessage;
+        private bool _soundCloudLoading;
+        private long? _soundCloudDownloadingTrackId;
+        private int _soundCloudScrollOffset;
+        private const int TrackRowHeight = 32;
+        private const int PickerPadding = 12;
+        private const int SCROLLBAR_WIDTH = 16;
+        private const int SCROLLBAR_PADDING = 2;
+        private int _soundCloudListContentHeight;
+        private bool _soundCloudNeedsScrollbar;
+        private Rectangle _soundCloudScrollbarBounds;
+        private Rectangle _soundCloudListBounds;
+        private bool _soundCloudIsDraggingScrollbar;
+        private Vector2 _soundCloudScrollbarDragStart;
+        private int _soundCloudScrollOffsetAtDragStart;
+        private Task _soundCloudTask;
+        private string _pendingSoundCloudPath;
+        private Task<(Stream stream, IDisposable owner)> _soundCloudStreamTask;
+        private Task<string> _soundCloudDownloadTask;
+        private SoundCloudTrack _soundCloudPendingTrack;
+        private int _soundCloudSection;
+        private List<SoundCloudPlaylist> _soundCloudPlaylists;
+        private SoundCloudPlaylist _soundCloudSelectedPlaylist;
+        private string _soundCloudSearchQuery;
+        private Task<List<SoundCloudPlaylist>> _soundCloudPlaylistsTask;
+        private string _soundCloudLastDownloadError; // set by download log callback for user-facing message
+
+        private bool _wasWindowVisible; // used to detect close so we can stop playback
+
+        private void SoundCloudDownloadLog(string msg)
+        {
+            _engine?.Log(msg);
+            if (msg == null) return;
+            if (msg.Contains("429") || msg.Contains("Too many requests"))
+                _soundCloudLastDownloadError = "Too many requests. Wait a few minutes and try again.";
+            else if (msg.Contains("403") || msg.Contains("Forbidden"))
+                _soundCloudLastDownloadError = "Could not load track. Sign in with SoundCloud and try again.";
+        }
 
         public Music(GraphicsDevice graphicsDevice, SpriteFont menuFont, int windowWidth)
         {
@@ -92,6 +139,9 @@ namespace MarySGameEngine.Modules.Music_essential
             _audioPlayback = new AudioPlayback(FftLength);
             _audioAnalyzer = new AudioAnalyzer(_audioPlayback, 64, 0.25f); // 64 level samples for many time-domain bars
             _basicEffect = new BasicEffect(graphicsDevice) { VertexColorEnabled = true, World = Matrix.Identity };
+            _soundCloudClient = new SoundCloudApiClient();
+            _soundCloudTracks = new List<SoundCloudTrack>();
+            _soundCloudPlaylists = new List<SoundCloudPlaylist>();
         }
 
         public void SetTaskBar(TaskBar taskBar)
@@ -136,6 +186,11 @@ namespace MarySGameEngine.Modules.Music_essential
             if (_windowManagement != null)
                 _windowManagement.Update();
 
+            // When the module window is closed, stop playback
+            if (_wasWindowVisible && _windowManagement != null && !_windowManagement.IsVisible())
+                _audioPlayback?.Stop();
+            _wasWindowVisible = _windowManagement?.IsVisible() ?? false;
+
             UpdateBounds();
 
             // Apply any file selected by the Open dialog (run on STA thread)
@@ -153,6 +208,7 @@ namespace MarySGameEngine.Modules.Music_essential
                 try
                 {
                     _currentFilePath = pathToLoad;
+                    _currentTrackTitle = null;
                     _audioPlayback?.Load(pathToLoad);
                     _audioPlayback?.Play();
                 }
@@ -162,14 +218,196 @@ namespace MarySGameEngine.Modules.Music_essential
                 }
             }
 
+            if (_pendingSoundCloudPath != null)
+            {
+                pathToLoad = _pendingSoundCloudPath;
+                _pendingSoundCloudPath = null;
+                _soundCloudPickerVisible = false;
+                _soundCloudDownloadingTrackId = null;
+                try
+                {
+                    _currentFilePath = pathToLoad;
+                    _audioPlayback?.Load(pathToLoad);
+                    _audioPlayback?.Play();
+                }
+                catch (Exception ex) { _engine?.Log($"Music: Load error: {ex.Message}"); }
+            }
+
+            if (_soundCloudTask != null && _soundCloudTask.IsCompleted)
+            {
+                try
+                {
+                    _soundCloudLoading = false;
+                    if (_soundCloudTask.IsFaulted)
+                        _soundCloudMessage = _soundCloudTask.Exception?.GetBaseException()?.Message ?? "Error";
+                    else if (_soundCloudTask is Task<List<SoundCloudTrack>> listTask && listTask.IsCompletedSuccessfully)
+                    {
+                        _soundCloudTracks = listTask.Result ?? new List<SoundCloudTrack>();
+                        _soundCloudMessage = null;
+                    }
+                }
+                catch (Exception ex) { _soundCloudMessage = ex.Message; _engine?.Log($"Music: task error: {ex.Message}"); }
+                _soundCloudTask = null;
+            }
+            if (_soundCloudStreamTask != null && _soundCloudStreamTask.IsCompleted)
+            {
+                try
+                {
+                    if (_soundCloudStreamTask.IsCompletedSuccessfully)
+                    {
+                        var (stream, owner) = _soundCloudStreamTask.Result;
+                        if (stream != null && owner != null)
+                        {
+                            bool played = false;
+                            try
+                            {
+                                _audioPlayback.Stop();
+                                _audioPlayback.Load(stream, owner);
+                                _audioPlayback.Play();
+                                played = true;
+                            }
+                            catch (Exception loadEx)
+                            {
+                                _engine?.Log($"Music: stream play failed: {loadEx.Message}, falling back to download.");
+                                owner?.Dispose();
+                                if (_soundCloudPendingTrack != null && _soundCloudDownloadTask == null)
+                                    _soundCloudDownloadTask = _soundCloudClient.DownloadTrackToTempFileAsync(_soundCloudPendingTrack, SoundCloudDownloadLog);
+                            }
+                            if (played)
+                            {
+                                _currentTrackTitle = SanitizeForFont(_soundCloudPendingTrack?.Title ?? "Untitled");
+                                _soundCloudDownloadingTrackId = null;
+                                _soundCloudPendingTrack = null;
+                                _currentFilePath = null;
+                            }
+                        }
+                        else
+                        {
+                            _engine?.Log("Music: SoundCloud stream returned no stream, falling back to download.");
+                            if (_soundCloudPendingTrack != null && _soundCloudDownloadTask == null)
+                                _soundCloudDownloadTask = _soundCloudClient.DownloadTrackToTempFileAsync(_soundCloudPendingTrack, SoundCloudDownloadLog);
+                        }
+                    }
+                    else if (_soundCloudStreamTask.IsFaulted)
+                    {
+                        _engine?.Log($"Music: SoundCloud stream failed: {_soundCloudStreamTask.Exception?.GetBaseException()?.Message ?? "Unknown"}, falling back to download.");
+                        if (_soundCloudPendingTrack != null && _soundCloudDownloadTask == null)
+                            _soundCloudDownloadTask = _soundCloudClient.DownloadTrackToTempFileAsync(_soundCloudPendingTrack, SoundCloudDownloadLog);
+                    }
+                }
+                catch (Exception ex) { _engine?.Log($"Music: stream task error: {ex.Message}"); }
+                _soundCloudStreamTask = null;
+            }
+            if (_soundCloudDownloadTask != null && _soundCloudDownloadTask.IsCompleted)
+            {
+                try
+                {
+                    if (_soundCloudDownloadTask.IsCompletedSuccessfully && _soundCloudDownloadTask.Result != null)
+                    {
+                        string path = _soundCloudDownloadTask.Result;
+                        _engine?.Log($"Music: Download completed, path={path}, FileExists={System.IO.File.Exists(path)}");
+                        _currentFilePath = path;
+                        bool played = false;
+                        try
+                        {
+                            _audioPlayback.Stop();
+                            _audioPlayback.Load(path);
+                            _engine?.Log("Music: Load(path) succeeded.");
+                            _audioPlayback.Play();
+                            played = true;
+                            _engine?.Log($"Music: Play() after download, state={_audioPlayback.PlaybackState}");
+                        }
+                        catch (Exception loadEx) { _engine?.Log($"Music: play failed after download: {loadEx.Message}"); }
+                        if (played)
+                        {
+                            _currentTrackTitle = SanitizeForFont(_soundCloudPendingTrack?.Title ?? "Untitled");
+                            _soundCloudDownloadingTrackId = null;
+                            _soundCloudPendingTrack = null;
+                        }
+                        else
+                            _soundCloudDownloadingTrackId = null;
+                    }
+                    else
+                    {
+                        _engine?.Log($"Music: Download task failed or null result. Success={_soundCloudDownloadTask.IsCompletedSuccessfully}, Result={(_soundCloudDownloadTask.IsCompletedSuccessfully ? _soundCloudDownloadTask.Result ?? "(null)" : "n/a")}");
+                        _soundCloudMessage = !string.IsNullOrEmpty(_soundCloudLastDownloadError)
+                            ? _soundCloudLastDownloadError
+                            : (_soundCloudClient.HasUserToken
+                                ? "Could not load track. Try again."
+                                : "Could not load track. Sign in with SoundCloud and try again.");
+                        _soundCloudDownloadingTrackId = null;
+                    }
+                }
+                catch (Exception ex) { _engine?.Log($"Music: download task error: {ex.Message}"); _soundCloudDownloadingTrackId = null; }
+                _soundCloudDownloadTask = null;
+            }
+            if (_soundCloudPlaylistsTask != null && _soundCloudPlaylistsTask.IsCompleted)
+            {
+                try
+                {
+                    _soundCloudLoading = false;
+                    if (_soundCloudPlaylistsTask.IsFaulted)
+                        _soundCloudMessage = _soundCloudPlaylistsTask.Exception?.GetBaseException()?.Message ?? "Failed to load playlists";
+                    else if (_soundCloudPlaylistsTask.IsCompletedSuccessfully)
+                        _soundCloudPlaylists = _soundCloudPlaylistsTask.Result ?? new List<SoundCloudPlaylist>();
+                }
+                catch (Exception ex) { _soundCloudMessage = ex.Message; _engine?.Log($"Music: playlists task error: {ex.Message}"); }
+                _soundCloudPlaylistsTask = null;
+            }
+
             if (_windowManagement?.IsVisible() != true) return;
 
             var pos = _currentMouseState.Position;
             bool leftClick = _currentMouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released;
 
+            if (_soundCloudPickerVisible && leftClick)
+            {
+                try
+                {
+                    if (HandleSoundCloudPickerClick(pos)) { _previousMouseState = _currentMouseState; return; }
+                }
+                catch (Exception ex) { _engine?.Log($"Music: SoundCloud picker error: {ex.Message}"); _soundCloudPickerVisible = false; }
+            }
+            if (_soundCloudPickerVisible)
+            {
+                int scroll = _previousMouseState.ScrollWheelValue - _currentMouseState.ScrollWheelValue;
+                GetSoundCloudPickerLayout(out _, out _, out _, out _, out int listH, out _, out _, out int contentHeight, out _, out _);
+                int maxScroll = Math.Max(0, contentHeight - listH);
+
+                if (_soundCloudIsDraggingScrollbar)
+                {
+                    if (_currentMouseState.LeftButton == ButtonState.Pressed)
+                    {
+                        float deltaY = pos.Y - _soundCloudScrollbarDragStart.Y;
+                        float scrollbarHeight = Math.Max(1, _soundCloudScrollbarBounds.Height);
+                        float scrollRatio = deltaY / scrollbarHeight;
+                        _soundCloudScrollOffset = _soundCloudScrollOffsetAtDragStart + (int)(scrollRatio * maxScroll);
+                        _soundCloudScrollOffset = MathHelper.Clamp(_soundCloudScrollOffset, 0, maxScroll);
+                    }
+                    else
+                    {
+                        _soundCloudIsDraggingScrollbar = false;
+                    }
+                }
+                else
+                {
+                    if (_currentMouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released
+                        && _soundCloudNeedsScrollbar && _soundCloudScrollbarBounds.Contains(pos))
+                    {
+                        _soundCloudIsDraggingScrollbar = true;
+                        _soundCloudScrollbarDragStart = new Vector2(pos.X, pos.Y);
+                        _soundCloudScrollOffsetAtDragStart = _soundCloudScrollOffset;
+                    }
+                    if (scroll != 0 && _soundCloudListBounds.Contains(pos))
+                    {
+                        _soundCloudScrollOffset = MathHelper.Clamp(_soundCloudScrollOffset + scroll / 120 * TrackRowHeight, 0, maxScroll);
+                    }
+                }
+            }
+
             if (_currentMouseState.LeftButton == ButtonState.Released)
                 _isDraggingVolume = false;
-            if (leftClick && _contentBounds.Contains(pos))
+            if (leftClick && _contentBounds.Contains(pos) && !_soundCloudPickerVisible)
             {
                 if (_progressBarBounds.Contains(pos))
                 {
@@ -180,19 +418,42 @@ namespace MarySGameEngine.Modules.Music_essential
                 else if (_volumeTrackBounds.Contains(pos))
                     _isDraggingVolume = true;
                 else if (_nextButtonLeftBounds.Contains(pos) || _nextButtonRightBounds.Contains(pos))
-                    OpenFile();
+                    ShowSoundCloudPicker();
                 else if (_playPauseButtonBounds.Contains(pos))
                 {
+                    _engine?.Log($"Music: Play button clicked. PlaybackState={_audioPlayback?.PlaybackState}, _currentFilePath={_currentFilePath ?? "(null)"}, FileExists={(!string.IsNullOrEmpty(_currentFilePath) && System.IO.File.Exists(_currentFilePath))}");
                     if (_audioPlayback != null)
                     {
                         if (_audioPlayback.PlaybackState == NAudio.Wave.PlaybackState.Playing)
+                        {
                             _audioPlayback.Pause();
+                            _engine?.Log("Music: Paused.");
+                        }
                         else
+                        {
                             _audioPlayback.Play();
+                            var stateAfter = _audioPlayback.PlaybackState;
+                            _engine?.Log($"Music: Play() called, state after={stateAfter}");
+                            if (stateAfter != NAudio.Wave.PlaybackState.Playing && !string.IsNullOrEmpty(_currentFilePath) && System.IO.File.Exists(_currentFilePath))
+                            {
+                                _engine?.Log($"Music: Retrying Load+Play from {_currentFilePath}");
+                                try
+                                {
+                                    _audioPlayback.Load(_currentFilePath);
+                                    _audioPlayback.Play();
+                                    _engine?.Log($"Music: Retry Play state={_audioPlayback.PlaybackState}");
+                                }
+                                catch (Exception ex) { _engine?.Log($"Music: retry play failed: {ex.Message}"); }
+                            }
+                            else if (stateAfter != NAudio.Wave.PlaybackState.Playing)
+                                _engine?.Log("Music: Not playing (no file loaded or path missing).");
+                        }
                     }
+                    else
+                        _engine?.Log("Music: Play button clicked but _audioPlayback is null.");
                 }
                 else if (_openButtonBounds.Contains(pos))
-                    OpenFile();
+                    ShowSoundCloudPicker();
                 else if (_stopButtonBounds.Contains(pos))
                     _audioPlayback?.Stop();
             }
@@ -210,7 +471,7 @@ namespace MarySGameEngine.Modules.Music_essential
 
         private void OpenFile()
         {
-            // Show dialog on a separate STA thread so the game loop keeps running and doesn't freeze
+            // Legacy: local file open (kept for compatibility). Prefer SoundCloud via Open button.
             var thread = new Thread(() =>
             {
                 try
@@ -236,12 +497,415 @@ namespace MarySGameEngine.Modules.Music_essential
             thread.Start();
         }
 
+        private void ShowSoundCloudPicker()
+        {
+            _soundCloudPickerVisible = true;
+            _soundCloudMessage = null;
+            _soundCloudScrollOffset = 0;
+            _soundCloudSection = 0;
+            _soundCloudSelectedPlaylist = null;
+            _soundCloudSearchQuery = null;
+            if (_soundCloudTracks == null) _soundCloudTracks = new List<SoundCloudTrack>();
+            else _soundCloudTracks.Clear();
+            _soundCloudLoading = true;
+            _soundCloudTask = _soundCloudClient.GetChartsAsync(30, msg => _engine?.Log(msg));
+        }
+
+        /// <summary>
+        /// Computes SoundCloud picker layout: panel bounds, list area (listTop, listH, listLeft, listW),
+        /// content height, whether scrollbar is needed, and scrollbar bounds.
+        /// </summary>
+        private void GetSoundCloudPickerLayout(
+            out int panelW, out int panelH, out Rectangle panelBounds,
+            out int listTop, out int listH, out int listLeft, out int listW,
+            out int contentHeight, out bool needsScrollbar, out Rectangle scrollbarBounds)
+        {
+            panelW = Math.Min(500, _contentBounds.Width - 40);
+            panelH = Math.Min(420, _contentBounds.Height - 50);
+            panelBounds = new Rectangle(_contentBounds.X + (_contentBounds.Width - panelW) / 2, _contentBounds.Y + (_contentBounds.Height - panelH) / 2, panelW, panelH);
+            int headerH = 44;
+            int tabH = 28;
+            int searchRowH = 36;
+            int backButtonH = 28;
+
+            listTop = panelBounds.Y + headerH + tabH + PickerPadding;
+            listH = panelBounds.Height - headerH - tabH - PickerPadding * 2;
+            listLeft = panelBounds.X + PickerPadding;
+            listW = panelBounds.Width - PickerPadding * 2;
+
+            int rowCount = 0;
+            if (_soundCloudSection == 3 && _soundCloudSelectedPlaylist != null)
+            {
+                listTop += backButtonH + 4;
+                listH -= backButtonH + 4;
+                var trackList = _soundCloudSelectedPlaylist?.Tracks;
+                rowCount = trackList?.Count ?? 0;
+            }
+            else if (_soundCloudSection == 1)
+            {
+                listTop += searchRowH + 4 + (6 / 3 + 1) * 26 + 4; // presets
+                listH -= searchRowH + 4 + (6 / 3 + 1) * 26 + 4;
+                rowCount = _soundCloudTracks?.Count ?? 0;
+            }
+            else if (_soundCloudSection == 3 && _soundCloudSelectedPlaylist == null)
+            {
+                rowCount = _soundCloudPlaylists?.Count ?? 0;
+            }
+            else
+            {
+                rowCount = _soundCloudTracks?.Count ?? 0;
+            }
+
+            contentHeight = rowCount * TrackRowHeight;
+            needsScrollbar = contentHeight > listH;
+            if (needsScrollbar)
+            {
+                listW -= SCROLLBAR_WIDTH + SCROLLBAR_PADDING;
+                scrollbarBounds = new Rectangle(panelBounds.Right - SCROLLBAR_WIDTH - 2, listTop, SCROLLBAR_WIDTH, listH);
+            }
+            else
+            {
+                scrollbarBounds = Rectangle.Empty;
+            }
+
+            _soundCloudListContentHeight = contentHeight;
+            _soundCloudNeedsScrollbar = needsScrollbar;
+            _soundCloudScrollbarBounds = scrollbarBounds;
+            _soundCloudListBounds = new Rectangle(listLeft, listTop, listW, listH);
+
+            int maxScroll = Math.Max(0, contentHeight - listH);
+            _soundCloudScrollOffset = MathHelper.Clamp(_soundCloudScrollOffset, 0, maxScroll);
+        }
+
+        private bool HandleSoundCloudPickerClick(Point pos)
+        {
+            int panelW = Math.Min(500, _contentBounds.Width - 40);
+            int panelH = Math.Min(420, _contentBounds.Height - 50);
+            var panelBounds = new Rectangle(_contentBounds.X + (_contentBounds.Width - panelW) / 2, _contentBounds.Y + (_contentBounds.Height - panelH) / 2, panelW, panelH);
+            if (!panelBounds.Contains(pos)) { _soundCloudPickerVisible = false; _windowManagement?.BringToFront(); return true; }
+
+            int headerH = 44;
+            int tabH = 28;
+            var closeBounds = new Rectangle(panelBounds.Right - 36, panelBounds.Y + 8, 28, 28);
+            if (closeBounds.Contains(pos)) { _soundCloudPickerVisible = false; _windowManagement?.BringToFront(); return true; }
+
+            int tabY = panelBounds.Y + headerH;
+            int tabW = panelBounds.Width / 4;
+            var tabPopular = new Rectangle(panelBounds.X, tabY, tabW, tabH);
+            var tabSearch = new Rectangle(panelBounds.X + tabW, tabY, tabW, tabH);
+            var tabMyTracks = new Rectangle(panelBounds.X + tabW * 2, tabY, tabW, tabH);
+            var tabPlaylists = new Rectangle(panelBounds.X + tabW * 3, tabY, tabW, tabH);
+            if (tabPopular.Contains(pos)) { _soundCloudSection = 0; _soundCloudSelectedPlaylist = null; if (_soundCloudTracks == null) _soundCloudTracks = new List<SoundCloudTrack>(); else _soundCloudTracks.Clear(); _soundCloudMessage = null; _soundCloudLoading = true; _soundCloudTask = _soundCloudClient.GetChartsAsync(30, msg => _engine?.Log(msg)); return true; }
+            if (tabSearch.Contains(pos)) { _soundCloudSection = 1; _soundCloudSelectedPlaylist = null; _soundCloudMessage = null; if (_soundCloudTracks == null) _soundCloudTracks = new List<SoundCloudTrack>(); return true; }
+            if (tabMyTracks.Contains(pos)) { _soundCloudSection = 2; _soundCloudSelectedPlaylist = null; if (!_soundCloudClient.HasUserToken) { _soundCloudMessage = "Sign in to see your likes"; return true; } if (_soundCloudTracks == null) _soundCloudTracks = new List<SoundCloudTrack>(); else _soundCloudTracks.Clear(); _soundCloudLoading = true; _soundCloudTask = _soundCloudClient.GetMyLikesAsync(msg => _engine?.Log(msg)); return true; }
+            if (tabPlaylists.Contains(pos)) { _soundCloudSection = 3; _soundCloudSelectedPlaylist = null; if (!_soundCloudClient.HasUserToken) { _soundCloudMessage = "Sign in to see playlists"; _soundCloudPlaylists = _soundCloudPlaylists ?? new List<SoundCloudPlaylist>(); _soundCloudPlaylists.Clear(); return true; } _soundCloudPlaylists = _soundCloudPlaylists ?? new List<SoundCloudPlaylist>(); _soundCloudPlaylists.Clear(); _soundCloudLoading = true; _soundCloudPlaylistsTask = _soundCloudClient.GetMyPlaylistsAsync(msg => _engine?.Log(msg)); return true; }
+
+            GetSoundCloudPickerLayout(out _, out _, out _, out int listTop, out int listH, out int listLeft, out int listW, out _, out _, out _);
+            if (_soundCloudNeedsScrollbar && _soundCloudScrollbarBounds.Contains(pos))
+                return true;
+
+            int searchRowH = 36;
+            int backButtonH = 28;
+            int listAreaTop = panelBounds.Y + headerH + tabH + PickerPadding;
+
+            if (_soundCloudSection == 2 && !_soundCloudClient.HasUserToken && !_soundCloudLoading)
+            {
+                var signInBounds = new Rectangle(panelBounds.X + PickerPadding, listAreaTop, panelBounds.Width - PickerPadding * 2, 40);
+                if (signInBounds.Contains(pos)) { _soundCloudLoading = true; _soundCloudMessage = null; _soundCloudTask = SignInThenLoadLikesAsync(); return true; }
+            }
+            if (_soundCloudSection == 3 && !_soundCloudClient.HasUserToken && !_soundCloudLoading)
+            {
+                var signInBounds = new Rectangle(panelBounds.X + PickerPadding, listAreaTop, panelBounds.Width - PickerPadding * 2, 40);
+                if (signInBounds.Contains(pos)) { _soundCloudLoading = true; _soundCloudMessage = null; _soundCloudPlaylistsTask = SignInThenLoadPlaylistsAsync(); return true; }
+            }
+
+            if (_soundCloudSection == 3 && _soundCloudSelectedPlaylist != null)
+            {
+                var backBounds = new Rectangle(panelBounds.X + PickerPadding, listAreaTop, 80, backButtonH);
+                if (backBounds.Contains(pos)) { _soundCloudSelectedPlaylist = null; _soundCloudTracks = new List<SoundCloudTrack>(); return true; }
+            }
+
+            if (_soundCloudSection == 1)
+            {
+                var searchBoxBounds = new Rectangle(panelBounds.X + PickerPadding, listAreaTop, panelBounds.Width - PickerPadding * 2 - 50, searchRowH - 4);
+                var goBounds = new Rectangle(searchBoxBounds.Right + 4, listAreaTop, 46, searchRowH - 4);
+                if (goBounds.Contains(pos))
+                {
+                    _soundCloudSearchQuery = _soundCloudSearchQuery ?? "";
+                    _soundCloudTracks.Clear();
+                    _soundCloudLoading = true;
+                    _soundCloudTask = _soundCloudClient.SearchTracksAsync(_soundCloudSearchQuery.Trim().Length > 0 ? _soundCloudSearchQuery.Trim() : "music", 40, msg => _engine?.Log(msg));
+                    _soundCloudMessage = null;
+                    return true;
+                }
+                int presetY = listAreaTop + searchRowH + 4;
+                string[] presets = { "electronic", "chill", "rock", "pop", "jazz", "hip hop" };
+                int pw = (panelBounds.Width - PickerPadding * 2 - 20) / 3;
+                for (int i = 0; i < presets.Length; i++)
+                {
+                    int col = i % 3, rw = i / 3;
+                    var preBounds = new Rectangle(panelBounds.X + PickerPadding + col * (pw + 6), presetY + rw * 26, pw, 22);
+                    if (preBounds.Contains(pos))
+                    {
+                        _soundCloudSearchQuery = presets[i];
+                        _soundCloudTracks.Clear();
+                        _soundCloudLoading = true;
+                        _soundCloudTask = _soundCloudClient.SearchTracksAsync(presets[i], 40, msg => _engine?.Log(msg));
+                        _soundCloudMessage = null;
+                        return true;
+                    }
+                }
+            }
+
+            var trackList = _soundCloudSection == 3 && _soundCloudSelectedPlaylist != null ? _soundCloudSelectedPlaylist?.Tracks : _soundCloudTracks;
+            if (trackList == null) trackList = _soundCloudTracks;
+            for (int i = 0; i < (trackList?.Count ?? 0); i++)
+            {
+                int rowY = _soundCloudListBounds.Y + i * TrackRowHeight - _soundCloudScrollOffset;
+                if (rowY + TrackRowHeight < _soundCloudListBounds.Y || rowY > _soundCloudListBounds.Bottom) continue;
+                var rowBounds = new Rectangle(_soundCloudListBounds.X, rowY, _soundCloudListBounds.Width, TrackRowHeight);
+                if (rowBounds.Contains(pos) && _soundCloudStreamTask == null && _soundCloudDownloadTask == null && !_soundCloudDownloadingTrackId.HasValue)
+                {
+                    var track = trackList[i];
+                    _soundCloudDownloadingTrackId = track.Id;
+                    _soundCloudPendingTrack = track;
+                    _soundCloudLastDownloadError = null;
+                    // Don't set _currentTrackTitle here — only set it when we actually start playing (so if load fails, title and playback stay correct)
+                    _soundCloudPickerVisible = false;
+                    // Bring Music window to front so Play button receives clicks (otherwise Desktop can be on top)
+                    _windowManagement?.BringToFront();
+                    // Use download-to-file only so Load(path)+Play() always works and Play button works
+                    _soundCloudDownloadTask = _soundCloudClient.DownloadTrackToTempFileAsync(track, SoundCloudDownloadLog);
+                    return true;
+                }
+            }
+
+            if (_soundCloudSection == 3 && _soundCloudSelectedPlaylist == null && (_soundCloudPlaylists?.Count ?? 0) > 0)
+            {
+                var list = _soundCloudPlaylists ?? new List<SoundCloudPlaylist>();
+                for (int i = 0; i < list.Count; i++)
+                {
+                    int rowY = _soundCloudListBounds.Y + i * TrackRowHeight - _soundCloudScrollOffset;
+                    if (rowY + TrackRowHeight < _soundCloudListBounds.Y || rowY > _soundCloudListBounds.Bottom) continue;
+                    var rowBounds = new Rectangle(_soundCloudListBounds.X, rowY, _soundCloudListBounds.Width, TrackRowHeight);
+                    if (rowBounds.Contains(pos))
+                    {
+                        var pl = list[i];
+                        if (pl == null) return true;
+                        _soundCloudSelectedPlaylist = pl;
+                        _soundCloudTracks = pl.Tracks != null ? new List<SoundCloudTrack>(pl.Tracks) : new List<SoundCloudTrack>();
+                        _soundCloudScrollOffset = 0;
+                        return true;
+                    }
+                }
+            }
+            return true;
+        }
+
+        private async Task<List<SoundCloudTrack>> SignInThenLoadLikesAsync()
+        {
+            var token = await _soundCloudClient.SignInWithSoundCloudAsync(msg => _engine?.Log(msg));
+            if (token == null) return new List<SoundCloudTrack>();
+            return await _soundCloudClient.GetMyLikesAsync(msg => _engine?.Log(msg));
+        }
+        private async Task<List<SoundCloudTrack>> SignInThenLoadTracksAsync()
+        {
+            var token = await _soundCloudClient.SignInWithSoundCloudAsync(msg => _engine?.Log(msg));
+            if (token == null) return new List<SoundCloudTrack>();
+            return await _soundCloudClient.GetMyTracksAsync(msg => _engine?.Log(msg));
+        }
+
+        private async Task<List<SoundCloudPlaylist>> SignInThenLoadPlaylistsAsync()
+        {
+            var token = await _soundCloudClient.SignInWithSoundCloudAsync(msg => _engine?.Log(msg));
+            if (token == null) return new List<SoundCloudPlaylist>();
+            return await _soundCloudClient.GetMyPlaylistsAsync(msg => _engine?.Log(msg));
+        }
+
+        private void DrawSoundCloudPicker(SpriteBatch spriteBatch)
+        {
+            SpriteFont font = _uiFont ?? _menuFont;
+            if (font == null) return;
+            int panelW = Math.Min(500, _contentBounds.Width - 40);
+            int panelH = Math.Min(420, _contentBounds.Height - 50);
+            var panelBounds = new Rectangle(_contentBounds.X + (_contentBounds.Width - panelW) / 2, _contentBounds.Y + (_contentBounds.Height - panelH) / 2, panelW, panelH);
+            GetSoundCloudPickerLayout(out _, out _, out _, out _, out _, out _, out _, out _, out _, out _);
+            int listAreaTop = panelBounds.Y + 44 + 28 + PickerPadding; // headerH + tabH + PickerPadding
+
+            var overlay = new Rectangle(_contentBounds.X, _contentBounds.Y, _contentBounds.Width, _contentBounds.Height);
+            spriteBatch.Draw(_pixel, overlay, new Color(0, 0, 0, 160));
+            spriteBatch.Draw(_pixel, panelBounds, new Color(35, 35, 42));
+            var borderColor = new Color(147, 112, 219);
+            int b = 2;
+            spriteBatch.Draw(_pixel, new Rectangle(panelBounds.X, panelBounds.Y, panelBounds.Width, b), borderColor);
+            spriteBatch.Draw(_pixel, new Rectangle(panelBounds.X, panelBounds.Bottom - b, panelBounds.Width, b), borderColor);
+            spriteBatch.Draw(_pixel, new Rectangle(panelBounds.X, panelBounds.Y, b, panelBounds.Height), borderColor);
+            spriteBatch.Draw(_pixel, new Rectangle(panelBounds.Right - b, panelBounds.Y, b, panelBounds.Height), borderColor);
+            var titlePos = new Vector2(panelBounds.X + 12, panelBounds.Y + 12);
+            spriteBatch.DrawString(font, "SoundCloud", titlePos, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+            var closeBounds = new Rectangle(panelBounds.Right - 36, panelBounds.Y + 8, 28, 28);
+            spriteBatch.DrawString(font, "X", new Vector2(closeBounds.X + 8, closeBounds.Y + 4), Color.White, 0f, Vector2.Zero, 0.9f, SpriteEffects.None, 0f);
+
+            int headerH = 44;
+            int tabH = 28;
+            int tabY = panelBounds.Y + headerH;
+            int tabW = panelBounds.Width / 4;
+            var tabPopular = new Rectangle(panelBounds.X, tabY, tabW, tabH);
+            var tabSearch = new Rectangle(panelBounds.X + tabW, tabY, tabW, tabH);
+            var tabMyTracks = new Rectangle(panelBounds.X + tabW * 2, tabY, tabW, tabH);
+            var tabPlaylists = new Rectangle(panelBounds.X + tabW * 3, tabY, tabW, tabH);
+            var tabBg = new Color(45, 45, 52);
+            spriteBatch.Draw(_pixel, tabPopular, _soundCloudSection == 0 ? new Color(99, 102, 241) : tabBg);
+            spriteBatch.Draw(_pixel, tabSearch, _soundCloudSection == 1 ? new Color(99, 102, 241) : tabBg);
+            spriteBatch.Draw(_pixel, tabMyTracks, _soundCloudSection == 2 ? new Color(99, 102, 241) : tabBg);
+            spriteBatch.Draw(_pixel, tabPlaylists, _soundCloudSection == 3 ? new Color(99, 102, 241) : tabBg);
+            spriteBatch.DrawString(font, "Popular", new Vector2(tabPopular.X + 8, tabPopular.Y + 6), Color.White, 0f, Vector2.Zero, 0.8f, SpriteEffects.None, 0f);
+            spriteBatch.DrawString(font, "Search", new Vector2(tabSearch.X + 8, tabSearch.Y + 6), Color.White, 0f, Vector2.Zero, 0.8f, SpriteEffects.None, 0f);
+            spriteBatch.DrawString(font, "Likes", new Vector2(tabMyTracks.X + 8, tabMyTracks.Y + 6), Color.White, 0f, Vector2.Zero, 0.8f, SpriteEffects.None, 0f);
+            spriteBatch.DrawString(font, "Playlists", new Vector2(tabPlaylists.X + 8, tabPlaylists.Y + 6), Color.White, 0f, Vector2.Zero, 0.8f, SpriteEffects.None, 0f);
+
+            int searchRowH = 36;
+            int backButtonH = 28;
+
+            if (_soundCloudSection == 3 && _soundCloudSelectedPlaylist != null)
+            {
+                var backBounds = new Rectangle(panelBounds.X + PickerPadding, listAreaTop, 80, backButtonH);
+                spriteBatch.Draw(_pixel, backBounds, backBounds.Contains(_currentMouseState.Position) ? new Color(99, 102, 241) : new Color(60, 60, 70));
+                spriteBatch.DrawString(font, "< Back", new Vector2(backBounds.X + 4, backBounds.Y + 4), Color.White, 0f, Vector2.Zero, 0.85f, SpriteEffects.None, 0f);
+            }
+
+            if (_soundCloudSection == 1)
+            {
+                var searchBoxBounds = new Rectangle(panelBounds.X + PickerPadding, listAreaTop, panelBounds.Width - PickerPadding * 2 - 50, searchRowH - 4);
+                var goBounds = new Rectangle(searchBoxBounds.Right + 4, listAreaTop, 46, searchRowH - 4);
+                spriteBatch.Draw(_pixel, searchBoxBounds, new Color(50, 50, 58));
+                spriteBatch.Draw(_pixel, goBounds, goBounds.Contains(_currentMouseState.Position) ? new Color(99, 102, 241) : new Color(60, 60, 70));
+                string searchLabel = string.IsNullOrEmpty(_soundCloudSearchQuery) ? "Click a genre below or Go" : _soundCloudSearchQuery;
+                if (searchLabel.Length > 35) searchLabel = searchLabel.Substring(0, 32) + "...";
+                searchLabel = SanitizeForFont(searchLabel);
+                spriteBatch.DrawString(font, searchLabel, new Vector2(searchBoxBounds.X + 6, searchBoxBounds.Y + 6), new Color(180, 180, 180), 0f, Vector2.Zero, 0.85f, SpriteEffects.None, 0f);
+                spriteBatch.DrawString(font, "Go", new Vector2(goBounds.X + 14, goBounds.Y + 8), Color.White, 0f, Vector2.Zero, 0.85f, SpriteEffects.None, 0f);
+                int presetY = listAreaTop + searchRowH + 4;
+                string[] presets = { "electronic", "chill", "rock", "pop", "jazz", "hip hop" };
+                int pw = (panelBounds.Width - PickerPadding * 2 - 20) / 3;
+                for (int i = 0; i < presets.Length; i++)
+                {
+                    int col = i % 3, rw = i / 3;
+                    var preBounds = new Rectangle(panelBounds.X + PickerPadding + col * (pw + 6), presetY + rw * 26, pw, 22);
+                    spriteBatch.Draw(_pixel, preBounds, preBounds.Contains(_currentMouseState.Position) ? new Color(99, 102, 241) : new Color(55, 55, 65));
+                    spriteBatch.DrawString(font, presets[i], new Vector2(preBounds.X + 6, preBounds.Y + 3), Color.White, 0f, Vector2.Zero, 0.75f, SpriteEffects.None, 0f);
+                }
+            }
+
+            // Scissor the list area and draw scrollable content
+            Rectangle originalScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
+            spriteBatch.End();
+            if (_soundCloudListBounds.Height > 0)
+            {
+                spriteBatch.GraphicsDevice.ScissorRectangle = _soundCloudListBounds;
+                spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState { ScissorTestEnable = true, CullMode = CullMode.None };
+                spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, DepthStencilState.None, spriteBatch.GraphicsDevice.RasterizerState);
+
+            if (_soundCloudLoading || _soundCloudDownloadingTrackId.HasValue)
+            {
+                string msg = _soundCloudDownloadingTrackId.HasValue ? "Loading track..." : "Loading...";
+                spriteBatch.DrawString(font, msg, new Vector2(_soundCloudListBounds.X, _soundCloudListBounds.Y), new Color(200, 200, 200), 0f, Vector2.Zero, 0.9f, SpriteEffects.None, 0f);
+            }
+            else if ((_soundCloudSection == 2 || _soundCloudSection == 3) && !_soundCloudClient.HasUserToken)
+            {
+                var signInBounds = new Rectangle(_soundCloudListBounds.X, _soundCloudListBounds.Y, _soundCloudListBounds.Width, 40);
+                spriteBatch.Draw(_pixel, signInBounds, new Color(60, 60, 70));
+                if (signInBounds.Contains(_currentMouseState.Position)) spriteBatch.Draw(_pixel, signInBounds, new Color(99, 102, 241, 80));
+                spriteBatch.DrawString(font, "Sign in with SoundCloud", new Vector2(signInBounds.X + (signInBounds.Width - font.MeasureString("Sign in with SoundCloud").X * 0.95f) / 2f, signInBounds.Y + 10), Color.White, 0f, Vector2.Zero, 0.95f, SpriteEffects.None, 0f);
+            }
+            else if (!string.IsNullOrEmpty(_soundCloudMessage))
+            {
+                string msg = SanitizeForFont(_soundCloudMessage);
+                spriteBatch.DrawString(font, msg, new Vector2(_soundCloudListBounds.X, _soundCloudListBounds.Y), new Color(220, 120, 120), 0f, Vector2.Zero, 0.85f, SpriteEffects.None, 0f);
+            }
+            else if (_soundCloudSection == 3 && _soundCloudSelectedPlaylist == null && (_soundCloudPlaylists?.Count ?? 0) > 0)
+            {
+                var list = _soundCloudPlaylists ?? new List<SoundCloudPlaylist>();
+                for (int i = 0; i < list.Count; i++)
+                {
+                    int rowY = _soundCloudListBounds.Y + i * TrackRowHeight - _soundCloudScrollOffset;
+                    if (rowY + TrackRowHeight < _soundCloudListBounds.Y || rowY > _soundCloudListBounds.Bottom) continue;
+                    var rowBounds = new Rectangle(_soundCloudListBounds.X, rowY, _soundCloudListBounds.Width, TrackRowHeight);
+                    bool hover = rowBounds.Contains(_currentMouseState.Position);
+                    if (hover) spriteBatch.Draw(_pixel, rowBounds, new Color(60, 60, 75));
+                    var pl = list[i];
+                    if (pl == null) continue;
+                    string title = string.IsNullOrEmpty(pl.Title) ? "Untitled" : pl.Title;
+                    if (title.Length > 50) title = title.Substring(0, 47) + "...";
+                    title = SanitizeForFont(title);
+                    try { spriteBatch.DrawString(font, title, new Vector2(rowBounds.X + 4, rowBounds.Y + (TrackRowHeight - font.LineSpacing * 0.85f) / 2), Color.White, 0f, Vector2.Zero, 0.85f, SpriteEffects.None, 0f); }
+                    catch { spriteBatch.DrawString(font, "?", new Vector2(rowBounds.X + 4, rowBounds.Y + (TrackRowHeight - font.LineSpacing * 0.85f) / 2), Color.White, 0f, Vector2.Zero, 0.85f, SpriteEffects.None, 0f); }
+                }
+            }
+            else
+            {
+                var trackList = _soundCloudSection == 3 && _soundCloudSelectedPlaylist != null ? _soundCloudSelectedPlaylist?.Tracks : _soundCloudTracks;
+                if (trackList != null && trackList.Count > 0)
+                {
+                    for (int i = 0; i < trackList.Count; i++)
+                    {
+                        int rowY = _soundCloudListBounds.Y + i * TrackRowHeight - _soundCloudScrollOffset;
+                        if (rowY + TrackRowHeight < _soundCloudListBounds.Y || rowY > _soundCloudListBounds.Bottom) continue;
+                        var rowBounds = new Rectangle(_soundCloudListBounds.X, rowY, _soundCloudListBounds.Width, TrackRowHeight);
+                        bool hover = rowBounds.Contains(_currentMouseState.Position) && !_soundCloudDownloadingTrackId.HasValue;
+                        if (hover) spriteBatch.Draw(_pixel, rowBounds, new Color(60, 60, 75));
+                        var track = trackList[i];
+                        string title = string.IsNullOrEmpty(track.Title) ? "Untitled" : track.Title;
+                        if (title.Length > 50) title = title.Substring(0, 47) + "...";
+                        title = SanitizeForFont(title);
+                        try { spriteBatch.DrawString(font, title, new Vector2(rowBounds.X + 4, rowBounds.Y + (TrackRowHeight - font.LineSpacing * 0.85f) / 2), Color.White, 0f, Vector2.Zero, 0.85f, SpriteEffects.None, 0f); }
+                        catch { spriteBatch.DrawString(font, "?", new Vector2(rowBounds.X + 4, rowBounds.Y + (TrackRowHeight - font.LineSpacing * 0.85f) / 2), Color.White, 0f, Vector2.Zero, 0.85f, SpriteEffects.None, 0f); }
+                    }
+                }
+                else if (_soundCloudSection == 1 && (_soundCloudTracks?.Count ?? 0) == 0 && !_soundCloudLoading)
+                {
+                    spriteBatch.DrawString(font, "Enter a search term above and click Go.", new Vector2(_soundCloudListBounds.X, _soundCloudListBounds.Y), new Color(180, 180, 180), 0f, Vector2.Zero, 0.85f, SpriteEffects.None, 0f);
+                }
+                else if (_soundCloudSection == 2 && (_soundCloudTracks?.Count ?? 0) == 0 && !_soundCloudLoading)
+                {
+                    spriteBatch.DrawString(font, "No likes.", new Vector2(_soundCloudListBounds.X, _soundCloudListBounds.Y), new Color(180, 180, 180), 0f, Vector2.Zero, 0.9f, SpriteEffects.None, 0f);
+                }
+                else if (_soundCloudSection == 3 && (_soundCloudPlaylists?.Count ?? 0) == 0 && _soundCloudSelectedPlaylist == null && !_soundCloudLoading)
+                {
+                    spriteBatch.DrawString(font, "No playlists.", new Vector2(_soundCloudListBounds.X, _soundCloudListBounds.Y), new Color(180, 180, 180), 0f, Vector2.Zero, 0.9f, SpriteEffects.None, 0f);
+                }
+                else if ((_soundCloudTracks?.Count ?? 0) == 0 && !_soundCloudLoading)
+                {
+                    spriteBatch.DrawString(font, "No tracks found.", new Vector2(_soundCloudListBounds.X, _soundCloudListBounds.Y), new Color(180, 180, 180), 0f, Vector2.Zero, 0.9f, SpriteEffects.None, 0f);
+                }
+            }
+
+                spriteBatch.End();
+            }
+            spriteBatch.GraphicsDevice.ScissorRectangle = originalScissor;
+            spriteBatch.GraphicsDevice.RasterizerState = new RasterizerState { ScissorTestEnable = false };
+            spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, DepthStencilState.None, spriteBatch.GraphicsDevice.RasterizerState);
+
+            if (_soundCloudNeedsScrollbar && !_soundCloudScrollbarBounds.IsEmpty)
+            {
+                spriteBatch.Draw(_pixel, _soundCloudScrollbarBounds, new Color(55, 65, 81));
+                int thumbHeight = Math.Max(20, (int)(_soundCloudScrollbarBounds.Height * (float)_soundCloudListBounds.Height / Math.Max(1, _soundCloudListContentHeight)));
+                int maxScroll = Math.Max(1, _soundCloudListContentHeight - _soundCloudListBounds.Height);
+                int thumbY = _soundCloudScrollbarBounds.Y + (int)((_soundCloudScrollbarBounds.Height - thumbHeight) * (_soundCloudScrollOffset / (float)maxScroll));
+                var thumbBounds = new Rectangle(_soundCloudScrollbarBounds.X + 2, thumbY + 2, _soundCloudScrollbarBounds.Width - 4, thumbHeight - 4);
+                bool thumbHover = thumbBounds.Contains(_currentMouseState.Position) || _soundCloudIsDraggingScrollbar;
+                spriteBatch.Draw(_pixel, thumbBounds, thumbHover ? new Color(99, 102, 241) : new Color(75, 85, 99));
+            }
+        }
+
         public void Draw(SpriteBatch spriteBatch)
         {
             if (_windowManagement?.IsVisible() != true) return;
 
             _windowManagement.Draw(spriteBatch, "Music");
 
+            try
+            {
             // Viz area (top)
             if (_vizBounds.Width > 0 && _vizBounds.Height > 0)
                 spriteBatch.Draw(_pixel, _vizBounds, new Color(25, 25, 30));
@@ -270,6 +934,21 @@ namespace MarySGameEngine.Modules.Music_essential
                 }
             }
 
+            // Show SoundCloud error in main view when picker is closed (e.g. "Could not load track. Sign in...")
+            if (!_soundCloudPickerVisible && !string.IsNullOrEmpty(_soundCloudMessage) && _contentBounds.Width > 0)
+            {
+                SpriteFont msgFont = _uiFont ?? _menuFont;
+                if (msgFont != null)
+                {
+                    string msg = SanitizeForFont(_soundCloudMessage);
+                    if (msg.Length > 60) msg = msg.Substring(0, 57) + "...";
+                    var msgSize = msgFont.MeasureString(msg) * 0.9f;
+                    float msgY = _toolbarBounds.Y > 0 ? _toolbarBounds.Y - 22 : _contentBounds.Y + 8;
+                    var msgPos = new Vector2(_contentBounds.X + (_contentBounds.Width - msgSize.X) / 2f, msgY);
+                    spriteBatch.DrawString(msgFont, msg, msgPos, new Color(220, 120, 120), 0f, Vector2.Zero, 0.9f, SpriteEffects.None, 0f);
+                }
+            }
+
             // Toolbar at bottom
             spriteBatch.Draw(_pixel, _toolbarBounds, new Color(50, 50, 55));
             SpriteFont font = _uiFont ?? _menuFont;
@@ -277,10 +956,13 @@ namespace MarySGameEngine.Modules.Music_essential
             const float timeScale = 0.95f;
 
             // Row 1: Song name centered, time on right
-            string label = string.IsNullOrEmpty(_currentFilePath)
-                ? "No file loaded"
-                : System.IO.Path.GetFileName(_currentFilePath);
+            string label = _soundCloudDownloadingTrackId.HasValue
+                ? "Loading track..."
+                : (string.IsNullOrEmpty(_currentTrackTitle)
+                    ? (string.IsNullOrEmpty(_currentFilePath) ? "No file loaded" : System.IO.Path.GetFileName(_currentFilePath))
+                    : _currentTrackTitle);
             if (label.Length > 45) label = label.Substring(0, 42) + "...";
+            label = SanitizeForFont(label);
             float labelW = font.MeasureString(label).X * titleScale;
             var labelPos = new Vector2(_toolbarBounds.X + (_toolbarBounds.Width - labelW) / 2f, _toolbarBounds.Y + (34 - font.LineSpacing * titleScale) / 2);
             spriteBatch.DrawString(font, label, labelPos, new Color(220, 220, 220), 0f, Vector2.Zero, titleScale, SpriteEffects.None, 0f);
@@ -311,7 +993,7 @@ namespace MarySGameEngine.Modules.Music_essential
                 DrawIconButton(spriteBatch, _playPauseButtonBounds, playPauseTexture, hoverPlayPause);
             }
 
-            DrawButton(spriteBatch, _openButtonBounds, "Open", _openButtonBounds.Contains(_currentMouseState.Position));
+            DrawButton(spriteBatch, _openButtonBounds, "SC", _openButtonBounds.Contains(_currentMouseState.Position));
             DrawButton(spriteBatch, _stopButtonBounds, "Stop", _stopButtonBounds.Contains(_currentMouseState.Position));
 
             // Volume slider (right side of row 2) + percent text
@@ -344,7 +1026,32 @@ namespace MarySGameEngine.Modules.Music_essential
                 spriteBatch.DrawString(font, volText, volPos, new Color(220, 220, 220), 0f, Vector2.Zero, volScale, SpriteEffects.None, 0f);
             }
 
+            // "Loading track..." overlay on top of everything when connecting (so user always sees it)
+            if (_soundCloudDownloadingTrackId.HasValue && _contentBounds.Width > 0 && _contentBounds.Height > 0)
+            {
+                SpriteFont overlayFont = _uiFont ?? _menuFont;
+                if (overlayFont != null)
+                {
+                    spriteBatch.Draw(_pixel, _contentBounds, new Color(0, 0, 0, 200));
+                    const float overlayScale = 1.35f;
+                    string loadingText = "Loading track...";
+                    var size = overlayFont.MeasureString(loadingText) * overlayScale;
+                    var pos = new Vector2(
+                        _contentBounds.X + (_contentBounds.Width - size.X) / 2f,
+                        _contentBounds.Y + (_contentBounds.Height - size.Y) / 2f);
+                    spriteBatch.DrawString(overlayFont, loadingText, pos, new Color(250, 250, 255), 0f, Vector2.Zero, overlayScale, SpriteEffects.None, 0f);
+                }
+            }
+
+            if (_soundCloudPickerVisible)
+            {
+                try { DrawSoundCloudPicker(spriteBatch); }
+                catch (Exception ex) { _engine?.Log($"Music: Draw SoundCloud error: {ex.Message}"); }
+            }
+
             _windowManagement.DrawOverlay(spriteBatch);
+            }
+            catch (Exception ex) { _engine?.Log($"Music: Draw error: {ex.Message}"); }
         }
 
         private static string FormatTime(TimeSpan t)
@@ -352,6 +1059,20 @@ namespace MarySGameEngine.Modules.Music_essential
             if (t.TotalHours >= 1)
                 return $"{(int)t.TotalHours}:{t.Minutes:D2}:{t.Seconds:D2}";
             return $"{(int)t.TotalMinutes}:{t.Seconds:D2}";
+        }
+
+        /// <summary>Keeps only characters safe for SpriteFont (printable ASCII) to avoid crash when track titles contain Unicode.</summary>
+        private static string SanitizeForFont(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text ?? "";
+            var sb = new StringBuilder(text.Length);
+            foreach (char c in text)
+            {
+                if (c >= 32 && c <= 126) sb.Append(c);
+                else if (c == '\n' || c == '\r' || c == '\t') sb.Append(' ');
+                else sb.Append('?');
+            }
+            return sb.ToString();
         }
 
         private static Texture2D CreateCircleTexture(GraphicsDevice graphicsDevice, int size)
