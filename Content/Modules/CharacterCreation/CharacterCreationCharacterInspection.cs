@@ -127,19 +127,43 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 _nameConfirmButtonBounds = new Rectangle(confirmBtnX, confirmBtnY, confirmBtnW, confirmBtnH);
                 _nameEditButtonBounds = Rectangle.Empty;
             }
+
+            // Description area: header (Description + Edit/Save) and content bounds (for hit test)
+            int descScreenY = _inspectionDescriptionBounds.Y + scrollY;
+            int descW = _inspectionDescriptionBounds.Width;
+            int descH = _inspectionDescriptionBounds.Height;
+            const float descHeaderBoldScale = 1.2f;
+            int descHeaderHeight = (int)(uiFont.MeasureString("Description").Y * descHeaderBoldScale) + 8;
+            float descTitleWidth = uiFont.MeasureString("Description").X * descHeaderBoldScale;
+            string descBtnLabel = _isEditingDescription ? "Save" : "Edit";
+            Vector2 descBtnSize = uiFont.MeasureString(descBtnLabel);
+            int descBtnW = (int)descBtnSize.X + 16;
+            int descBtnH = (int)descBtnSize.Y + 6;
+            int descBtnX = _inspectionDescriptionBounds.X + 10 + CATEGORY_BAR_ACCENT_WIDTH + (int)descTitleWidth + 12;
+            int descBtnY = descScreenY + (descHeaderHeight - descBtnH) / 2;
+            _descriptionEditButtonBounds = new Rectangle(descBtnX, descBtnY, descBtnW, descBtnH);
+            _descriptionContentBounds = new Rectangle(
+                _inspectionDescriptionBounds.X + DESCRIPTION_TEXT_PADDING,
+                descScreenY + descHeaderHeight + DESCRIPTION_TEXT_PADDING,
+                Math.Max(0, descW - DESCRIPTION_TEXT_PADDING * 2),
+                Math.Max(0, descH - descHeaderHeight - DESCRIPTION_TEXT_PADDING * 2));
         }
 
         private void DrawCharacterInspectionView(SpriteBatch spriteBatch, int scrollOffset, Rectangle scissorRect, SpriteFont uiFont)
         {
             int scrollY = -scrollOffset;
+            const float headerBoldScale = 1.2f;
 
             int rowVisibleWidth = Math.Min(_nameInputBounds.Width, Math.Max(0, scissorRect.Right - _nameInputBounds.X));
             Rectangle nameBounds = new Rectangle(_nameInputBounds.X, _nameInputBounds.Y + scrollY, rowVisibleWidth, _nameInputBounds.Height);
             if (IsVisible(nameBounds, scissorRect))
             {
+                // Top bar background strip (modern header look)
+                Rectangle topBarBg = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, nameBounds.Y, _centerPanelBounds.Width - PANEL_PADDING * 2, nameBounds.Height);
+                if (IsVisible(topBarBg, scissorRect))
+                    spriteBatch.Draw(_pixel, topBarBg, INSPECTION_ROW_BG);
                 int rowY = nameBounds.Y;
                 int rowH = nameBounds.Height;
-                const float headerBoldScale = 1.2f;
                 const int idToNameGap = 12;
 
                 string backLabel = "BACK";
@@ -153,9 +177,12 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 Rectangle backBtnRect = new Rectangle(backBtnX, backBtnY, backBtnW, backBtnH);
                 _backButtonBounds = backBtnRect;
                 bool backHover = backBtnRect.Contains(_hoverMousePosition);
-                spriteBatch.Draw(_pixel, backBtnRect, backHover ? BUTTON_HOVER : BUTTON_COLOR);
-                DrawBorder(spriteBatch, backBtnRect, SEARCH_BORDER);
-                spriteBatch.DrawString(uiFont, backLabel, new Vector2(backBtnRect.X + (backBtnW - backLabelSize.X) / 2, backBtnRect.Y + (backBtnH - backLabelSize.Y) / 2), TEXT_COLOR);
+                float backPulse = GetListViewHeaderPulse();
+                Color backBase = backHover ? new Color(120, 90, 200) : BUTTON_ACTIVE;
+                Color backColor = Color.Lerp(backBase, new Color(165, 130, 230), backPulse * 0.12f);
+                spriteBatch.Draw(_pixel, backBtnRect, backColor);
+                DrawBorder(spriteBatch, backBtnRect, Color.Lerp(new Color(backColor.R + 30, backColor.G + 30, backColor.B + 30), new Color(200, 180, 255), backPulse * 0.2f));
+                spriteBatch.DrawString(uiFont, backLabel, new Vector2(backBtnRect.X + (backBtnW - backLabelSize.X) / 2, backBtnRect.Y + (backBtnH - backLabelSize.Y) / 2), Color.White);
 
                 int leftMargin = 10 + backBtnW + 8;
                 int idX = nameBounds.X + leftMargin;
@@ -191,9 +218,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     _idEditButtonBounds = editBtnRect;
                     bool idEditDisabled = _isEditingName;
                     bool editHover = !idEditDisabled && editBtnRect.Contains(_hoverMousePosition);
-                    Color idEditBg = idEditDisabled ? new Color(BUTTON_COLOR.R / 2, BUTTON_COLOR.G / 2, BUTTON_COLOR.B / 2) : (editHover ? BUTTON_HOVER : BUTTON_COLOR);
-                    Color idEditBorder = idEditDisabled ? new Color(SEARCH_BORDER.R / 2, SEARCH_BORDER.G / 2, SEARCH_BORDER.B / 2) : SEARCH_BORDER;
-                    Color idEditText = idEditDisabled ? TEXT_SECONDARY : TEXT_COLOR;
+                    float idEditPulse = GetListViewHeaderPulse();
+                    Color idEditBase = idEditDisabled ? new Color(BUTTON_COLOR.R / 2, BUTTON_COLOR.G / 2, BUTTON_COLOR.B / 2) : (editHover ? new Color(120, 90, 200) : BUTTON_ACTIVE);
+                    Color idEditBg = idEditDisabled ? idEditBase : Color.Lerp(idEditBase, new Color(165, 130, 230), idEditPulse * 0.12f);
+                    Color idEditBorder = idEditDisabled ? new Color(SEARCH_BORDER.R / 2, SEARCH_BORDER.G / 2, SEARCH_BORDER.B / 2) : Color.Lerp(new Color(idEditBg.R + 30, idEditBg.G + 30, idEditBg.B + 30), new Color(200, 180, 255), idEditPulse * 0.2f);
+                    Color idEditText = idEditDisabled ? TEXT_SECONDARY : Color.White;
                     spriteBatch.Draw(_pixel, editBtnRect, idEditBg);
                     DrawBorder(spriteBatch, editBtnRect, idEditBorder);
                     spriteBatch.DrawString(uiFont, editLabel, new Vector2(editBtnRect.X + (editBtnW - editLabelSize.X) / 2, editBtnRect.Y + (editBtnH - editLabelSize.Y) / 2), idEditText);
@@ -220,8 +249,8 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     int inputY = rowY + 2;
                     Rectangle inputRect = new Rectangle(inputX, inputY, inputW, inputH);
                     _idTextBounds = inputRect;
-                    spriteBatch.Draw(_pixel, inputRect, new Color(25, 25, 25));
-                    DrawBorder(spriteBatch, inputRect, new Color(147, 112, 219));
+                    spriteBatch.Draw(_pixel, inputRect, INSPECTION_INPUT_BG);
+                    DrawBorder(spriteBatch, inputRect, INSPECTION_ACCENT_BORDER);
                     Rectangle idClip = Rectangle.Intersect(scissorRect, inputRect);
                     if (idClip.Width > 0 && idClip.Height > 0)
                     {
@@ -283,9 +312,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     _nameEditButtonBounds = editBtnRect;
                     bool nameEditDisabled = _isEditingId;
                     bool nameEditHover = !nameEditDisabled && editBtnRect.Contains(_hoverMousePosition);
-                    Color nameEditBg = nameEditDisabled ? new Color(BUTTON_COLOR.R / 2, BUTTON_COLOR.G / 2, BUTTON_COLOR.B / 2) : (nameEditHover ? BUTTON_HOVER : BUTTON_COLOR);
-                    Color nameEditBorder = nameEditDisabled ? new Color(SEARCH_BORDER.R / 2, SEARCH_BORDER.G / 2, SEARCH_BORDER.B / 2) : SEARCH_BORDER;
-                    Color nameEditText = nameEditDisabled ? TEXT_SECONDARY : TEXT_COLOR;
+                    float nameEditPulse = GetListViewHeaderPulse();
+                    Color nameEditBase = nameEditDisabled ? new Color(BUTTON_COLOR.R / 2, BUTTON_COLOR.G / 2, BUTTON_COLOR.B / 2) : (nameEditHover ? new Color(120, 90, 200) : BUTTON_ACTIVE);
+                    Color nameEditBg = nameEditDisabled ? nameEditBase : Color.Lerp(nameEditBase, new Color(165, 130, 230), nameEditPulse * 0.12f);
+                    Color nameEditBorder = nameEditDisabled ? new Color(SEARCH_BORDER.R / 2, SEARCH_BORDER.G / 2, SEARCH_BORDER.B / 2) : Color.Lerp(new Color(nameEditBg.R + 30, nameEditBg.G + 30, nameEditBg.B + 30), new Color(200, 180, 255), nameEditPulse * 0.2f);
+                    Color nameEditText = nameEditDisabled ? TEXT_SECONDARY : Color.White;
                     spriteBatch.Draw(_pixel, editBtnRect, nameEditBg);
                     DrawBorder(spriteBatch, editBtnRect, nameEditBorder);
                     spriteBatch.DrawString(uiFont, editLabel, new Vector2(editBtnRect.X + (editBtnW - editLabelSize.X) / 2, editBtnRect.Y + (editBtnH - editLabelSize.Y) / 2), nameEditText);
@@ -309,8 +340,8 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     int inputY = rowY + 2;
                     Rectangle inputRect = new Rectangle(inputX, inputY, inputW, inputH);
                     _nameTextBounds = inputRect;
-                    spriteBatch.Draw(_pixel, inputRect, new Color(25, 25, 25));
-                    DrawBorder(spriteBatch, inputRect, new Color(147, 112, 219));
+                    spriteBatch.Draw(_pixel, inputRect, INSPECTION_INPUT_BG);
+                    DrawBorder(spriteBatch, inputRect, INSPECTION_ACCENT_BORDER);
                     int nameSelMin = Math.Min(_nameCursorPosition, _nameAnchorPosition);
                     int nameSelMax = Math.Max(_nameCursorPosition, _nameAnchorPosition);
                     if (nameSelMin < nameSelMax)
@@ -338,103 +369,341 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 }
             }
 
+            // Horizontal separator between top bar (Back, ID, Name) and content below
+            int topBarBottom = nameBounds.Bottom;
+            Rectangle hrRect = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, topBarBottom, _centerPanelBounds.Width - PANEL_PADDING * 2, 1);
+            if (IsVisible(hrRect, scissorRect))
+                spriteBatch.Draw(_pixel, hrRect, INSPECTION_SEPARATOR);
+
             Rectangle imageBounds = new Rectangle(_characterImageBounds.X, _characterImageBounds.Y + scrollY, _characterImageBounds.Width, _characterImageBounds.Height);
             if (IsVisible(imageBounds, scissorRect))
             {
-                spriteBatch.Draw(_pixel, imageBounds, new Color(30, 30, 30));
-                DrawBorder(spriteBatch, imageBounds, PANEL_BORDER);
+                spriteBatch.Draw(_pixel, imageBounds, INSPECTION_IMAGE_BG);
+                DrawBorder(spriteBatch, imageBounds, INSPECTION_ACCENT_BORDER);
                 Vector2 imageTextPos = new Vector2(imageBounds.X + imageBounds.Width / 2 - 50, imageBounds.Y + imageBounds.Height / 2);
                 spriteBatch.DrawString(uiFont, "Knight_Warrior", imageTextPos, TEXT_SECONDARY);
             }
 
-            int statsY = imageBounds.Bottom + PANEL_PADDING;
-            Rectangle statsHeaderBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, statsY, 200, 30);
-            if (IsVisible(statsHeaderBounds, scissorRect))
+            Rectangle descBounds = new Rectangle(_inspectionDescriptionBounds.X, _inspectionDescriptionBounds.Y + scrollY, _inspectionDescriptionBounds.Width, _inspectionDescriptionBounds.Height);
+            if (descBounds.Width > 0 && descBounds.Height > 0 && IsVisible(descBounds, scissorRect))
             {
-                spriteBatch.Draw(_pixel, statsHeaderBounds, SECTION_HEADER);
-                Vector2 statsHeaderPos = new Vector2(statsHeaderBounds.X + 10, statsHeaderBounds.Y + 5);
-                spriteBatch.DrawString(uiFont, "BASE STATS", statsHeaderPos, TEXT_COLOR);
+                // Header: same style as BASE STATS / TRAITS (DrawCategoryTitleBar) with Edit/Save right after "Description"
+                int descHeaderHeight = (int)(uiFont.MeasureString("Description").Y * headerBoldScale) + 8;
+                Rectangle descHeaderRect = new Rectangle(descBounds.X, descBounds.Y, descBounds.Width, descHeaderHeight);
+                DrawCategoryTitleBar(spriteBatch, descHeaderRect, "Description", uiFont, headerBoldScale);
+                string descBtnLabel = _isEditingDescription ? "Save" : "Edit";
+                Vector2 descBtnLabelSize = uiFont.MeasureString(descBtnLabel);
+                int descBtnW = (int)descBtnLabelSize.X + 16;
+                int descBtnH = (int)descBtnLabelSize.Y + 6;
+                int descBtnX = descBounds.X + 10 + CATEGORY_BAR_ACCENT_WIDTH + (int)(uiFont.MeasureString("Description").X * headerBoldScale) + 12;
+                int descBtnY = descBounds.Y + (descHeaderHeight - descBtnH) / 2;
+                Rectangle descEditBtnRect = new Rectangle(descBtnX, descBtnY, descBtnW, descBtnH);
+                bool descBtnHover = descEditBtnRect.Contains(_hoverMousePosition);
+                float descBtnPulse = GetListViewHeaderPulse();
+                Color descBtnBase = descBtnHover ? new Color(120, 90, 200) : BUTTON_ACTIVE;
+                Color descBtnBg = Color.Lerp(descBtnBase, new Color(165, 130, 230), descBtnPulse * 0.12f);
+                spriteBatch.Draw(_pixel, descEditBtnRect, descBtnBg);
+                DrawBorder(spriteBatch, descEditBtnRect, Color.Lerp(new Color(descBtnBg.R + 30, descBtnBg.G + 30, descBtnBg.B + 30), new Color(200, 180, 255), descBtnPulse * 0.2f));
+                spriteBatch.DrawString(uiFont, descBtnLabel, new Vector2(descEditBtnRect.X + (descBtnW - descBtnLabelSize.X) / 2, descEditBtnRect.Y + (descBtnH - descBtnLabelSize.Y) / 2), Color.White);
+                // Content area below header: subtle card background when not editing
+                Rectangle descContentRect = new Rectangle(descBounds.X + DESCRIPTION_TEXT_PADDING, descBounds.Y + descHeaderHeight + DESCRIPTION_TEXT_PADDING,
+                    Math.Max(0, descBounds.Width - DESCRIPTION_TEXT_PADDING * 2), Math.Max(0, descBounds.Height - descHeaderHeight - DESCRIPTION_TEXT_PADDING * 2));
+                if (_isEditingDescription)
+                    DrawDescriptionEditArea(spriteBatch, uiFont, descContentRect, scissorRect, scrollY);
+                else
+                {
+                    if (IsVisible(descContentRect, scissorRect))
+                    {
+                        spriteBatch.Draw(_pixel, descContentRect, INSPECTION_CARD_BG);
+                        DrawBorder(spriteBatch, descContentRect, INSPECTION_ACCENT_BORDER);
+                    }
+                    DrawDescriptionTextView(spriteBatch, uiFont, descContentRect, scissorRect);
+                }
             }
+
+            int statsY = Math.Max(imageBounds.Bottom, descBounds.Bottom) + PANEL_PADDING;
+            int statsHeaderHeight = (int)(uiFont.MeasureString("BASE STATS").Y * headerBoldScale) + 8;
+            Rectangle statsHeaderBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, statsY, _centerPanelBounds.Width - PANEL_PADDING * 2, statsHeaderHeight);
+            if (IsVisible(statsHeaderBounds, scissorRect))
+                DrawCategoryTitleBar(spriteBatch, statsHeaderBounds, "BASE STATS", uiFont, headerBoldScale);
 
             int statY = statsHeaderBounds.Bottom + 10;
-            foreach (var stat in _baseStats)
+            if (_baseStats.Count == 0)
             {
-                Rectangle statBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, statY, 200, 25);
-                if (IsVisible(statBounds, scissorRect))
+                Rectangle emptyCard = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, statY, _centerPanelBounds.Width - PANEL_PADDING * 2, 70);
+                if (IsVisible(emptyCard, scissorRect))
                 {
-                    Vector2 statNamePos = new Vector2(statBounds.X + 10, statY);
-                    spriteBatch.DrawString(uiFont, $"{stat.Name}: {stat.Value}", statNamePos, TEXT_COLOR);
-                    Rectangle barBounds = new Rectangle(statBounds.X + 10, statY + 20, 150, 8);
-                    spriteBatch.Draw(_pixel, barBounds, STAT_BAR_BACKGROUND);
-                    int fillWidth = (int)(barBounds.Width * ((float)stat.Value / stat.MaxValue));
-                    Rectangle fillBounds = new Rectangle(barBounds.X, barBounds.Y, fillWidth, barBounds.Height);
-                    spriteBatch.Draw(_pixel, fillBounds, STAT_BAR_FILL);
+                    spriteBatch.Draw(_pixel, emptyCard, INSPECTION_CARD_BG);
+                    DrawBorder(spriteBatch, emptyCard, INSPECTION_ACCENT_BORDER);
                 }
-                statY += 35;
+                DrawEmptyInspectionSection(spriteBatch, uiFont, _centerPanelBounds.X + PANEL_PADDING, statY, _centerPanelBounds.Width - PANEL_PADDING * 2, 70, scissorRect, "There are no stats yet, create or link one.");
+                statY += 70;
             }
-
-            int rightStatsY = statsHeaderBounds.Y;
-            int rightStatsX = _centerPanelBounds.Right - 250;
-            Rectangle healthBounds = new Rectangle(rightStatsX, rightStatsY, 250, 25);
-            if (IsVisible(healthBounds, scissorRect))
-                DrawStatDisplay(spriteBatch, "Health: 120 / 120", rightStatsX, rightStatsY, Color.Red);
-            Rectangle actionPointsBounds = new Rectangle(rightStatsX, rightStatsY + 30, 250, 25);
-            if (IsVisible(actionPointsBounds, scissorRect))
-                DrawStatDisplay(spriteBatch, "Action Points: 8", rightStatsX, rightStatsY + 30, Color.Gray);
-            Rectangle initiativeBounds = new Rectangle(rightStatsX, rightStatsY + 60, 250, 25);
-            if (IsVisible(initiativeBounds, scissorRect))
-                DrawStatDisplay(spriteBatch, "Initiative: 12", rightStatsX, rightStatsY + 60, Color.Yellow);
+            else
+            {
+                int cardContentH = _baseStats.Count * 35 + 12;
+                Rectangle statsCard = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, statY, _centerPanelBounds.Width - PANEL_PADDING * 2, cardContentH);
+                if (IsVisible(statsCard, scissorRect))
+                {
+                    spriteBatch.Draw(_pixel, statsCard, INSPECTION_CARD_BG);
+                    DrawBorder(spriteBatch, statsCard, INSPECTION_ACCENT_BORDER);
+                }
+                foreach (var stat in _baseStats)
+                {
+                    Rectangle statBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, statY, 200, 25);
+                    if (IsVisible(statBounds, scissorRect))
+                    {
+                        Vector2 statNamePos = new Vector2(statBounds.X + 10, statY);
+                        spriteBatch.DrawString(uiFont, $"{stat.Name}: {stat.Value}", statNamePos, TEXT_COLOR);
+                        Rectangle barBounds = new Rectangle(statBounds.X + 10, statY + 20, 150, 8);
+                        spriteBatch.Draw(_pixel, barBounds, STAT_BAR_TRACK_INSPECTION);
+                        int maxVal = Math.Max(1, stat.MaxValue);
+                        int fillWidth = (int)(barBounds.Width * ((float)stat.Value / maxVal));
+                        Rectangle fillBounds = new Rectangle(barBounds.X, barBounds.Y, fillWidth, barBounds.Height);
+                        spriteBatch.Draw(_pixel, fillBounds, STAT_BAR_FILL);
+                    }
+                    statY += 35;
+                }
+                statY += 12;
+            }
 
             int traitsSectionY = statY + PANEL_PADDING;
-            Rectangle traitsSectionHeader = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, traitsSectionY, _centerPanelBounds.Width - PANEL_PADDING * 2, 30);
+            int traitsHeaderHeight = (int)(uiFont.MeasureString("TRAITS & PERKS").Y * headerBoldScale) + 8;
+            Rectangle traitsSectionHeader = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, traitsSectionY, _centerPanelBounds.Width - PANEL_PADDING * 2, traitsHeaderHeight);
             if (IsVisible(traitsSectionHeader, scissorRect))
-            {
-                spriteBatch.Draw(_pixel, traitsSectionHeader, SECTION_HEADER);
-                Vector2 traitsSectionPos = new Vector2(traitsSectionHeader.X + 10, traitsSectionHeader.Y + 5);
-                spriteBatch.DrawString(uiFont, "TRAITS & PERKS", traitsSectionPos, TEXT_COLOR);
-            }
+                DrawCategoryTitleBar(spriteBatch, traitsSectionHeader, "TRAITS & PERKS", uiFont, headerBoldScale);
 
             int charTraitY = traitsSectionHeader.Bottom + 10;
-            foreach (var trait in _characterTraits)
+            if (_characterTraits.Count == 0)
             {
-                Rectangle traitBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, charTraitY, 300, 30);
-                if (IsVisible(traitBounds, scissorRect))
+                Rectangle emptyCard = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, charTraitY, _centerPanelBounds.Width - PANEL_PADDING * 2, 70);
+                if (IsVisible(emptyCard, scissorRect))
                 {
-                    Vector2 traitNamePos = new Vector2(traitBounds.X + 10, traitBounds.Y + 5);
-                    spriteBatch.DrawString(uiFont, trait.Name, traitNamePos, TEXT_COLOR);
-                    Rectangle editButtonBounds = new Rectangle(traitBounds.Right - 100, traitBounds.Y, 50, 25);
-                    spriteBatch.Draw(_pixel, editButtonBounds, BUTTON_COLOR);
-                    DrawBorder(spriteBatch, editButtonBounds, PANEL_BORDER);
-                    Vector2 editPos = new Vector2(editButtonBounds.X + 10, editButtonBounds.Y + 3);
-                    spriteBatch.DrawString(uiFont, "Edit", editPos, TEXT_COLOR);
+                    spriteBatch.Draw(_pixel, emptyCard, INSPECTION_CARD_BG);
+                    DrawBorder(spriteBatch, emptyCard, INSPECTION_ACCENT_BORDER);
                 }
-                charTraitY += 35;
+                DrawEmptyInspectionSection(spriteBatch, uiFont, _centerPanelBounds.X + PANEL_PADDING, charTraitY, _centerPanelBounds.Width - PANEL_PADDING * 2, 70, scissorRect, "There are no perks yet, create or link one.");
+                charTraitY += 70;
+            }
+            else
+            {
+                int traitCardH = _characterTraits.Count * 35 + 12;
+                Rectangle traitsCard = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, charTraitY, _centerPanelBounds.Width - PANEL_PADDING * 2, traitCardH);
+                if (IsVisible(traitsCard, scissorRect))
+                {
+                    spriteBatch.Draw(_pixel, traitsCard, INSPECTION_CARD_BG);
+                    DrawBorder(spriteBatch, traitsCard, INSPECTION_ACCENT_BORDER);
+                }
+                foreach (var trait in _characterTraits)
+                {
+                    Rectangle traitBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, charTraitY, 300, 30);
+                    if (IsVisible(traitBounds, scissorRect))
+                    {
+                        Rectangle rowBg = new Rectangle(_centerPanelBounds.X + PANEL_PADDING + 4, charTraitY + 2, _centerPanelBounds.Width - PANEL_PADDING * 2 - 8, 28);
+                        if (IsVisible(rowBg, scissorRect))
+                            spriteBatch.Draw(_pixel, rowBg, INSPECTION_ROW_BG);
+                        Vector2 traitNamePos = new Vector2(traitBounds.X + 10, traitBounds.Y + 5);
+                        spriteBatch.DrawString(uiFont, trait.Name, traitNamePos, TEXT_COLOR);
+                        Rectangle editButtonBounds = new Rectangle(traitBounds.Right - 100, traitBounds.Y, 50, 25);
+                        bool traitEditHover = editButtonBounds.Contains(_hoverMousePosition);
+                        float traitEditPulse = GetListViewHeaderPulse();
+                        Color traitEditBase = traitEditHover ? new Color(120, 90, 200) : BUTTON_ACTIVE;
+                        Color traitEditBg = Color.Lerp(traitEditBase, new Color(165, 130, 230), traitEditPulse * 0.12f);
+                        spriteBatch.Draw(_pixel, editButtonBounds, traitEditBg);
+                        DrawBorder(spriteBatch, editButtonBounds, Color.Lerp(new Color(traitEditBg.R + 30, traitEditBg.G + 30, traitEditBg.B + 30), new Color(200, 180, 255), traitEditPulse * 0.2f));
+                        Vector2 editPos = new Vector2(editButtonBounds.X + 10, editButtonBounds.Y + 3);
+                        spriteBatch.DrawString(uiFont, "Edit", editPos, Color.White);
+                    }
+                    charTraitY += 35;
+                }
+                charTraitY += 12;
             }
 
             int abilitiesSectionY = charTraitY + PANEL_PADDING;
-            Rectangle abilitiesSectionHeader = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, abilitiesSectionY, _centerPanelBounds.Width - PANEL_PADDING * 2, 30);
+            int abilitiesHeaderHeight = (int)(uiFont.MeasureString("SKILLS").Y * headerBoldScale) + 8;
+            Rectangle abilitiesSectionHeader = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, abilitiesSectionY, _centerPanelBounds.Width - PANEL_PADDING * 2, abilitiesHeaderHeight);
             if (IsVisible(abilitiesSectionHeader, scissorRect))
-            {
-                spriteBatch.Draw(_pixel, abilitiesSectionHeader, SECTION_HEADER);
-                Vector2 abilitiesSectionPos = new Vector2(abilitiesSectionHeader.X + 10, abilitiesSectionHeader.Y + 5);
-                spriteBatch.DrawString(uiFont, "SKILLS", abilitiesSectionPos, TEXT_COLOR);
-            }
+                DrawCategoryTitleBar(spriteBatch, abilitiesSectionHeader, "SKILLS", uiFont, headerBoldScale);
 
             int abilityY = abilitiesSectionHeader.Bottom + 10;
-            foreach (var ability in _characterAbilities)
+            if (_characterAbilities.Count == 0)
             {
-                Rectangle abilityBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, abilityY, 300, 30);
-                if (IsVisible(abilityBounds, scissorRect))
+                Rectangle emptyCard = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, abilityY, _centerPanelBounds.Width - PANEL_PADDING * 2, 70);
+                if (IsVisible(emptyCard, scissorRect))
                 {
-                    Vector2 abilityNamePos = new Vector2(abilityBounds.X + 10, abilityBounds.Y + 5);
-                    spriteBatch.DrawString(uiFont, ability.Name, abilityNamePos, TEXT_COLOR);
-                    Rectangle pickButtonBounds = new Rectangle(abilityBounds.Right - 100, abilityBounds.Y, 80, 25);
-                    spriteBatch.Draw(_pixel, pickButtonBounds, BUTTON_COLOR);
-                    DrawBorder(spriteBatch, pickButtonBounds, PANEL_BORDER);
-                    Vector2 pickPos = new Vector2(pickButtonBounds.X + 5, pickButtonBounds.Y + 3);
-                    spriteBatch.DrawString(uiFont, "Pick Skill", pickPos, TEXT_COLOR);
+                    spriteBatch.Draw(_pixel, emptyCard, INSPECTION_CARD_BG);
+                    DrawBorder(spriteBatch, emptyCard, INSPECTION_ACCENT_BORDER);
                 }
-                abilityY += 35;
+                DrawEmptyInspectionSection(spriteBatch, uiFont, _centerPanelBounds.X + PANEL_PADDING, abilityY, _centerPanelBounds.Width - PANEL_PADDING * 2, 70, scissorRect, "There are no skills yet, create or link one.");
+            }
+            else
+            {
+                int abilityCardH = _characterAbilities.Count * 35 + 12;
+                Rectangle abilitiesCard = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, abilityY, _centerPanelBounds.Width - PANEL_PADDING * 2, abilityCardH);
+                if (IsVisible(abilitiesCard, scissorRect))
+                {
+                    spriteBatch.Draw(_pixel, abilitiesCard, INSPECTION_CARD_BG);
+                    DrawBorder(spriteBatch, abilitiesCard, INSPECTION_ACCENT_BORDER);
+                }
+                foreach (var ability in _characterAbilities)
+                {
+                    Rectangle abilityBounds = new Rectangle(_centerPanelBounds.X + PANEL_PADDING, abilityY, 300, 30);
+                    if (IsVisible(abilityBounds, scissorRect))
+                    {
+                        Rectangle rowBg = new Rectangle(_centerPanelBounds.X + PANEL_PADDING + 4, abilityY + 2, _centerPanelBounds.Width - PANEL_PADDING * 2 - 8, 28);
+                        if (IsVisible(rowBg, scissorRect))
+                            spriteBatch.Draw(_pixel, rowBg, INSPECTION_ROW_BG);
+                        Vector2 abilityNamePos = new Vector2(abilityBounds.X + 10, abilityBounds.Y + 5);
+                        spriteBatch.DrawString(uiFont, ability.Name, abilityNamePos, TEXT_COLOR);
+                        Rectangle pickButtonBounds = new Rectangle(abilityBounds.Right - 100, abilityBounds.Y, 80, 25);
+                        bool pickHover = pickButtonBounds.Contains(_hoverMousePosition);
+                        float pickPulse = GetListViewHeaderPulse();
+                        Color pickBase = pickHover ? new Color(120, 90, 200) : BUTTON_ACTIVE;
+                        Color pickBg = Color.Lerp(pickBase, new Color(165, 130, 230), pickPulse * 0.12f);
+                        spriteBatch.Draw(_pixel, pickButtonBounds, pickBg);
+                        DrawBorder(spriteBatch, pickButtonBounds, Color.Lerp(new Color(pickBg.R + 30, pickBg.G + 30, pickBg.B + 30), new Color(200, 180, 255), pickPulse * 0.2f));
+                        Vector2 pickPos = new Vector2(pickButtonBounds.X + 5, pickButtonBounds.Y + 3);
+                        spriteBatch.DrawString(uiFont, "Pick Skill", pickPos, Color.White);
+                    }
+                    abilityY += 35;
+                }
+            }
+        }
+
+        private const int DESCRIPTION_TEXT_PADDING = 8;
+
+        /// <summary>Draws read-only description text with scroll (display mode).</summary>
+        private void DrawDescriptionTextView(SpriteBatch spriteBatch, SpriteFont uiFont, Rectangle contentRect, Rectangle scissorRect)
+        {
+            int innerX = contentRect.X;
+            int innerY = contentRect.Y;
+            int innerW = contentRect.Width;
+            int innerH = contentRect.Height;
+            Rectangle clip = Rectangle.Intersect(scissorRect, contentRect);
+            if (clip.Width <= 0 || clip.Height <= 0) return;
+
+            float lineHeight = uiFont.MeasureString("Ay").Y;
+            string text = _characterDescriptionText ?? "";
+            if (string.IsNullOrEmpty(text))
+            {
+                spriteBatch.DrawString(uiFont, "Description (multiline)...", new Vector2(innerX, innerY), TEXT_SECONDARY);
+                return;
+            }
+            string[] lines = text.Split('\n');
+            Rectangle savedScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
+            spriteBatch.GraphicsDevice.ScissorRectangle = clip;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                float lineY = innerY + i * lineHeight - _descriptionScrollY;
+                if (lineY + lineHeight < innerY || lineY > innerY + innerH) continue;
+                spriteBatch.DrawString(uiFont, lines[i], new Vector2(innerX, (int)lineY), TEXT_COLOR);
+            }
+            spriteBatch.GraphicsDevice.ScissorRectangle = savedScissor;
+        }
+
+        /// <summary>Draws editable description textarea with cursor and selection (edit mode).</summary>
+        private void DrawDescriptionEditArea(SpriteBatch spriteBatch, SpriteFont uiFont, Rectangle contentRect, Rectangle scissorRect, int scrollOffset)
+        {
+            int innerX = contentRect.X + 6;
+            int innerY = contentRect.Y;
+            int innerW = Math.Max(0, contentRect.Width - 12);
+            int innerH = contentRect.Height;
+            Rectangle clip = Rectangle.Intersect(scissorRect, contentRect);
+            if (clip.Width <= 0 || clip.Height <= 0) return;
+
+            spriteBatch.Draw(_pixel, contentRect, INSPECTION_INPUT_BG);
+            DrawBorder(spriteBatch, contentRect, INSPECTION_ACCENT_BORDER);
+
+            float lineHeight = uiFont.MeasureString("Ay").Y;
+            string text = _descriptionEditBuffer ?? "";
+            string[] lines = text.Split('\n');
+            int selMin = Math.Min(_descriptionCursorPosition, _descriptionAnchorPosition);
+            int selMax = Math.Max(_descriptionCursorPosition, _descriptionAnchorPosition);
+
+            Rectangle savedScissor = spriteBatch.GraphicsDevice.ScissorRectangle;
+            spriteBatch.GraphicsDevice.ScissorRectangle = clip;
+
+            int idx = 0;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                float lineY = innerY + i * lineHeight - _descriptionScrollY;
+                if (lineY + lineHeight < contentRect.Y || lineY > contentRect.Bottom) { idx += line.Length + 1; continue; }
+                int lineStart = idx;
+                int lineEnd = idx + line.Length;
+                if (selMin < lineEnd && selMax > lineStart)
+                {
+                    int selStartInLine = Math.Max(0, selMin - lineStart);
+                    int selEndInLine = Math.Min(line.Length, selMax - lineStart);
+                    if (selStartInLine < selEndInLine)
+                    {
+                        string beforeSel = line.Substring(0, selStartInLine);
+                        string selText = line.Substring(selStartInLine, selEndInLine - selStartInLine);
+                        float selX = innerX + uiFont.MeasureString(beforeSel).X;
+                        float selW = uiFont.MeasureString(selText).X;
+                        Rectangle selRect = new Rectangle((int)selX, (int)lineY, (int)selW, (int)lineHeight);
+                        if (selRect.Width > 0)
+                            spriteBatch.Draw(_pixel, selRect, new Color(60, 100, 180, 140));
+                    }
+                }
+                if (line.Length > 0)
+                    spriteBatch.DrawString(uiFont, line, new Vector2(innerX, (int)lineY), TEXT_COLOR);
+                idx += line.Length + 1;
+            }
+            if (_descriptionShowCursor)
+            {
+                int curLine = 0, curCol = 0;
+                int k = 0;
+                for (int i = 0; i < lines.Length && k <= _descriptionCursorPosition; i++)
+                {
+                    curLine = i;
+                    if (k + lines[i].Length >= _descriptionCursorPosition)
+                        curCol = _descriptionCursorPosition - k;
+                    else
+                        curCol = lines[i].Length;
+                    k += lines[i].Length + 1;
+                }
+                float cursorY = innerY + curLine * lineHeight - _descriptionScrollY;
+                if (cursorY >= contentRect.Y - lineHeight && cursorY <= contentRect.Bottom)
+                {
+                    string cursorLine = curLine < lines.Length ? lines[curLine] : "";
+                    string beforeCursor = cursorLine.Substring(0, Math.Min(curCol, cursorLine.Length));
+                    float cursorX = innerX + uiFont.MeasureString(beforeCursor).X;
+                    spriteBatch.Draw(_pixel, new Rectangle((int)cursorX, (int)cursorY, 1, (int)lineHeight), TEXT_COLOR);
+                }
+            }
+            spriteBatch.GraphicsDevice.ScissorRectangle = savedScissor;
+        }
+
+        private const int EMPTY_INSPECTION_SECTION_HEIGHT = 70;
+        private const int EMPTY_SECTION_PLUS_BUTTON_SIZE = 28;
+
+        /// <summary>Draws message text and one plus button (disabled) below for an empty stats/perks/skills section.</summary>
+        private void DrawEmptyInspectionSection(SpriteBatch spriteBatch, SpriteFont uiFont, int x, int y, int width, int height, Rectangle scissorRect, string message)
+        {
+            Rectangle sectionRect = new Rectangle(x, y, width, height);
+            if (!IsVisible(sectionRect, scissorRect)) return;
+            int centerX = x + width / 2;
+            Vector2 msgSize = uiFont.MeasureString(message);
+            Vector2 plusSize = uiFont.MeasureString("+");
+            int buttonSize = EMPTY_SECTION_PLUS_BUTTON_SIZE;
+            float msgY = y + (height - msgSize.Y - buttonSize - 8) / 2f;
+            float plusButtonY = msgY + msgSize.Y + 8;
+
+            // Message text
+            spriteBatch.DrawString(uiFont, message, new Vector2(centerX - msgSize.X / 2, msgY), TEXT_SECONDARY);
+            // Single plus button below text (All-tab style: pulse, purple, border, White)
+            int plusX = centerX - buttonSize / 2;
+            Rectangle plusRect = new Rectangle(plusX, (int)plusButtonY, buttonSize, buttonSize);
+            bool plusHover = plusRect.Contains(_hoverMousePosition);
+            float plusPulse = GetListViewHeaderPulse();
+            Color plusBase = plusHover ? new Color(120, 90, 200) : BUTTON_ACTIVE;
+            Color plusBg = Color.Lerp(plusBase, new Color(165, 130, 230), plusPulse * 0.12f);
+            if (IsVisible(plusRect, scissorRect))
+            {
+                spriteBatch.Draw(_pixel, plusRect, plusBg);
+                DrawBorder(spriteBatch, plusRect, Color.Lerp(new Color(plusBg.R + 30, plusBg.G + 30, plusBg.B + 30), new Color(200, 180, 255), plusPulse * 0.2f));
+                spriteBatch.DrawString(uiFont, "+", new Vector2(plusRect.X + (buttonSize - plusSize.X) / 2, plusRect.Y + (buttonSize - plusSize.Y) / 2), Color.White);
             }
         }
     }

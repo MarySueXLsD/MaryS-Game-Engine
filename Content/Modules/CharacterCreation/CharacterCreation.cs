@@ -136,10 +136,31 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private Rectangle _nameConfirmButtonBounds = Rectangle.Empty;
         private Rectangle _nameTextBounds = Rectangle.Empty;
         private Rectangle _characterImageBounds = Rectangle.Empty;
+        private Rectangle _inspectionDescriptionBounds = Rectangle.Empty;
+        private string _characterDescriptionText = "";
+        private int _descriptionScrollY = 0;
+        private const int MAX_DESCRIPTION_LENGTH = 2000;
+        private bool _isEditingDescription = false;
+        private string _descriptionEditBuffer = "";
+        private int _descriptionCursorPosition = 0;
+        private int _descriptionAnchorPosition = 0;
+        private bool _descriptionShowCursor = true;
+        private float _descriptionCursorBlinkTimer = 0f;
+        private Rectangle _descriptionEditButtonBounds = Rectangle.Empty;
+        private Rectangle _descriptionContentBounds = Rectangle.Empty;
+        private const int INSPECTION_IMAGE_WIDTH = 200;
+        private const int INSPECTION_IMAGE_HEIGHT = 280;
+        private const int INSPECTION_IMAGE_DESCRIPTION_GAP = 12;
         private Texture2D _characterImagePlaceholder;
         private List<StatItem> _baseStats = new List<StatItem>();
         private List<TraitItem> _characterTraits = new List<TraitItem>();
         private List<AbilityItem> _characterAbilities = new List<AbilityItem>();
+
+        // Per-character stats/traits/skills loaded from database (characters.json)
+        private Dictionary<string, List<CharacterStatEntry>> _characterStatsData = new Dictionary<string, List<CharacterStatEntry>>();
+        private Dictionary<string, List<string>> _characterTraitsData = new Dictionary<string, List<string>>();
+        private Dictionary<string, List<string>> _characterSkillsData = new Dictionary<string, List<string>>();
+        private Dictionary<string, string> _characterDescriptionsData = new Dictionary<string, string>();
 
         // Entity type descriptions (loaded from JSON)
         private Dictionary<string, string> _entityDescriptionsShort = new Dictionary<string, string>();
@@ -164,12 +185,24 @@ namespace MarySGameEngine.Modules.CharacterCreation
         private readonly Color BUTTON_COLOR = new Color(50, 50, 50);
         private readonly Color BUTTON_HOVER = new Color(70, 70, 70);
         private readonly Color BUTTON_ACTIVE = new Color(147, 112, 219);
+        private readonly Color BUTTON_EDIT_PURPLE = new Color(100, 70, 160);
+        private readonly Color BUTTON_EDIT_PURPLE_HOVER = new Color(140, 110, 200);
         private readonly Color TEXT_COLOR = new Color(220, 220, 220);
         private readonly Color TEXT_SECONDARY = new Color(150, 150, 150);
         private readonly Color SECTION_HEADER = new Color(60, 60, 60);
         private readonly Color STAT_BAR_BACKGROUND = new Color(30, 30, 30);
         private readonly Color STAT_BAR_FILL = new Color(147, 112, 219);
         private readonly Color PROJECT_NAME_COLOR = new Color(147, 112, 219); // Purple for project names
+
+        // Inspection view (modern, less gray)
+        private readonly Color INSPECTION_PANEL_BG = new Color(32, 30, 42);
+        private readonly Color INSPECTION_CARD_BG = new Color(48, 44, 60);
+        private readonly Color INSPECTION_IMAGE_BG = new Color(42, 38, 55);
+        private readonly Color INSPECTION_SEPARATOR = new Color(72, 65, 95);
+        private readonly Color INSPECTION_INPUT_BG = new Color(28, 26, 38);
+        private readonly Color INSPECTION_ACCENT_BORDER = new Color(100, 85, 150);
+        private readonly Color INSPECTION_ROW_BG = new Color(44, 41, 56);
+        private readonly Color STAT_BAR_TRACK_INSPECTION = new Color(40, 36, 52);
 
         // Toolbar (top bar with action buttons in center panel)
         private Rectangle _toolbarBounds = Rectangle.Empty;
@@ -219,6 +252,14 @@ namespace MarySGameEngine.Modules.CharacterCreation
         {
             public string Name { get; set; }
             public string Icon { get; set; }
+        }
+
+        /// <summary>Persisted per-character stat: id references _stats, value/maxValue stored.</summary>
+        private class CharacterStatEntry
+        {
+            public string Id { get; set; }
+            public int Value { get; set; }
+            public int MaxValue { get; set; }
         }
 
         public CharacterCreation(GraphicsDevice graphicsDevice, SpriteFont menuFont, int windowWidth)
@@ -291,28 +332,40 @@ namespace MarySGameEngine.Modules.CharacterCreation
 
         private void InitializeSampleData()
         {
-            // Initialize base stats
-            _baseStats = new List<StatItem>
-            {
-                new StatItem { Name = "Strength", Value = 7, MaxValue = 10 },
-                new StatItem { Name = "Dexterity", Value = 5, MaxValue = 10 },
-                new StatItem { Name = "Intelligence", Value = 3, MaxValue = 10 }
-            };
+            // Stats, traits, and abilities are loaded from database when opening character inspection.
+            _baseStats.Clear();
+            _characterTraits.Clear();
+            _characterAbilities.Clear();
+        }
 
-            // Initialize character traits
-            _characterTraits = new List<TraitItem>
-            {
-                new TraitItem { Name = "Battle Hardened", IsChecked = true, Icon = "crown" },
-                new TraitItem { Name = "Heavy Hitter", IsChecked = true, Icon = "fist" }
-            };
+        /// <summary>Loads the currently inspected character's stats, traits, and skills from database into _baseStats, _characterTraits, _characterAbilities.</summary>
+        private void LoadCharacterInspectionData(string characterId)
+        {
+            _baseStats.Clear();
+            _characterTraits.Clear();
+            _characterAbilities.Clear();
+            if (string.IsNullOrEmpty(characterId)) return;
 
-            // Initialize character abilities
-            _characterAbilities = new List<AbilityItem>
+            if (_characterStatsData.TryGetValue(characterId, out var statEntries) && statEntries != null)
             {
-                new AbilityItem { Name = "Power Strike", Icon = "fist" },
-                new AbilityItem { Name = "Shield Bash", Icon = "shield" },
-                new AbilityItem { Name = "Chainmail Armor", Icon = "armor" }
-            };
+                foreach (var entry in statEntries)
+                {
+                    string name = _stats.Contains(entry.Id) ? entry.Id : entry.Id;
+                    _baseStats.Add(new StatItem { Name = name, Value = entry.Value, MaxValue = entry.MaxValue > 0 ? entry.MaxValue : 10 });
+                }
+            }
+            if (_characterTraitsData.TryGetValue(characterId, out var traitIds) && traitIds != null)
+            {
+                foreach (var id in traitIds)
+                    _characterTraits.Add(new TraitItem { Name = id, IsChecked = true, Icon = "" });
+            }
+            if (_characterSkillsData.TryGetValue(characterId, out var skillIds) && skillIds != null)
+            {
+                foreach (var id in skillIds)
+                    _characterAbilities.Add(new AbilityItem { Name = id, Icon = "" });
+            }
+            _characterDescriptionText = _characterDescriptionsData.TryGetValue(characterId, out var desc) ? desc : "";
+            _descriptionScrollY = 0;
         }
         
         private void HandleInput()
@@ -357,6 +410,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                         _isInspectingCharacter = false;
                         _isEditingId = false;
                         _isEditingName = false;
+                        _isEditingDescription = false;
                         
                         // Reset scroll position when switching tabs
                         if (_previousView != _currentView)
@@ -385,6 +439,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                         _characterTags[_characterId] = "";
                         _isInspectingCharacter = true;
                         _scrollY = 0;
+                        LoadCharacterInspectionData(_characterId);
                         SaveCharacters();
                     }
                 }
@@ -421,9 +476,14 @@ namespace MarySGameEngine.Modules.CharacterCreation
                                     _characters.Remove(idToDelete);
                                     _characterNames.Remove(idToDelete);
                                     _characterTags.Remove(idToDelete);
+                                    _characterStatsData.Remove(idToDelete);
+                                    _characterTraitsData.Remove(idToDelete);
+                                    _characterSkillsData.Remove(idToDelete);
+                                    _characterDescriptionsData.Remove(idToDelete);
                                     if (_isInspectingCharacter && _characterId == idToDelete)
                                     {
                                         _isInspectingCharacter = false;
+                                        _isEditingDescription = false;
                                     }
                                     SaveCharacters();
                                 },
@@ -445,6 +505,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                                 _characterName = _characterNames.TryGetValue(_characterId, out string n) ? n : _characterId;
                                 _isInspectingCharacter = true;
                                 _scrollY = 0;
+                                LoadCharacterInspectionData(_characterId);
                                 break;
                             }
                         }
@@ -569,6 +630,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     if (_backButtonBounds.Contains(_currentMouseState.Position))
                     {
                         _isInspectingCharacter = false;
+                        _isEditingDescription = false;
                     }
                     else if (!_isEditingId && !_isEditingName && _idEditButtonBounds.Contains(_currentMouseState.Position))
                     {
@@ -634,6 +696,38 @@ namespace MarySGameEngine.Modules.CharacterCreation
                              && !_nameConfirmButtonBounds.Contains(_currentMouseState.Position))
                     {
                         ConfirmNameEdit();
+                    }
+                    else if (!_isEditingDescription && !_isEditingId && !_isEditingName && _descriptionEditButtonBounds.Contains(_currentMouseState.Position))
+                    {
+                        _isEditingDescription = true;
+                        _descriptionEditBuffer = _characterDescriptionText ?? "";
+                        _descriptionCursorPosition = _descriptionEditBuffer.Length;
+                        _descriptionAnchorPosition = _descriptionCursorPosition;
+                        _descriptionScrollY = 0;
+                        ResetDescriptionCursorBlink();
+                    }
+                    else if (_isEditingDescription && _descriptionEditButtonBounds.Contains(_currentMouseState.Position))
+                    {
+                        ConfirmDescriptionEdit();
+                    }
+                    else if (_isEditingDescription && _descriptionContentBounds.Contains(_currentMouseState.Position))
+                    {
+                        SpriteFont font = _uiFont ?? _menuFont;
+                        if (font != null)
+                        {
+                            float localX = _currentMouseState.Position.X - _descriptionContentBounds.X - 6;
+                            float localY = _currentMouseState.Position.Y - _descriptionContentBounds.Y + _descriptionScrollY;
+                            float lineHeight = font.MeasureString("Ay").Y;
+                            _descriptionCursorPosition = GetDescriptionCharacterIndexAtPosition(_descriptionEditBuffer, localX, localY, font, lineHeight);
+                            if (!(_currentKeyboardState.IsKeyDown(Keys.LeftShift) || _currentKeyboardState.IsKeyDown(Keys.RightShift)))
+                                _descriptionAnchorPosition = _descriptionCursorPosition;
+                            ResetDescriptionCursorBlink();
+                        }
+                    }
+                    else if (_isEditingDescription && !_descriptionContentBounds.Contains(_currentMouseState.Position)
+                             && !_descriptionEditButtonBounds.Contains(_currentMouseState.Position))
+                    {
+                        ConfirmDescriptionEdit();
                     }
                 }
             }
@@ -717,16 +811,21 @@ namespace MarySGameEngine.Modules.CharacterCreation
             string newId = _idEditBuffer.Trim();
             if (newId != _characterId)
             {
-                int idx = _characters.IndexOf(_characterId);
+                string oldId = _characterId;
+                int idx = _characters.IndexOf(oldId);
                 if (idx >= 0)
                 {
-                    string oldName = _characterNames.TryGetValue(_characterId, out string n) ? n : _characterId;
-                    string oldTags = _characterTags.TryGetValue(_characterId, out string t) ? t : "";
-                    _characterNames.Remove(_characterId);
-                    _characterTags.Remove(_characterId);
+                    string oldName = _characterNames.TryGetValue(oldId, out string n) ? n : oldId;
+                    string oldTags = _characterTags.TryGetValue(oldId, out string t) ? t : "";
+                    _characterNames.Remove(oldId);
+                    _characterTags.Remove(oldId);
                     _characters[idx] = newId;
                     _characterNames[newId] = oldName;
                     _characterTags[newId] = oldTags;
+                    if (_characterStatsData.TryGetValue(oldId, out var statsList)) { _characterStatsData[newId] = statsList; _characterStatsData.Remove(oldId); }
+                    if (_characterTraitsData.TryGetValue(oldId, out var traitsList)) { _characterTraitsData[newId] = traitsList; _characterTraitsData.Remove(oldId); }
+                    if (_characterSkillsData.TryGetValue(oldId, out var skillsList)) { _characterSkillsData[newId] = skillsList; _characterSkillsData.Remove(oldId); }
+                    if (_characterDescriptionsData.TryGetValue(oldId, out var descText)) { _characterDescriptionsData[newId] = descText; _characterDescriptionsData.Remove(oldId); }
                     SaveCharacters();
                 }
                 _characterId = newId;
@@ -748,6 +847,157 @@ namespace MarySGameEngine.Modules.CharacterCreation
             _isEditingName = false;
             _editLastRepeatedKey = Keys.None;
             _editKeyRepeatTimer = 0f;
+        }
+
+        private void ConfirmDescriptionEdit()
+        {
+            _characterDescriptionText = _descriptionEditBuffer ?? "";
+            _characterDescriptionsData[_characterId] = _characterDescriptionText;
+            _isEditingDescription = false;
+            _descriptionScrollY = 0;
+            SaveCharacters();
+        }
+
+        private void ResetDescriptionCursorBlink()
+        {
+            _descriptionShowCursor = true;
+            _descriptionCursorBlinkTimer = 0f;
+        }
+
+        private static int GetDescriptionCharacterIndexAtPosition(string text, float localX, float localY, SpriteFont font, float lineHeight)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            string[] lines = text.Split('\n');
+            if (lines.Length == 0) return 0;
+            int lineIndex = (int)(localY / lineHeight);
+            if (lineIndex < 0) return 0;
+            if (lineIndex >= lines.Length) return text.Length;
+            string line = lines[lineIndex];
+            int charInLine = GetCharacterIndexAtPosition(line, localX, font);
+            int index = 0;
+            for (int i = 0; i < lineIndex; i++)
+                index += lines[i].Length + 1;
+            index += charInLine;
+            return Math.Min(index, text.Length);
+        }
+
+        private void ApplyDescriptionBackspace()
+        {
+            int min = Math.Min(_descriptionCursorPosition, _descriptionAnchorPosition);
+            int max = Math.Max(_descriptionCursorPosition, _descriptionAnchorPosition);
+            if (min < max)
+            {
+                _descriptionEditBuffer = _descriptionEditBuffer.Remove(min, max - min);
+                _descriptionCursorPosition = min;
+                _descriptionAnchorPosition = min;
+                ResetDescriptionCursorBlink();
+                return;
+            }
+            if (_descriptionCursorPosition > 0)
+            {
+                _descriptionEditBuffer = _descriptionEditBuffer.Remove(_descriptionCursorPosition - 1, 1);
+                _descriptionCursorPosition--;
+                _descriptionAnchorPosition = _descriptionCursorPosition;
+                ResetDescriptionCursorBlink();
+            }
+        }
+
+        private void ApplyDescriptionDelete()
+        {
+            int min = Math.Min(_descriptionCursorPosition, _descriptionAnchorPosition);
+            int max = Math.Max(_descriptionCursorPosition, _descriptionAnchorPosition);
+            if (min < max)
+            {
+                _descriptionEditBuffer = _descriptionEditBuffer.Remove(min, max - min);
+                _descriptionCursorPosition = min;
+                _descriptionAnchorPosition = min;
+                ResetDescriptionCursorBlink();
+                return;
+            }
+            if (_descriptionCursorPosition < _descriptionEditBuffer.Length)
+            {
+                _descriptionEditBuffer = _descriptionEditBuffer.Remove(_descriptionCursorPosition, 1);
+                _descriptionAnchorPosition = _descriptionCursorPosition;
+                ResetDescriptionCursorBlink();
+            }
+        }
+
+        private void HandleDescriptionKey(Keys key)
+        {
+            switch (key)
+            {
+                case Keys.Enter:
+                    if (_currentKeyboardState.IsKeyDown(Keys.LeftShift) || _currentKeyboardState.IsKeyDown(Keys.RightShift))
+                        break; // Shift+Enter could do something else or nothing
+                    if (_descriptionEditBuffer.Length < MAX_DESCRIPTION_LENGTH)
+                    {
+                        int min = Math.Min(_descriptionCursorPosition, _descriptionAnchorPosition);
+                        int max = Math.Max(_descriptionCursorPosition, _descriptionAnchorPosition);
+                        if (min < max)
+                        {
+                            _descriptionEditBuffer = _descriptionEditBuffer.Remove(min, max - min);
+                            _descriptionCursorPosition = min;
+                            _descriptionAnchorPosition = min;
+                        }
+                        _descriptionEditBuffer = _descriptionEditBuffer.Insert(_descriptionCursorPosition, "\n");
+                        _descriptionCursorPosition++;
+                        _descriptionAnchorPosition = _descriptionCursorPosition;
+                        ResetDescriptionCursorBlink();
+                    }
+                    return;
+                case Keys.Escape:
+                    _isEditingDescription = false;
+                    ResetDescriptionCursorBlink();
+                    return;
+                case Keys.Back:
+                    ApplyDescriptionBackspace();
+                    return;
+                case Keys.Delete:
+                    ApplyDescriptionDelete();
+                    return;
+                case Keys.Left:
+                    if (!(_currentKeyboardState.IsKeyDown(Keys.LeftShift) || _currentKeyboardState.IsKeyDown(Keys.RightShift)))
+                        _descriptionAnchorPosition = _descriptionCursorPosition;
+                    if (_descriptionCursorPosition > 0) { _descriptionCursorPosition--; ResetDescriptionCursorBlink(); }
+                    return;
+                case Keys.Right:
+                    if (!(_currentKeyboardState.IsKeyDown(Keys.LeftShift) || _currentKeyboardState.IsKeyDown(Keys.RightShift)))
+                        _descriptionAnchorPosition = _descriptionCursorPosition;
+                    if (_descriptionCursorPosition < _descriptionEditBuffer.Length) { _descriptionCursorPosition++; ResetDescriptionCursorBlink(); }
+                    return;
+                case Keys.Home:
+                    if (!(_currentKeyboardState.IsKeyDown(Keys.LeftShift) || _currentKeyboardState.IsKeyDown(Keys.RightShift)))
+                        _descriptionAnchorPosition = _descriptionCursorPosition;
+                    _descriptionCursorPosition = 0;
+                    ResetDescriptionCursorBlink();
+                    return;
+                case Keys.End:
+                    if (!(_currentKeyboardState.IsKeyDown(Keys.LeftShift) || _currentKeyboardState.IsKeyDown(Keys.RightShift)))
+                        _descriptionAnchorPosition = _descriptionCursorPosition;
+                    _descriptionCursorPosition = _descriptionEditBuffer.Length;
+                    ResetDescriptionCursorBlink();
+                    return;
+            }
+            char c = GetNameCharFromKey(key);
+            if (c != '\0' && _descriptionEditBuffer.Length < MAX_DESCRIPTION_LENGTH)
+            {
+                int min = Math.Min(_descriptionCursorPosition, _descriptionAnchorPosition);
+                int max = Math.Max(_descriptionCursorPosition, _descriptionAnchorPosition);
+                if (min < max)
+                {
+                    _descriptionEditBuffer = _descriptionEditBuffer.Remove(min, max - min);
+                    _descriptionEditBuffer = _descriptionEditBuffer.Insert(min, c.ToString());
+                    _descriptionCursorPosition = min + 1;
+                    _descriptionAnchorPosition = _descriptionCursorPosition;
+                }
+                else
+                {
+                    _descriptionEditBuffer = _descriptionEditBuffer.Insert(_descriptionCursorPosition, c.ToString());
+                    _descriptionCursorPosition++;
+                    _descriptionAnchorPosition = _descriptionCursorPosition;
+                }
+                ResetDescriptionCursorBlink();
+            }
         }
 
         private void HandleNameEditInput()
@@ -791,6 +1041,24 @@ namespace MarySGameEngine.Modules.CharacterCreation
                             else
                                 ApplyIdDelete();
                         }
+                    }
+                }
+                return;
+            }
+            if (_isEditingDescription)
+            {
+                _descriptionCursorBlinkTimer += dt;
+                if (_descriptionCursorBlinkTimer >= 0.5f)
+                {
+                    _descriptionShowCursor = !_descriptionShowCursor;
+                    _descriptionCursorBlinkTimer = 0f;
+                }
+                var descKeys = _currentKeyboardState.GetPressedKeys();
+                foreach (var key in descKeys)
+                {
+                    if (_previousKeyboardState.IsKeyUp(key))
+                    {
+                        HandleDescriptionKey(key);
                     }
                 }
                 return;
@@ -1137,6 +1405,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     _previousWorkspaceName = newWorkspaceName;
                     LoadCharacters();
                     _isInspectingCharacter = false;
+                    _isEditingDescription = false;
                     _scrollY = 0;
                 }
             }
@@ -1253,7 +1522,16 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 {
                     WriteIndented = true
                 };
-                var data = new { ids = _characters, names = _characterNames, tags = _characterTags };
+                var data = new
+                {
+                    ids = _characters,
+                    names = _characterNames,
+                    tags = _characterTags,
+                    characterStats = _characterStatsData,
+                    characterTraits = _characterTraitsData,
+                    characterSkills = _characterSkillsData,
+                    characterDescriptions = _characterDescriptionsData
+                };
                 string json = JsonSerializer.Serialize(data, options);
                 File.WriteAllText(filePath, json);
                 _engine?.Log($"CharacterCreation: Saved {_characters.Count} characters to {filePath}");
@@ -1274,6 +1552,10 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     _characters.Clear();
                     _characterNames.Clear();
                     _characterTags.Clear();
+                    _characterStatsData.Clear();
+                    _characterTraitsData.Clear();
+                    _characterSkillsData.Clear();
+                    _characterDescriptionsData.Clear();
                     return;
                 }
 
@@ -1287,6 +1569,10 @@ namespace MarySGameEngine.Modules.CharacterCreation
                         _characters = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
                         _characterNames.Clear();
                         _characterTags.Clear();
+                        _characterStatsData.Clear();
+                        _characterTraitsData.Clear();
+                        _characterSkillsData.Clear();
+                        _characterDescriptionsData.Clear();
                         foreach (string id in _characters)
                         {
                             _characterNames[id] = id;
@@ -1307,6 +1593,18 @@ namespace MarySGameEngine.Modules.CharacterCreation
                         foreach (string id in _characters)
                             if (!_characterTags.ContainsKey(id))
                                 _characterTags[id] = "";
+                        _characterStatsData = new Dictionary<string, List<CharacterStatEntry>>();
+                        if (root.TryGetProperty("characterStats", out var statsEl))
+                            _characterStatsData = JsonSerializer.Deserialize<Dictionary<string, List<CharacterStatEntry>>>(statsEl.GetRawText()) ?? new Dictionary<string, List<CharacterStatEntry>>();
+                        _characterTraitsData = new Dictionary<string, List<string>>();
+                        if (root.TryGetProperty("characterTraits", out var traitsEl))
+                            _characterTraitsData = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(traitsEl.GetRawText()) ?? new Dictionary<string, List<string>>();
+                        _characterSkillsData = new Dictionary<string, List<string>>();
+                        if (root.TryGetProperty("characterSkills", out var skillsEl))
+                            _characterSkillsData = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(skillsEl.GetRawText()) ?? new Dictionary<string, List<string>>();
+                        _characterDescriptionsData = new Dictionary<string, string>();
+                        if (root.TryGetProperty("characterDescriptions", out var descEl))
+                            _characterDescriptionsData = JsonSerializer.Deserialize<Dictionary<string, string>>(descEl.GetRawText()) ?? new Dictionary<string, string>();
                     }
                     _engine?.Log($"CharacterCreation: Loaded {_characters.Count} characters from {filePath}");
                 }
@@ -1315,6 +1613,10 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     _characters.Clear();
                     _characterNames.Clear();
                     _characterTags.Clear();
+                    _characterStatsData.Clear();
+                    _characterTraitsData.Clear();
+                    _characterSkillsData.Clear();
+                    _characterDescriptionsData.Clear();
                 }
                 LoadEntityList("traits.json", _traits);
                 LoadEntityList("skills.json", _skills);
@@ -1328,6 +1630,10 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 _characters.Clear();
                 _characterNames.Clear();
                 _characterTags.Clear();
+                _characterStatsData.Clear();
+                _characterTraitsData.Clear();
+                _characterSkillsData.Clear();
+                _characterDescriptionsData.Clear();
             }
         }
 
@@ -1366,6 +1672,7 @@ namespace MarySGameEngine.Modules.CharacterCreation
                     _currentView = "All";
                     _previousView = "All";
                     _isInspectingCharacter = false;
+                    _isEditingDescription = false;
                     _rightPanelScrollY = 0;
                     LoadCharacters();
                     UpdateBounds();
@@ -1507,12 +1814,21 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 30
             );
 
-            // Update character image bounds (below ID+Name row)
+            // Update character image bounds (below ID+Name row) - smaller image with description area to the right
+            int imageDescRowY = _nameInputBounds.Bottom + PANEL_PADDING * 2;
             _characterImageBounds = new Rectangle(
                 _centerPanelBounds.X + PANEL_PADDING,
-                _nameInputBounds.Bottom + PANEL_PADDING * 2,
-                400,
-                500
+                imageDescRowY,
+                INSPECTION_IMAGE_WIDTH,
+                INSPECTION_IMAGE_HEIGHT
+            );
+            int descX = _characterImageBounds.Right + INSPECTION_IMAGE_DESCRIPTION_GAP;
+            int descWidth = Math.Max(0, _centerPanelBounds.X + _centerPanelBounds.Width - PANEL_PADDING - descX);
+            _inspectionDescriptionBounds = new Rectangle(
+                descX,
+                imageDescRowY,
+                descWidth,
+                INSPECTION_IMAGE_HEIGHT
             );
 
             }
@@ -1574,14 +1890,14 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 // Character inspection view
             int height = 0;
                 height += 30 + PANEL_PADDING; // ID and Name row
-                height += 500 + PANEL_PADDING * 2; // Character image
+                height += INSPECTION_IMAGE_HEIGHT + PANEL_PADDING * 2; // Image + description row
                 height += 30 + PANEL_PADDING; // BASE STATS header
-            height += _baseStats.Count * 35; // Stats
+            height += _baseStats.Count > 0 ? _baseStats.Count * 35 : EMPTY_INSPECTION_SECTION_HEIGHT;
                 height += 30 + PANEL_PADDING; // TRAITS & PERKS header
-            height += _characterTraits.Count * 35; // Traits
+            height += _characterTraits.Count > 0 ? _characterTraits.Count * 35 : EMPTY_INSPECTION_SECTION_HEIGHT;
                 height += 30 + PANEL_PADDING; // SKILLS header
-            height += _characterAbilities.Count * 35; // Abilities
-            height += PANEL_PADDING * 2;
+            height += _characterAbilities.Count > 0 ? _characterAbilities.Count * 35 : EMPTY_INSPECTION_SECTION_HEIGHT;
+                height += PANEL_PADDING * 2;
             return height;
             }
             else
@@ -1635,6 +1951,26 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 _currentMouseState.ScrollWheelValue != _previousMouseState.ScrollWheelValue)
             {
                 int delta = _currentMouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
+                // If in inspection and mouse is over the description area, scroll the description text instead of the panel
+                SpriteFont descFont = _uiFont ?? _menuFont;
+                if (_isInspectingCharacter && descFont != null && _inspectionDescriptionBounds.Width > 0 && _inspectionDescriptionBounds.Height > 0)
+                {
+                    Rectangle descScreenRect = new Rectangle(
+                        _inspectionDescriptionBounds.X,
+                        _inspectionDescriptionBounds.Y - _scrollY,
+                        _inspectionDescriptionBounds.Width,
+                        _inspectionDescriptionBounds.Height);
+                    if (descScreenRect.Contains(mousePosition))
+                    {
+                        int textHeight = GetDescriptionTextHeight(descFont);
+                        int descHeaderHeight = (int)(descFont.MeasureString("Description").Y * 1.2f) + 8;
+                        int innerHeight = Math.Max(0, _inspectionDescriptionBounds.Height - descHeaderHeight - 2 * DESCRIPTION_TEXT_PADDING);
+                        int maxDescScroll = Math.Max(0, textHeight - innerHeight);
+                        _descriptionScrollY -= delta / 3;
+                        _descriptionScrollY = MathHelper.Clamp(_descriptionScrollY, 0, maxDescScroll);
+                        return;
+                    }
+                }
                 _scrollY -= delta / 3; // Adjust scroll speed
                 
                 int resizeHandleSize = 24;
@@ -1642,6 +1978,17 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 int maxScroll = Math.Max(0, _contentHeight - availableHeight);
                 _scrollY = MathHelper.Clamp(_scrollY, 0, maxScroll);
             }
+        }
+
+        /// <summary>Returns total height in pixels of the description text when drawn with the given font (lines split by \n).</summary>
+        private int GetDescriptionTextHeight(SpriteFont font)
+        {
+            if (string.IsNullOrEmpty(_characterDescriptionText)) return 0;
+            float lineHeight = font.MeasureString("Ay").Y;
+            int count = 0;
+            foreach (char c in _characterDescriptionText)
+                if (c == '\n') count++;
+            return (int)((count + 1) * lineHeight);
         }
 
         public void Draw(SpriteBatch spriteBatch)
@@ -1911,9 +2258,11 @@ namespace MarySGameEngine.Modules.CharacterCreation
                 scissorRect = spriteBatch.GraphicsDevice.ScissorRectangle;
             }
 
-            // Draw panel background
-            spriteBatch.Draw(_pixel, _centerPanelBounds, PANEL_BACKGROUND);
-            DrawBorder(spriteBatch, _centerPanelBounds, PANEL_BORDER);
+            // Draw panel background (warmer, modern when inspecting a character)
+            Color panelBg = _isInspectingCharacter ? INSPECTION_PANEL_BG : PANEL_BACKGROUND;
+            Color panelBorder = _isInspectingCharacter ? INSPECTION_ACCENT_BORDER : PANEL_BORDER;
+            spriteBatch.Draw(_pixel, _centerPanelBounds, panelBg);
+            DrawBorder(spriteBatch, _centerPanelBounds, panelBorder);
 
             // Draw content based on current view
             if (_isInspectingCharacter)

@@ -2,6 +2,56 @@
   "notifications": [
     {
       "message": "Workspace changed to Hotline (Top Down)",
+      "timestamp": "2026-03-01T20:35:18.6856362+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Final F (JRPG)",
+      "timestamp": "2026-03-01T20:31:35.2558516+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Hotline (Top Down)",
+      "timestamp": "2026-03-01T20:22:29.8411463+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Final F (JRPG)",
+      "timestamp": "2026-03-01T20:22:28.3958342+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Fallout (Isometric)",
+      "timestamp": "2026-03-01T20:01:38.097228+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Balatro (Card Based)",
+      "timestamp": "2026-03-01T20:01:37.230108+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Hotline (Top Down)",
+      "timestamp": "2026-03-01T20:01:36.0797597+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Final F (JRPG)",
+      "timestamp": "2026-03-01T20:01:35.3816095+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Balatro (Card Based)",
+      "timestamp": "2026-03-01T20:01:31.7470872+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Final F (JRPG)",
+      "timestamp": "2026-03-01T20:01:30.38552+01:00",
+      "type": "workspace"
+    },
+    {
+      "message": "Workspace changed to Hotline (Top Down)",
       "timestamp": "2026-02-24T12:00:05.6836721+01:00",
       "type": "workspace"
     },
@@ -99,76 +149,7 @@
       "message": "Workspace changed to Final F (JRPG)",
       "timestamp": "2026-02-22T00:11:34.7240161+01:00",
       "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Hotline (Top Down)",
-      "timestamp": "2026-02-22T00:11:33.6906242+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Final F (JRPG)",
-      "timestamp": "2026-02-22T00:11:32.7901258+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Hotline (Top Down)",
-      "timestamp": "2026-02-22T00:11:29.7401793+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Final F (JRPG)",
-      "timestamp": "2026-02-22T00:11:28.6244259+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Balatro (Card Based)",
-      "timestamp": "2026-02-22T00:11:27.6037761+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Fallout (Isometric)",
-      "timestamp": "2026-02-22T00:11:26.7245128+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Hotline (Top Down)",
-      "timestamp": "2026-02-22T00:11:25.5918437+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Final F (JRPG)",
-      "timestamp": "2026-02-22T00:11:24.5712381+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Balatro (Card Based)",
-      "timestamp": "2026-02-22T00:11:19.0240292+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Final F (JRPG)",
-      "timestamp": "2026-02-22T00:11:17.379836+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Hotline (Top Down)",
-      "timestamp": "2026-02-21T14:11:46.4460103+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Final F (JRPG)",
-      "timestamp": "2026-02-21T14:11:45.5991306+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Hotline (Top Down)",
-      "timestamp": "2026-02-21T14:11:05.7422529+01:00",
-      "type": "workspace"
-    },
-    {
-      "message": "Workspace changed to Balatro (Card Based)",
-      "timestamp": "2026-02-21T13:31:21.5930429+01:00",
-      "type": "workspace"
     }
-  ]
+  ],
+  "lastReadNotificationCount": 30
 }

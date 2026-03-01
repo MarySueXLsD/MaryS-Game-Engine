@@ -71,7 +71,7 @@ namespace MarySGameEngine.Modules.TopBar_essential
         private int _buttonRightPadding = 10; // Right padding for text
         private int _dropdownLeftPadding = 25; // Padding from left edge for dropdowns
         private Vector2 _menuStartPosition = new Vector2(10, 5);
-        private int _buttonHeight = 35;     // Height of the button area
+        private int _buttonHeight = 48;     // Height of the button area (fits larger notification icon)
         private int _shortcutRightPadding = 15; // Increased from 10 to 15 for more padding
         private int _dropdownTextSpacing = 40; // Spacing between menu text and shortcut
         private const int SETTINGS_ICON_SIZE = 30; // Size of settings icon (same as dropdown item height minus small spacing)
@@ -1217,10 +1217,10 @@ namespace MarySGameEngine.Modules.TopBar_essential
             _notificationCenter = notificationCenter;
             if (_notificationCenter != null)
             {
-                // Set icon bounds at right edge, centered vertically in TopBar
-                const int ICON_SIZE = 30;
-                const int ICON_PADDING = 5;
-                int iconY = (_buttonHeight - ICON_SIZE) / 2; // Center vertically in TopBar
+                // Set icon bounds at right edge, centered vertically in TopBar (larger icon for visibility)
+                const int ICON_SIZE = 46;
+                const int ICON_PADDING = 6;
+                int iconY = (_buttonHeight - ICON_SIZE) / 2;
                 Rectangle iconBounds = new Rectangle(_windowWidth - ICON_SIZE - ICON_PADDING, iconY, ICON_SIZE, ICON_SIZE);
                 _notificationCenter.SetIconBounds(iconBounds);
                 System.Diagnostics.Debug.WriteLine($"TopBar: Set notification icon bounds to {iconBounds}");

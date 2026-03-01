@@ -1,5 +1,15 @@
 {
-  "ids": [],
-  "names": {},
-  "tags": {}
+  "ids": [
+    "1"
+  ],
+  "names": {
+    "1": "Character_1"
+  },
+  "tags": {
+    "1": ""
+  },
+  "characterStats": {},
+  "characterTraits": {},
+  "characterSkills": {},
+  "characterDescriptions": {}
 }

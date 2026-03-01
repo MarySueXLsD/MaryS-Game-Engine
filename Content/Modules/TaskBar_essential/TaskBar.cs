@@ -327,6 +327,18 @@ namespace MarySGameEngine.Modules.TaskBar_essential
                             continue;
                         }
 
+                        // Skip Music module - it will be added when opened
+                        if (moduleInfo.Name == "Music")
+                        {
+                            continue;
+                        }
+
+                        // Skip Game Manager module - it will be added when opened
+                        if (moduleInfo.Name == "Game Manager")
+                        {
+                            continue;
+                        }
+
                         // Skip Notification Center module - it's integrated into TopBar
                         if (moduleInfo.Name == "Notification Center")
                         {

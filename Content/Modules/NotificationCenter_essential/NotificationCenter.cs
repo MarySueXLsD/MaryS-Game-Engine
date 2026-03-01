@@ -14,6 +14,9 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
 {
     public class NotificationCenter : IModule
     {
+        /// <summary>Static instance for push notifications (e.g. from GameManager when workspace changes).</summary>
+        private static NotificationCenter _instance;
+
         private GraphicsDevice _graphicsDevice;
         private SpriteFont _menuFont;
         private SpriteFont _dropdownFont;
@@ -22,6 +25,14 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
         private GameEngine _engine;
         private Texture2D _pixel;
         private Texture2D _logo;
+        // Notification bell icons (read state and unread counts 1-5, 5+)
+        private Texture2D _iconNotificationBell;
+        private Texture2D _iconNew1;
+        private Texture2D _iconNew2;
+        private Texture2D _iconNew3;
+        private Texture2D _iconNew4;
+        private Texture2D _iconNew5;
+        private Texture2D _iconNew5Plus;
         private MouseState _currentMouseState;
         private MouseState _previousMouseState;
         private bool _isHoveringOverInteractive = false;
@@ -43,16 +54,22 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
         {
             [JsonPropertyName("notifications")]
             public List<Notification> Notifications { get; set; } = new List<Notification>();
+            [JsonPropertyName("lastReadNotificationCount")]
+            public int LastReadNotificationCount { get; set; }
         }
 
         private List<Notification> _notifications = new List<Notification>();
         private const int MAX_NOTIFICATIONS = 30; // Keep last 30 notifications
         private string _notificationsFilePath;
+        /// <summary>Number of notifications considered "read" (user opened the dropdown at that count).</summary>
+        private int _lastReadNotificationCount = 0;
+        /// <summary>When dropdown was opened, how many items were unread (show red dot on that many top items until closed).</summary>
+        private int _unreadCountWhenOpened = 0;
 
         // TopBar integration
         private Rectangle _iconBounds;
-        private const int ICON_SIZE = 30;
-        private const int ICON_PADDING = 5;
+        private const int ICON_SIZE = 46;   // Larger so the bell is clearly visible (matches TopBar)
+        private const int ICON_PADDING = 6;
         private bool _isIconHovered = false;
 
         // Dropdown properties
@@ -97,6 +114,9 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
 
             // Initialize icon bounds (will be set by TopBar)
             _iconBounds = new Rectangle(_windowWidth - ICON_SIZE - ICON_PADDING, ICON_PADDING, ICON_SIZE, ICON_SIZE);
+
+            // Set static instance for push notifications
+            _instance = this;
 
             // Set notifications file path
             string dataDir = Path.Combine(Directory.GetCurrentDirectory(), "Data");
@@ -246,6 +266,21 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
             _engine.Log($"NotificationCenter: Added notification: {message}");
         }
 
+        /// <summary>Call from GameManager (or elsewhere) when workspace changes so the notification appears immediately.</summary>
+        public static void NotifyWorkspaceChanged(string workspaceText)
+        {
+            if (string.IsNullOrEmpty(workspaceText) || workspaceText == "No workspace chosen")
+                return;
+            _instance?.AddNotification($"Workspace changed to {workspaceText}", "workspace");
+            _instance?.SetPreviousWorkspaceText(workspaceText);
+        }
+
+        /// <summary>Keeps polling in sync so we don't add a duplicate when CheckWorkspaceChanges runs later in the same frame.</summary>
+        private void SetPreviousWorkspaceText(string workspaceText)
+        {
+            _previousWorkspaceText = workspaceText ?? "";
+        }
+
         private void LoadNotifications()
         {
             try
@@ -262,6 +297,7 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
                     if (data != null && data.Notifications != null)
                     {
                         _notifications = data.Notifications;
+                        _lastReadNotificationCount = data.LastReadNotificationCount;
                         // Ensure we only have max notifications
                         if (_notifications.Count > MAX_NOTIFICATIONS)
                         {
@@ -284,7 +320,8 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
             {
                 var data = new NotificationsData
                 {
-                    Notifications = _notifications
+                    Notifications = _notifications,
+                    LastReadNotificationCount = _lastReadNotificationCount
                 };
                 
                 var options = new JsonSerializerOptions
@@ -453,6 +490,7 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
         {
             _isDropdownOpen = false;
             _scrollOffset = 0;
+            _unreadCountWhenOpened = 0; // Next time we open, don't show red dots for already-read items
         }
 
         private string FormatNotificationDateTime(DateTime timestamp)
@@ -586,11 +624,11 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
 
         public void Draw(SpriteBatch spriteBatch)
         {
-            // Draw notification icon (will be called from TopBar)
-            if (_logo != null)
+            Texture2D iconTexture = GetIconTexture();
+            if (iconTexture != null)
             {
                 Color iconColor = _isIconHovered ? Color.White : new Color(200, 200, 200);
-                spriteBatch.Draw(_logo, _iconBounds, iconColor);
+                spriteBatch.Draw(iconTexture, _iconBounds, iconColor);
 
                 // Draw hover background
                 if (_isIconHovered)
@@ -600,7 +638,7 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
             }
             else
             {
-                // Fallback: draw a simple rectangle if logo not loaded
+                // Fallback: draw a simple rectangle if no icon loaded
                 Color iconColor = _isIconHovered ? MIAMI_PURPLE_LIGHT : MIAMI_PURPLE;
                 spriteBatch.Draw(_pixel, _iconBounds, iconColor);
             }
@@ -705,6 +743,16 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
                 var notification = _notifications[actualIndex];
                 DrawNotificationText(spriteBatch, notification, itemRect);
 
+                // Red dot for notifications that were "new" when we opened (only this session)
+                if (actualIndex < _unreadCountWhenOpened)
+                {
+                    const int RED_DOT_SIZE = 8;
+                    int contentWidth = itemRect.Width - (_scrollBarBounds.IsEmpty ? 0 : SCROLLBAR_WIDTH);
+                    int dotX = itemRect.X + contentWidth - RED_DOT_SIZE - 6;
+                    int dotY = itemRect.Y + (ITEM_HEIGHT - RED_DOT_SIZE) / 2;
+                    spriteBatch.Draw(_pixel, new Rectangle(dotX, dotY, RED_DOT_SIZE, RED_DOT_SIZE), Color.Red);
+                }
+
                 // Draw separator line at bottom of item (except for last item)
                 if (i < visibleItems - 1 && actualIndex < _notifications.Count - 1)
                 {
@@ -753,11 +801,46 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
         {
             try
             {
+                _iconNotificationBell = content.Load<Texture2D>("Modules/NotificationCenter_essential/Images/NotificationBell");
+            }
+            catch (Exception ex) { _engine.Log($"NotificationCenter: Failed to load NotificationBell: {ex.Message}"); }
+            try
+            {
+                _iconNew1 = content.Load<Texture2D>("Modules/NotificationCenter_essential/Images/NewNotification_1");
+            }
+            catch (Exception ex) { _engine.Log($"NotificationCenter: Failed to load NewNotification_1: {ex.Message}"); }
+            try
+            {
+                _iconNew2 = content.Load<Texture2D>("Modules/NotificationCenter_essential/Images/NewNotification_2");
+            }
+            catch (Exception ex) { _engine.Log($"NotificationCenter: Failed to load NewNotification_2: {ex.Message}"); }
+            try
+            {
+                _iconNew3 = content.Load<Texture2D>("Modules/NotificationCenter_essential/Images/NewNotification_3");
+            }
+            catch (Exception ex) { _engine.Log($"NotificationCenter: Failed to load NewNotification_3: {ex.Message}"); }
+            try
+            {
+                _iconNew4 = content.Load<Texture2D>("Modules/NotificationCenter_essential/Images/NewNotification_4");
+            }
+            catch (Exception ex) { _engine.Log($"NotificationCenter: Failed to load NewNotification_4: {ex.Message}"); }
+            try
+            {
+                _iconNew5 = content.Load<Texture2D>("Modules/NotificationCenter_essential/Images/NewNotification_5");
+            }
+            catch (Exception ex) { _engine.Log($"NotificationCenter: Failed to load NewNotification_5: {ex.Message}"); }
+            try
+            {
+                _iconNew5Plus = content.Load<Texture2D>("Modules/NotificationCenter_essential/Images/NewNotification_5+");
+            }
+            catch (Exception ex) { _engine.Log($"NotificationCenter: Failed to load NewNotification_5+: {ex.Message}"); }
+            try
+            {
                 _logo = content.Load<Texture2D>("Modules/NotificationCenter_essential/logo");
             }
             catch (Exception ex)
             {
-                _engine.Log($"NotificationCenter: Failed to load logo: {ex.Message}");
+                _engine.Log($"NotificationCenter: Failed to load logo (optional): {ex.Message}");
                 _logo = null;
             }
 
@@ -828,15 +911,47 @@ namespace MarySGameEngine.Modules.NotificationCenter_essential
             else
             {
                 _engine.Log("NotificationCenter: Opening dropdown");
+                // Mark all current notifications as read and show red dot on items that were unread
+                int unreadCount = GetUnreadCount();
+                _unreadCountWhenOpened = unreadCount;
+                _lastReadNotificationCount = _notifications.Count;
+                SaveNotifications();
                 _isDropdownOpen = true;
                 UpdateDropdownBounds();
             }
         }
 
+        /// <summary>Number of notifications added after the last time the user opened the dropdown.</summary>
+        private int GetUnreadCount()
+        {
+            return Math.Max(0, _notifications.Count - _lastReadNotificationCount);
+        }
+
+        private Texture2D GetIconTexture()
+        {
+            int unread = GetUnreadCount();
+            if (unread <= 0) return _iconNotificationBell ?? _logo;
+            if (unread == 1) return _iconNew1 ?? _iconNotificationBell ?? _logo;
+            if (unread == 2) return _iconNew2 ?? _iconNotificationBell ?? _logo;
+            if (unread == 3) return _iconNew3 ?? _iconNotificationBell ?? _logo;
+            if (unread == 4) return _iconNew4 ?? _iconNotificationBell ?? _logo;
+            if (unread == 5) return _iconNew5 ?? _iconNotificationBell ?? _logo;
+            return _iconNew5Plus ?? _iconNew5 ?? _iconNotificationBell ?? _logo;
+        }
+
         public void Dispose()
         {
+            if (_instance == this)
+                _instance = null;
             _pixel?.Dispose();
             _logo?.Dispose();
+            _iconNotificationBell?.Dispose();
+            _iconNew1?.Dispose();
+            _iconNew2?.Dispose();
+            _iconNew3?.Dispose();
+            _iconNew4?.Dispose();
+            _iconNew5?.Dispose();
+            _iconNew5Plus?.Dispose();
         }
     }
 }

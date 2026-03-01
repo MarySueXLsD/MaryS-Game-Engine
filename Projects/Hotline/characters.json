@@ -2,25 +2,39 @@
   "ids": [
     "Building_01",
     "Enemy_01",
-    "1",
+    "133",
     "2",
     "3",
-    "4"
+    "4",
+    "1",
+    "5"
   ],
   "names": {
     "Building_01": "Farm",
     "Enemy_01": "Witch",
-    "1": "Character_1",
+    "133": "Character_1",
     "2": "Character_2",
     "3": "Character_3",
-    "4": "Character_4"
+    "4": "Character_4",
+    "1": "Character_1",
+    "5": "Character_5"
   },
   "tags": {
     "Building_01": "",
     "Enemy_01": "",
-    "1": "",
+    "133": "",
     "2": "",
     "3": "",
-    "4": ""
+    "4": "",
+    "1": "",
+    "5": ""
+  },
+  "characterStats": {},
+  "characterTraits": {},
+  "characterSkills": {},
+  "characterDescriptions": {
+    "Building_01": "I dont wanna brag but this char took me 5 hours to make\n",
+    "5": "",
+    "Enemy_01": "HELL NAH"
   }
 }

@@ -14,6 +14,7 @@ using MarySGameEngine.Modules.TaskBar_essential;
 using MarySGameEngine.Modules.UIElements_essential;
 using MarySGameEngine.Modules.TopBar_essential;
 using MarySGameEngine.Modules.FlashMessage_essential;
+using MarySGameEngine.Modules.NotificationCenter_essential;
 
 namespace MarySGameEngine.Modules.GameManager_essential
 {
@@ -711,6 +712,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
                         FlashMessageType.Info,
                         3.0f
                     );
+                    NotificationCenter.NotifyWorkspaceChanged($"{project.Name} ({gameType})");
                 }
             }
             catch (Exception ex)
@@ -1064,6 +1066,7 @@ namespace MarySGameEngine.Modules.GameManager_essential
                         FlashMessageType.Info,
                         3.0f
                     );
+                    NotificationCenter.NotifyWorkspaceChanged($"{project.Name} ({gameType})");
                 }
             }
 
