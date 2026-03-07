@@ -232,7 +232,7 @@ public class GameEngine : Game
 
                     // Special case for Desktop module - always load it regardless of visibility
                     // Also always load ModuleSettings, Console, GameManager, FlashMessage, NotificationCenter, and PopUp as they're essential for the engine
-                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential" || moduleName == "GameManager_essential" || moduleName == "Music_essential" || moduleName == "FlashMessage_essential" || moduleName == "NotificationCenter_essential" || moduleName == "PopUp_essential";
+                    bool shouldLoad = moduleInfo.IsVisible || moduleName == "Desktop_essential" || moduleName == "ModuleSettings_essential" || moduleName == "Console_essential" || moduleName == "GameManager_essential" || moduleName == "Music_essential" || moduleName == "FlashMessage_essential" || moduleName == "NotificationCenter_essential" || moduleName == "PopUp_essential" || moduleName == "Grid_essential";
 
                     if (!shouldLoad)
                     {
@@ -726,6 +726,8 @@ public class GameEngine : Game
         {
             System.Diagnostics.Debug.WriteLine($"Main: ERROR in Update: {ex.Message}");
             System.Diagnostics.Debug.WriteLine($"Main: Stack trace: {ex.StackTrace}");
+            Log($"Main: ERROR in Update: {ex.Message}");
+            Log($"Main: Stack trace: {ex.StackTrace}");
         }
     }
 
@@ -915,6 +917,8 @@ public class GameEngine : Game
         {
             System.Diagnostics.Debug.WriteLine($"Main: ERROR in Draw: {ex.Message}");
             System.Diagnostics.Debug.WriteLine($"Main: Stack trace: {ex.StackTrace}");
+            Log($"Main: ERROR in Draw: {ex.Message}");
+            Log($"Main: Stack trace: {ex.StackTrace}");
         }
     }
 

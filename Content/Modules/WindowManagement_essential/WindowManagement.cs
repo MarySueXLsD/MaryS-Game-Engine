@@ -210,8 +210,12 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                 int gameWindowWidth = _graphicsDevice.Viewport.Width;
                 int gameWindowHeight = _graphicsDevice.Viewport.Height;
 
-                // Calculate minimum width based on title and buttons
-                int minWidth = CalculateMinimumWidth(_windowTitle);
+                // Effective minimum size: use custom if set, otherwise defaults
+                int effectiveMinWidth = _customMinWidth > 0 ? _customMinWidth : MIN_WINDOW_WIDTH;
+                int effectiveMinHeight = _customMinHeight > 0 ? _customMinHeight : MIN_WINDOW_HEIGHT;
+
+                // Calculate minimum width based on title and buttons (width must be at least both)
+                int minWidth = Math.Max(CalculateMinimumWidth(_windowTitle), effectiveMinWidth);
 
                 if (_isMaximized)
                 {
@@ -253,7 +257,7 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     
                     // Ensure minimum dimensions
                     availableWidth = Math.Max(availableWidth, minWidth);
-                    availableHeight = Math.Max(availableHeight, MIN_WINDOW_HEIGHT);
+                    availableHeight = Math.Max(availableHeight, effectiveMinHeight);
                     
                     _windowBounds = new Rectangle(
                         startX,
@@ -274,21 +278,21 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
                     int x = Math.Max(0, Math.Min((int)_position.X, gameWindowWidth - minWidth));
                     int y = _taskBar != null && _taskBar.GetCurrentPosition() == TaskBarPosition.Top ? 
                         _taskBar.GetTaskBarBounds().Height : TOP_BAR_HEIGHT;
-                    y = Math.Max(y, Math.Min((int)_position.Y, gameWindowHeight - MIN_WINDOW_HEIGHT));
+                    y = Math.Max(y, Math.Min((int)_position.Y, gameWindowHeight - effectiveMinHeight));
                     
                     // Ensure dimensions are valid
                     if (_defaultWidth <= 0 || _defaultHeight <= 0)
                     {
                         _engine.Log($"WindowManagement: Invalid dimensions detected for {_windowTitle}: {_defaultWidth}x{_defaultHeight}");
-                        _defaultWidth = Math.Max(_defaultWidth, MIN_WINDOW_WIDTH);
-                        _defaultHeight = Math.Max(_defaultHeight, MIN_WINDOW_HEIGHT);
+                        _defaultWidth = Math.Max(_defaultWidth, effectiveMinWidth);
+                        _defaultHeight = Math.Max(_defaultHeight, effectiveMinHeight);
                     }
                     
                     _windowBounds = new Rectangle(
                         x,
                         y,
                         Math.Max(minWidth, Math.Min(_defaultWidth, gameWindowWidth - x)),
-                        Math.Min(_defaultHeight, gameWindowHeight - y)
+                        Math.Max(effectiveMinHeight, Math.Min(_defaultHeight, gameWindowHeight - y))
                     );
                 }
 
@@ -333,7 +337,9 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             }
             catch (Exception ex)
             {
-                _windowBounds = new Rectangle(10, TOP_BAR_HEIGHT, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+                int w = _customMinWidth > 0 ? _customMinWidth : MIN_WINDOW_WIDTH;
+                int h = _customMinHeight > 0 ? _customMinHeight : MIN_WINDOW_HEIGHT;
+                _windowBounds = new Rectangle(10, TOP_BAR_HEIGHT, w, h);
                 System.Diagnostics.Debug.WriteLine($"Error updating window bounds: {ex.Message}");
             }
         }
@@ -1474,9 +1480,11 @@ namespace MarySGameEngine.Modules.WindowManagement_essential
             _defaultWidth = (int)(_defaultWidth * widthRatio);
             _defaultHeight = (int)(_defaultHeight * heightRatio);
             
-            // Ensure minimum sizes
-            _defaultWidth = Math.Max(_defaultWidth, MIN_WINDOW_WIDTH);
-            _defaultHeight = Math.Max(_defaultHeight, MIN_WINDOW_HEIGHT);
+            // Ensure minimum sizes (use custom if set)
+            int effectiveMinWidth = _customMinWidth > 0 ? _customMinWidth : MIN_WINDOW_WIDTH;
+            int effectiveMinHeight = _customMinHeight > 0 ? _customMinHeight : MIN_WINDOW_HEIGHT;
+            _defaultWidth = Math.Max(_defaultWidth, effectiveMinWidth);
+            _defaultHeight = Math.Max(_defaultHeight, effectiveMinHeight);
             
             // Update position to maintain relative position (guard against division by zero)
             float relativeX = oldWidth > 0 ? _position.X / oldWidth : 0;
